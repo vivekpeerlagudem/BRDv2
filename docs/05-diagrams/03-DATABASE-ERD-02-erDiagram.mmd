@@ -1,0 +1,23 @@
+%% Source: docs/03-tld/DATABASE-ERD.md — section: 2. Identity
+%% Extracted copy; edit the source document, then re-run the extraction.
+erDiagram
+  AUTH_USER ||--|| APP_USER_PROFILE : "profile (same id)"
+  AUTH_USER ||--o{ AUTH_SESSION : sessions
+  AUTH_USER ||--o{ AUTH_ACCOUNT : "credentials/OAuth"
+  AUTH_USER ||--o| AUTH_TWO_FACTOR : totp
+  APP_USER_PROFILE ||--o| TEAM_MEMBERSHIP : member
+  TEAM ||--o{ TEAM_MEMBERSHIP : members
+  TEAM ||--o{ TEAM_MANAGER : managers
+  APP_USER_PROFILE ||--o{ TEAM_MANAGER : manages
+  APP_USER_PROFILE ||--o{ INVITATION : "invited_by"
+  TEAM |o--o{ INVITATION : "target team"
+  ORGANIZATION_SETTINGS |o--o| APP_USER_PROFILE : "default_lead_owner"
+
+  AUTH_USER { uuid id PK text email boolean two_factor_enabled }
+  AUTH_SESSION { uuid id PK uuid user_id FK text token UK text kind "web|addin" timestamptz expires_at }
+  APP_USER_PROFILE { uuid user_id PK,FK text normalized_email UK text role "admin|sales_manager|salesperson" text status "invited|active|deactivated" boolean can_manage_content }
+  TEAM { uuid id PK text name }
+  TEAM_MEMBERSHIP { uuid user_id PK,FK uuid team_id FK boolean is_active }
+  TEAM_MANAGER { uuid team_id PK,FK uuid user_id PK,FK }
+  INVITATION { uuid id PK text normalized_email char64 token_hash UK text status timestamptz expires_at }
+  ORGANIZATION_SETTINGS { smallint id PK "=1" char3 default_currency text mfa_policy jsonb ai_settings }

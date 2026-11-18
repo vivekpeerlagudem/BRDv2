@@ -1,0 +1,44 @@
+%% Source: docs/02-hld/COMPONENT-ARCHITECTURE.md — section: 4.1 Component diagram
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart TB
+  classDef core fill:#1168bd,stroke:#0b4884,color:#ffffff
+  classDef infra fill:#d9e6f2,stroke:#5b7083,color:#1b2733
+  classDef q fill:#85bbf0,stroke:#5d82a8,color:#0b2540
+  classDef ext fill:#999999,stroke:#6b6b6b,color:#ffffff
+
+  boss["pg-boss runtime<br/>fetch, retry, backoff, DLQ, archive"]:::infra
+  sched["Scheduler<br/>cron schedules in org time zone"]:::infra
+  reg["Handler registry<br/>queue → handler, concurrency, retry policy"]:::infra
+  subgraph handlers["worker: job handlers (thin adapters → module services)"]
+    direction LR
+    hEv["event subscribers<br/>automation, notifications, comms, ai"]:::q
+    hAi["ai jobs<br/>pre-send LLM layer, AUT-004 drafts"]:::q
+    hSig["esign jobs<br/>dispatch, void, remind, webhook.process, reconcile, fetch-signed"]:::q
+    hMail["comms jobs<br/>mail.sync, mail.send, calendar via sync"]:::q
+    hLead["leads jobs<br/>submission.process"]:::q
+    hImp["import jobs<br/>validate, commit, undo"]:::q
+    hPlat["platform jobs<br/>retention, erasure, export, audit export, purges"]:::q
+    hNtf["notification jobs<br/>email delivery, digest, task due scan"]:::q
+  end
+  core["Module services + Unit of work<br/>(same code as server)"]:::core
+  ad["Adapters"]:::infra
+  subgraph rnd["renderer role (crm-renderer image; egress: Postgres + object storage only)"]
+    direction TB
+    rboss["pg-boss runtime<br/>subscribes to pdf only"]:::infra
+    hDoc["pdf handler<br/>proposals document service"]:::q
+    pool["PdfRendererPool<br/>warm Chromium, 1–2 pages, offline, JS disabled,<br/>request interception, timeout; DOCX mapper"]:::infra
+  end
+  pg[("PostgreSQL")]:::ext
+  obj[("Object storage")]:::ext
+  ext["Providers"]:::ext
+
+  sched --> boss
+  boss --> reg --> handlers
+  handlers --> core
+  core --> ad --> ext
+  core --> pg
+  boss --> pg
+  rboss --> hDoc --> pool
+  rboss --> pg
+  hDoc --> pg
+  hDoc --> obj

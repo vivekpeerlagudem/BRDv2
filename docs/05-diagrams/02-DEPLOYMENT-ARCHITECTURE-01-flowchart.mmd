@@ -1,0 +1,18 @@
+%% Source: docs/02-hld/DEPLOYMENT-ARCHITECTURE.md — section: 3.2 Local development on Windows (Docker Compose)
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart LR
+  subgraph HOST[Windows host - pnpm dev]
+    VITE[Vite dev server :5173<br/>index.html, buyer.html, addin.html]
+    SRV[server :3000<br/>app.localhost / proposals.localhost]
+    WRK[worker]
+    RND[renderer<br/>local Chromium via Playwright]
+  end
+  subgraph DOCKER[Docker Desktop - compose]
+    PG[(postgres:18 :5432)]
+    MINIO[(MinIO :9000 API / :9001 console)]
+    MP[Mailpit SMTP :1025 / UI :8025]
+  end
+  VITE -- proxy /api, /public --> SRV
+  SRV & WRK & RND --> PG
+  SRV & WRK & RND --> MINIO
+  WRK --> MP

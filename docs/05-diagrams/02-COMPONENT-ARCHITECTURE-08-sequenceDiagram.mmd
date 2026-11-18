@@ -1,0 +1,28 @@
+%% Source: docs/02-hld/COMPONENT-ARCHITECTURE.md — section: 7. Webhook processing (e-sign) — component interaction
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  participant P as E-sign provider
+  participant WH as /webhooks/esign (server)
+  participant DB as PostgreSQL
+  participant W as worker esign.webhook.process
+  participant ES as esign service
+  participant PR as proposals service (state machine)
+
+  P->>WH: POST event (raw body, signature header, timestamp)
+  WH->>WH: verify HMAC over raw body, timestamp tolerance
+  alt invalid
+    WH-->>P: 401 (logged, metric webhook_failures)
+  end
+  WH->>DB: INSERT webhook_inbox (provider, providerEventId UNIQUE, raw) + enqueue job in same tx
+  WH-->>P: 200 (duplicate event id also 200)
+  W->>ES: process(inboxId)
+  ES->>P: getStatus(envelopeId) authoritative re-read
+  ES->>DB: tx: lock deal FOR UPDATE, load SR, version, proposal
+  alt SR open and version current
+    ES->>PR: applySignatureOutcome(tx, ...) forward-only transition
+    PR->>DB: SR/signers/version/proposal updated, timeline, audit, events (AUT-002 job)
+  else SR voided/expired or version superseded (stale)
+    ES->>DB: store signature event + signed document (legal record), deal flag "signed_on_stale_version", notify owner, no AUT-002
+  end
+  ES->>DB: mark inbox row processed

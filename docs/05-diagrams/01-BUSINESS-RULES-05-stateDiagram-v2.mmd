@@ -1,0 +1,16 @@
+%% Source: docs/01-specifications/BUSINESS-RULES.md — section: 17.5 SM-05 Signer
+%% Extracted copy; edit the source document, then re-run the extraction.
+stateDiagram-v2
+    [*] --> waiting: request created (G1)
+    waiting --> sent: turn reached / dispatched (G2)
+    sent --> viewed: opened (G3)
+    sent --> signed: signed (G4)
+    viewed --> signed: signed (G4)
+    sent --> declined: declined (G5)
+    viewed --> declined: declined (G5)
+    waiting --> cancelled: request ended (G6)
+    sent --> cancelled: request ended (G6)
+    viewed --> cancelled: request ended (G6)
+    signed --> [*]
+    declined --> [*]
+    cancelled --> [*]

@@ -1,0 +1,30 @@
+%% Source: docs/02-hld/SECURITY-ARCHITECTURE.md — section: 6.3 Password sign-in with TOTP
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  participant B as Browser (app origin)
+  participant BA as Better Auth (/api/auth)
+  participant G as Auth guard (ours)
+  participant DB as PostgreSQL
+  B->>BA: POST /sign-in/email {email, password} (Origin checked)
+  BA->>DB: rate_limit_bucket check (account, IP)
+  BA->>DB: load user + scrypt verify
+  alt invalid or throttled
+    BA-->>B: 401/429 uniform error, audit auth.sign_in_failed
+  else TOTP enrolled
+    BA-->>B: 200 twoFactorRequired (short-lived 2FA cookie, no session)
+    B->>BA: POST /two-factor/verify-totp {code}
+    BA->>DB: verify (±1 step, ≤5 attempts)
+    BA-->>B: Set-Cookie __Host-session (rotated), audit auth.sign_in
+  else not enrolled
+    BA-->>B: Set-Cookie __Host-session (mfaLevel=none)
+  end
+  B->>G: GET /api/v1/me (cookie)
+  G->>DB: session + app_user_profile(status, role) + mfaPolicy
+  alt status != active
+    G-->>B: 401 auth.user_deactivated (session deleted)
+  else policy requires MFA and mfaLevel=none
+    G-->>B: 403 MFA_ENROLMENT_REQUIRED (only enrolment routes allowed)
+  else ok
+    G-->>B: 200 profile + permissions payload
+  end

@@ -1,0 +1,28 @@
+%% Source: docs/01-specifications/WORKFLOWS.md — section: WF-09 Lead capture via web form → assignment → notification
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+    autonumber
+    actor V as Visitor
+    participant S as Server (public)
+    participant DB as Postgres
+    participant W as Worker
+    participant N as Notifications
+    actor SP as Assigned salesperson
+    V->>S: POST /public/v1/forms/{id}/submissions
+    S->>S: published? size, honeypot, rate limit, CAPTCHA, field validation
+    alt invalid / rate limited
+        S-->>V: 422 / 429
+    else honeypot filled
+        S->>DB: submission spam_rejected
+        S-->>V: 200 (silent)
+    else valid
+        S->>DB: submission received + enqueue job
+        S-->>V: 200 thank-you
+        W->>DB: lock submission (processing)
+        W->>DB: dedupe contact (email) and company (domain/name)
+        W->>DB: evaluate rules: existing owner, field rules, round-robin (row lock), fallback
+        W->>DB: TXN upsert company/contact (fill-empty), create or reuse deal, timeline, outbox lead.assigned
+        W->>DB: submission processed
+        DB-->>N: outbox dispatch lead.assigned
+        N->>SP: in-app (SSE) + email "New lead assigned"
+    end

@@ -1,0 +1,13 @@
+%% Source: docs/02-hld/DATA-FLOW-ARCHITECTURE.md — section: F-03 Mailbox sync
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart TB
+  CRON["cron mail.schedule (every 2-5 min)"] --> J["job mail.sync<br/>singletonKey = mailboxConnectionId"]
+  J --> T["decrypt tokens (envelope, AAD=userId+provider)<br/>refresh access token if needed"]
+  T --> D["Provider delta: Gmail history.list from historyId /<br/>Graph messages delta per folder (deltaLink)<br/>select participant headers ONLY"]
+  D -->|"cursor expired (Gmail 404 / Graph 410 or syncStateNotFound)"| RS["bounded full resync<br/>(backfill window, OD-51)"]
+  D --> F1{"Filter BEFORE fetch of bodies<br/>1 all participants internal? drop<br/>2 user/org exclusion? drop or partial<br/>3 any participant = non-archived contact<br/>   OR thread already linked? keep<br/>4 else discard (keep msg-id hash only)"}
+  F1 -->|keep| FB["fetch full message (body, metadata;<br/>attachments metadata only)"]
+  FB --> SAN["sanitise HTML (allowlist), derive text,<br/>strip hidden text, block remote images"]
+  SAN --> TX["TX per page/chunk:<br/>email_thread, email_message (ON CONFLICT DO NOTHING),<br/>email_link (OD-28 rules), timeline_event,<br/>deal.last_activity_at, domain_event email.received/sent,<br/>jobs (flag re-evaluation), cursor advance"]
+  F1 -->|discard| SK[("email_sync_skip (msg-id hash)")]
+  TX --> H["mailbox_connection.lastSyncedAt / status"]

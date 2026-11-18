@@ -1,0 +1,30 @@
+%% Source: docs/03-tld/DATABASE-ERD.md — section: 6. Communications, leads and import
+%% Extracted copy; edit the source document, then re-run the extraction.
+erDiagram
+  APP_USER_PROFILE ||--o| MAILBOX_CONNECTION : "one mailbox"
+  MAILBOX_CONNECTION ||--o{ EMAIL_THREAD : threads
+  EMAIL_THREAD ||--|{ EMAIL_MESSAGE : messages
+  EMAIL_MESSAGE ||--|{ EMAIL_MESSAGE_PARTICIPANT : participants
+  CONTACT |o--o{ EMAIL_MESSAGE_PARTICIPANT : "matched contact"
+  EMAIL_MESSAGE ||--o{ EMAIL_LINK : links
+  MAILBOX_CONNECTION ||--o{ OUTBOUND_EMAIL : sends
+  OUTBOUND_EMAIL ||--o| EMAIL_TRACKING : "open tracking"
+  MAILBOX_CONNECTION ||--o{ CALENDAR_EVENT : events
+  CALENDAR_EVENT ||--|{ CALENDAR_EVENT_ATTENDEE : attendees
+  CALENDAR_EVENT ||--o{ CALENDAR_EVENT_LINK : links
+  LEAD_FORM ||--o{ LEAD_FORM_SUBMISSION : submissions
+  LEAD_FORM ||--o{ LEAD_FORM_ASSIGNMENT_RULE : "ordered rules"
+  ASSIGNMENT_RULE ||--o{ LEAD_FORM_ASSIGNMENT_RULE : used
+  ASSIGNMENT_RULE ||--|{ ASSIGNMENT_RULE_MEMBER : pool
+  ASSIGNMENT_RULE ||--o| ASSIGNMENT_STATE : cursor
+  IMPORT_BATCH ||--|{ IMPORT_ROW : rows
+  IMPORT_BATCH ||--o{ IMPORT_RECORD_LINK : "undo links"
+  IMPORT_ROW ||--o{ IMPORT_RECORD_LINK : produced
+
+  MAILBOX_CONNECTION { uuid id PK uuid user_id FK,UK text provider "google|microsoft" text status text encrypted_tokens text mail_sync_cursor }
+  EMAIL_MESSAGE { uuid id PK uuid mailbox_connection_id FK text provider_message_id text internet_message_id text direction boolean is_private }
+  EMAIL_LINK { uuid id PK uuid email_message_id FK text target_type uuid target_id text link_source boolean review_suggested }
+  OUTBOUND_EMAIL { uuid id PK uuid crm_send_id UK text status "queued|sending|sent|failed|unknown" }
+  LEAD_FORM { uuid id PK text public_key UK text status jsonb fields }
+  LEAD_FORM_SUBMISSION { uuid id PK uuid lead_form_id FK text spam_verdict text processing_status }
+  IMPORT_BATCH { uuid id PK text source text status jsonb counts }

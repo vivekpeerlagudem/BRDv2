@@ -1,0 +1,11 @@
+%% Source: docs/02-hld/DATA-FLOW-ARCHITECTURE.md — section: F-13 Full export
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart LR
+  A["Admin requests export (Idempotency-Key)"] -->|"TX: export_job queued (one running max)"| J["worker export.run"]
+  J --> R["read each entity in keyset pages<br/>(REPEATABLE READ, READ ONLY; readonly-equivalent scope = all)"]
+  R --> Z["stream CSV + NDJSON per entity into ZIP<br/>(multipart upload to exports bucket)"]
+  Z --> F["optional files/: signed PDFs, certificates,<br/>proposal PDFs, images (server-side copy)"]
+  F --> M["manifest.json: counts, schema version,<br/>SHA-256 per file"]
+  M --> D["TX: export_job completed, notification to Admin,<br/>audit export.completed"]
+  D --> DL["download via signed URL (24 h, requester only, audited)"]
+  DL --> LC["lifecycle delete after 7 days"]

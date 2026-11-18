@@ -1,0 +1,15 @@
+%% Source: docs/02-hld/DATA-FLOW-ARCHITECTURE.md — section: F-02 CSV/Excel import pipeline
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart TB
+  U1["Admin uploads .csv/.xlsx"] -->|"multipart, size check"| S1["server: store source file<br/>(object storage, import bucket)"]
+  S1 -->|"TX-1"| B1[("import_batch: uploaded<br/>file_object")]
+  B1 --> P["worker import.parse: detect encoding/delimiter,<br/>header row, preview 20 rows"]
+  P --> M["Admin maps columns -> standard/custom fields,<br/>defaults (owner, pipeline, stage), date format"]
+  M -->|"TX-2 status validating + job"| VJ["worker import.validate: per row type coercion,<br/>required, options, owner/stage resolution,<br/>in-file and existing duplicates (exact keys),<br/>pg_trgm fuzzy suggestions"]
+  VJ -->|"TX-3 chunks"| R[("import_row: mappedData, errors,<br/>duplicateCandidates; batch validated")]
+  R --> D["Admin reviews error report (CSV download)<br/>and duplicate actions skip/merge/create"]
+  D -->|"Idempotency-Key, TX-4 status committing + job"| CJ["worker import.commit"]
+  CJ -->|"TX-5..n per chunk"| C[("company/contact/deal upserts,<br/>import_record_link (before snapshot),<br/>timeline 'Imported', audit")]
+  C --> DONE["batch committed; notification to Admin"]
+  DONE -->|"Admin undo"| UJ["worker import.undo (chunked)"]
+  UJ --> UD[("hard delete untouched created rows;<br/>restore merged fields still equal to imported;<br/>report kept rows; batch undone")]

@@ -1,0 +1,18 @@
+%% Source: docs/01-specifications/BUSINESS-RULES.md — section: 17.8 SM-08 Import batch
+%% Extracted copy; edit the source document, then re-run the extraction.
+stateDiagram-v2
+    [*] --> uploaded: upload (I1)
+    uploaded --> validating: map + validate (I2)
+    validated --> validating: remap / revalidate (I2)
+    validating --> validated: done (I3)
+    validated --> importing: commit (I4)
+    importing --> completed: done (I5)
+    importing --> failed: error (I6)
+    failed --> importing: resume (I7)
+    completed --> undoing: undo (I8)
+    failed --> undoing: undo (I8)
+    undoing --> undone: done (I9)
+    uploaded --> cancelled: cancel (I10)
+    validated --> cancelled: cancel (I10)
+    undone --> [*]
+    cancelled --> [*]

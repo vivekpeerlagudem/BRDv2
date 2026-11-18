@@ -1,0 +1,36 @@
+%% Source: docs/02-hld/COMPONENT-ARCHITECTURE.md — section: 4.4 Job lifecycle
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  participant S as Producer service (server or worker)
+  participant U as Unit of work
+  participant DB as PostgreSQL (business tables + pg-boss schema)
+  participant B as pg-boss (worker)
+  participant H as Handler
+  participant M as Module service
+  participant X as Provider (optional)
+  participant A as Admin (jobs view)
+
+  S->>U: business change
+  U->>DB: BEGIN, UPDATE business rows, INSERT timeline, audit, domain_event
+  U->>DB: INSERT job(s) via pg-boss with tx executor (singletonKey, idempotency key)
+  U->>DB: COMMIT (job invisible until commit, rollback discards it)
+  B->>DB: fetch next job (SKIP LOCKED)
+  B->>H: payload (ids only)
+  H->>M: service op with system actor and new unit of work
+  M->>DB: idempotency check (e.g. automation_execution key exists?)
+  alt already processed
+    M-->>H: no-op
+  else not processed
+    M->>X: provider call (if any), timeout
+    M->>DB: tx: apply change + timeline/audit + follow-up jobs
+  end
+  alt success
+    H-->>B: complete
+  else retryable failure
+    H-->>B: fail → retry with backoff (attempt n of limit)
+  else retries exhausted or non-retryable
+    B->>DB: move to <queue>.dlq, metric DLQ depth +1, alert
+    A->>DB: inspect DLQ (Admin job view), fix cause, replay
+    DB->>B: job re-queued with same idempotency key
+  end

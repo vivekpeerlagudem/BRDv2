@@ -1,0 +1,46 @@
+%% Source: docs/02-hld/COMPONENT-ARCHITECTURE.md — section: 3. Request lifecycle (internal API write)
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  participant C as SPA (TanStack Query)
+  participant LB as LB/WAF
+  participant MW as Middleware chain
+  participant H as Route handler (crm)
+  participant S as crm service
+  participant P as Policy
+  participant U as Unit of work
+  participant R as crm repository
+  participant DB as PostgreSQL
+  participant HUB as RealtimeHub (all instances)
+
+  C->>LB: PATCH stage {stageId, rowVersion, lostReasonId?}
+  LB->>MW: forward (TLS terminated, per-IP limit ok)
+  MW->>MW: requestId, logger, headers, rateLimit
+  MW->>MW: authenticate session, mfaPolicy, actorContext
+  MW->>MW: validate body (Zod)
+  MW->>H: validated input + Actor
+  H->>S: changeStage(ctx, input)
+  S->>U: run(ctx, fn)
+  U->>DB: BEGIN
+  S->>R: findById(tx, actor, dealId) with scopeFilter
+  R->>DB: SELECT ... WHERE id = $1 AND scope predicate FOR UPDATE
+  alt not visible
+    S-->>H: NotFound (404, hides existence)
+  end
+  S->>P: decide(actor, deal.edit, deal)
+  alt denied
+    S-->>H: Forbidden (403 permission_denied) and audit.record denial
+  end
+  S->>S: state machine SM-01 guard (stage in pipeline, lost needs reason)
+  S->>R: updateWithVersion(tx, id, rowVersion, patch)
+  alt rowVersion stale
+    R-->>S: conflict
+    S-->>H: 409 CONCURRENT_MODIFICATION
+  end
+  S->>U: deal_stage_history insert, timeline.record, audit.record
+  S->>U: events.record deal.stage_changed (history + fan-out jobs)
+  U->>DB: COMMIT
+  DB-->>HUB: NOTIFY (if a notification row was created)
+  S-->>H: updated deal
+  H-->>C: 200 DTO + allowedActions + new rowVersion
+  Note over MW,H: errorMapper converts any thrown domain error to RFC 9457 problem+json with requestId

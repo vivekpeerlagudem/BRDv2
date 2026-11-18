@@ -1,0 +1,30 @@
+%% Source: docs/03-tld/DATABASE-ERD.md — section: 3. CRM core
+%% Extracted copy; edit the source document, then re-run the extraction.
+erDiagram
+  COMPANY ||--o{ CONTACT : "company_id (0..1 per contact)"
+  COMPANY ||--o{ DEAL : "company_id (required)"
+  PIPELINE ||--|{ PIPELINE_STAGE : stages
+  PIPELINE ||--o{ DEAL : pipeline_id
+  PIPELINE_STAGE ||--o{ DEAL : stage_id
+  DEAL ||--o{ DEAL_CONTACT : stakeholders
+  CONTACT ||--o{ DEAL_CONTACT : roles
+  DEAL_CONTACT ||--|{ DEAL_CONTACT_ROLE : "1..* roles"
+  CONTACT_ROLE ||--o{ DEAL_CONTACT_ROLE : role
+  DEAL ||--o{ DEAL_STAGE_HISTORY : history
+  LOST_REASON |o--o{ DEAL : "lost_reason_id"
+  DEAL |o--o| PROPOSAL : "won_from_proposal_id"
+  APP_USER_PROFILE ||--o{ TASK : assignee
+  ACTIVITY_LOG ||--o{ ACTIVITY_LOG_PARTICIPANT : participants
+  CONTACT ||--o{ ACTIVITY_LOG_PARTICIPANT : participant
+  APP_USER_PROFILE ||--o{ SAVED_VIEW : owns
+
+  COMPANY { uuid id PK text normalized_domain "UK when active" uuid owner_id FK jsonb custom_fields }
+  CONTACT { uuid id PK text normalized_email "UK when active" uuid company_id FK "nullable" uuid owner_id FK }
+  DEAL { uuid id PK uuid company_id FK uuid owner_id FK uuid pipeline_id FK uuid stage_id FK text status "open|won|lost" numeric amount char3 currency date close_date }
+  DEAL_CONTACT { uuid id PK uuid deal_id FK uuid contact_id FK boolean is_primary text added_via }
+  PIPELINE_STAGE { uuid id PK uuid pipeline_id FK text kind "open|won|lost" int sort_order numeric probability int stall_threshold_days }
+  DEAL_STAGE_HISTORY { uuid id PK uuid deal_id FK uuid from_stage_id uuid to_stage_id jsonb actor }
+  TASK { uuid id PK text related_type uuid related_id uuid assignee_id FK timestamptz due_at text status text source }
+  NOTE { uuid id PK text related_type uuid related_id uuid author_id FK }
+  ACTIVITY_LOG { uuid id PK text kind "call|meeting" text related_type uuid related_id }
+  CUSTOM_FIELD_DEFINITION { uuid id PK text object_type text key text data_type }

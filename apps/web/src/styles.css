@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+/* Design tokens — one palette, used everywhere through Tailwind utilities (bg-brand, text-ink, …). */
+@theme {
+  --color-brand: #1f4e79;
+  --color-brand-dark: #173b5c;
+  --color-brand-soft: #e8f0f7;
+  --color-ink: #1c2430;
+  --color-muted: #5b6675;
+  --color-line: #d8dee6;
+  --color-surface: #f5f7fa;
+  --color-ok: #1e7b4b;
+  --color-warn: #a15c00;
+  --color-danger: #b3261e;
+  --font-sans: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+}
+body {
+  @apply bg-surface text-ink antialiased;
+}
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+dialog::backdrop {
+  background: rgb(15 23 42 / 0.45);
+}

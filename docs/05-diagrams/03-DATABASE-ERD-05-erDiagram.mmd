@@ -1,0 +1,30 @@
+%% Source: docs/03-tld/DATABASE-ERD.md — section: 5. Sharing and e-signature
+%% Extracted copy; edit the source document, then re-run the extraction.
+erDiagram
+  PROPOSAL_VERSION ||--o{ RECIPIENT : recipients
+  DEAL_CONTACT ||--o{ RECIPIENT : "is"
+  RECIPIENT ||--|| SHARE_LINK : link
+  SHARE_LINK ||--o{ BUYER_SESSION : "cookie sessions"
+  SHARE_LINK ||--o{ VIEWER_IDENTITY : viewers
+  VIEWER_IDENTITY |o--o| DEAL_CONTACT : "resolved stakeholder"
+  VIEWER_IDENTITY ||--o{ VIEW_SESSION : views
+  VIEWER_IDENTITY ||--o{ DOWNLOAD_EVENT : downloads
+  PROPOSAL_VERSION ||--o| BUYER_RESPONSE : "accept/decline (first wins)"
+  BUYER_SESSION ||--o{ EMAIL_VERIFICATION_CHALLENGE : otp
+  PROPOSAL_VERSION ||--o{ SIGNATURE_REQUEST : requests
+  DEAL ||--o{ SIGNATURE_REQUEST : "≤1 open (partial unique)"
+  SIGNATURE_REQUEST ||--|{ SIGNER : signers
+  DEAL_CONTACT ||--o{ SIGNER : "signer is deal contact"
+  SIGNATURE_REQUEST ||--o{ SIGNATURE_EVENT : evidence
+  SIGNATURE_REQUEST ||--o| SIGNED_DOCUMENT : result
+  ESIGN_WEBHOOK_INBOX }o..o| SIGNATURE_REQUEST : "processed into"
+
+  SHARE_LINK { uuid id PK uuid recipient_id FK,UK char64 token_hash UK text token_ciphertext text link_handle UK text status "active|revoked|expired" timestamptz expires_at }
+  BUYER_SESSION { uuid id PK char64 session_hash UK uuid share_link_id FK uuid viewer_identity_id FK }
+  VIEWER_IDENTITY { uuid id PK uuid share_link_id FK text normalized_email boolean is_original_recipient }
+  VIEW_SESSION { uuid id PK uuid share_link_id FK timestamptz started_at int active_seconds boolean is_first_view_of_proposal }
+  SIGNATURE_REQUEST { uuid id PK uuid proposal_version_id FK uuid deal_id FK text status "pending|sent|viewed|signed|declined|expired|voided" char64 document_sha256 text signing_order boolean stale_completion }
+  SIGNER { uuid id PK uuid signature_request_id FK uuid deal_contact_id FK smallint sign_order text status }
+  SIGNATURE_EVENT { uuid id PK uuid signature_request_id FK text type text provider_event_id UK }
+  SIGNED_DOCUMENT { uuid id PK uuid signature_request_id FK,UK char64 signed_pdf_sha256 char64 certificate_sha256 }
+  ESIGN_WEBHOOK_INBOX { uuid id PK text provider text provider_event_id text status }

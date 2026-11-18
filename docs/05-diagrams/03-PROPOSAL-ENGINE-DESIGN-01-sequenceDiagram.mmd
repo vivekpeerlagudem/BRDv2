@@ -1,0 +1,28 @@
+%% Source: docs/03-tld/PROPOSAL-ENGINE-DESIGN.md — section: 5.4 Send — two-phase (ADR-081)
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  participant UI as Send wizard
+  participant API as proposals.prepareSend
+  participant DB as Postgres
+  participant R as renderer (pdf queue)
+  participant C as comms (mail.send)
+  participant MP as Mail provider
+  UI->>API: POST /proposals/{id}/send (Idempotency-Key)
+  API->>DB: validations · deterministic pre-send check fresh (content hash) · no blockers
+  API->>DB: send_attempt(preparing) · version.send_lock_until · snapshot + snapshot_sha256 stored on attempt
+  API->>DB: enqueue pdf {attemptId}
+  API-->>UI: 202 {sendAttemptId}
+  R->>DB: load snapshot (verify sha256)
+  R->>R: render HTML → Chromium PDF (offline) · DOCX
+  R->>DB: file_object + generated_file (pdf_sha256) · attempt → prepared
+  alt crm_email
+    DB->>C: enqueue mail.send (links per recipient)
+    C->>MP: send via user mailbox (X-CRM-Send-Id)
+    MP-->>C: accepted
+    C->>API: commitSend(attemptId)
+  else manual_link
+    UI->>API: GET /send-attempts/{id} → links (once) · user copies
+    UI->>API: POST /send-attempts/{id}/confirm-manual-share
+  end
+  API->>DB: tx: version sent (frozen fields) · previous → superseded (+void open SR) · recipients, share_links · proposal status · events

@@ -1,0 +1,31 @@
+%% Source: docs/01-specifications/WORKFLOWS.md — section: WF-29 Signature request with order and reminders
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+    autonumber
+    actor SP as Salesperson
+    participant S as Server
+    participant DB as Postgres
+    participant W as Worker
+    participant ES as ESignProvider
+    actor S1 as Signer 1
+    actor S2 as Signer 2
+    SP->>S: POST signature request (signers, sequential, reminders)
+    S->>S: eligibility: current sent version, one open per deal, signers are deal contacts
+    S->>DB: request Pending, signers waiting, expiry=min(default, validity)
+    W->>ES: create envelope (frozen PDF, order, verification, consent, webhook)
+    alt dispatch fails
+        ES-->>W: error
+        W->>W: retry x5 then lastError + notify owner
+    else dispatched
+        ES-->>W: envelope id
+        W->>DB: request Sent, signer1 sent
+        ES->>S1: email invitation
+        S1->>ES: open, verify email/SMS, consent, sign
+        ES-->>S: webhook signer1 signed (HMAC)
+        S->>DB: signer1 signed (idempotent, monotonic)
+        ES->>S2: invitation (turn reached)
+        ES->>S2: reminders per schedule
+        S2->>ES: sign
+        ES-->>S: webhook envelope completed
+        S->>DB: enqueue completion (WF-32)
+    end

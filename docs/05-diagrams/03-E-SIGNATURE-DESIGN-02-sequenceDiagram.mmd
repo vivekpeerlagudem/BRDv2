@@ -1,0 +1,25 @@
+%% Source: docs/03-tld/E-SIGNATURE-DESIGN.md — section: 5. Webhooks and reconciliation (ADR-025, ADR-053)
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  participant P as Provider
+  participant S as server /webhooks/esign/{provider}
+  participant DB as Postgres
+  participant W as worker (esign.webhook.process)
+  P->>S: POST event (raw body, signature header)
+  S->>S: verify HMAC over raw body + timestamp ±5 min
+  alt invalid
+    S-->>P: 401 (no detail) · metric webhook_invalid
+  else valid
+    S->>DB: INSERT esign_webhook_inbox ON CONFLICT (provider, provider_event_id) DO NOTHING
+    S->>DB: enqueue esign.webhook.process {inboxId}
+    S-->>P: 200
+  end
+  W->>DB: load inbox row → envelope id → signature_request (FOR UPDATE, deal→proposal→version→request order)
+  W->>P: getEnvelope(envelopeId)  (authoritative)
+  W->>W: map provider state → target SM-04/05 states, apply forward-only transitions
+  W->>DB: signature_event rows (dedupe provider_event_id) · signer statuses · request status · proposals.applySignatureEvent · timeline · events
+  opt completed and not stale
+    W->>DB: enqueue esign.fetch-signed · subscribers: automation-aut002, notifications
+  end
+  W->>DB: inbox status processed

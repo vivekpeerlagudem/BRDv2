@@ -1,0 +1,21 @@
+%% Source: docs/02-hld/SECURITY-ARCHITECTURE.md — section: 6.6 Outlook add-in (Office dialog hand-off)
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  participant TP as Task pane (addin.html, app host, inside Outlook)
+  participant DLG as Office dialog (app host sign-in page)
+  participant API as server /api/v1/addin
+  participant DB as PostgreSQL
+  TP->>TP: generate verifier v, challenge c = SHA256(v)
+  TP->>DLG: displayDialogAsync(/addin/sign-in?c=...)
+  DLG->>DLG: normal sign-in (password+TOTP or Google/Microsoft) on app origin
+  DLG->>API: POST /addin/handoff {c} (cookie session, Origin checked)
+  API->>DB: store one-time code (hash, c, userId, 60 s)
+  API-->>DLG: code
+  DLG->>TP: messageParent(code)  (dialog closes, web session cookie stays first-party)
+  TP->>API: POST /addin/session {code, v}
+  API->>DB: verify SHA256(v)=c, unused, not expired, user active, MFA policy met
+  API->>DB: create session kind=addin (token hash), audit addin.session_created
+  API-->>TP: bearer token (held in add-in storage only)
+  TP->>API: GET /addin/context?participants=... (Authorization: Bearer)
+  API-->>TP: records filtered by the same policy (PERM-088)

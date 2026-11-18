@@ -1,0 +1,25 @@
+%% Source: docs/02-hld/INTEGRATION-ARCHITECTURE.md — section: 10.8 Transactional notification email
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  participant SRC as Producing TX (e.g. view counted)
+  participant DB as PostgreSQL
+  participant S as server instances
+  participant W as worker notify.email
+  participant T as Transactional email provider
+  SRC->>DB: TX notification row (dedupeKey unique, channels), job notify.email (startAfter quiet hours end)
+  DB-->>S: NOTIFY notif id (post-commit)
+  S-->>S: SSE poke to recipient, client fetches /notifications?since
+  W->>DB: load notification, recipient preference, template
+  W->>T: send (to, from notify subdomain, subject, HTML+text without proposal body, idempotency key)
+  alt accepted
+    T-->>W: message id
+    W->>DB: emailStatus sent, provider message id
+  else 429 or 5xx
+    W->>W: retry up to 5 with backoff
+    W->>DB: emailStatus failed after final attempt
+  end
+  opt delivery events enabled (O-07)
+    T->>S: webhook bounced or delivered (verified)
+    S->>DB: update emailStatus, suppression entry
+  end

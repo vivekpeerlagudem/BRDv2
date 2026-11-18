@@ -1,0 +1,44 @@
+%% Source: docs/01-specifications/WORKFLOWS.md — section: WF-22 Send proposal from the CRM (and end-to-end overview)
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+    autonumber
+    actor SP as Salesperson
+    participant S as Server
+    participant DB as Postgres (+outbox)
+    participant W as Worker
+    participant MP as MailProvider
+    actor B as Buyer / forwarded viewer
+    participant ES as ESignProvider
+    participant N as Notifications (SSE + email)
+    SP->>S: Send version n (recipients, mode, Idempotency-Key)
+    S->>S: RULE-PRP-08 checks + pre-send check (content hash)
+    S->>DB: TXN freeze snapshot, version sent, prev superseded, links, status Sent, outbox
+    W->>W: render PDF + SHA-256
+    S->>MP: send per-recipient email from user's mailbox
+    DB-->>W: proposal.version_sent
+    W->>DB: AUT-001 move stage (if earlier), automated timeline
+    W->>DB: schedule AUT-004 check at sentAt + N days
+    B->>S: open link (identity gate / verification)
+    S->>DB: view session counted, status Viewed (first)
+    DB-->>N: proposal_first_open
+    N-->>SP: real-time alert
+    B->>S: forward then new viewer identifies (name, email)
+    S->>DB: contact matched/created, deal stakeholder "Forwarded viewer"
+    DB-->>N: proposal_forwarded_new_viewer
+    Note over SP,S: Negotiation: new versions (WF-28)
+    SP->>S: Request signatures on current sent version (signers, order)
+    S->>DB: signature_request Pending
+    W->>ES: create envelope (sealed PDF of version)
+    ES-->>W: dispatched then Sent
+    ES-->>B: signer emails in order, reminders
+    B->>ES: consent + sign (each signer)
+    ES-->>S: webhook signer_signed (HMAC, idempotent)
+    S->>DB: signer signed
+    DB-->>N: signer_signed
+    ES-->>S: webhook completed
+    W->>ES: fetch sealed PDF + certificate
+    W->>DB: store files + SHA-256, request Signed, version signed, proposal Signed, outbox
+    DB-->>W: signature_request.completed
+    W->>DB: AUT-002 deal Closed Won, amount=TCV, close date=signing date, void other open proposals
+    DB-->>N: proposal_signed
+    N-->>SP: "Signed - deal Closed Won (automated, reversible)"

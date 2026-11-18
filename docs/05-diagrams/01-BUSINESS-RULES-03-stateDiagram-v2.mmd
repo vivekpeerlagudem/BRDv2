@@ -1,0 +1,10 @@
+%% Source: docs/01-specifications/BUSINESS-RULES.md — section: 17.3 SM-03 ProposalVersion (OD-20)
+%% Extracted copy; edit the source document, then re-run the extraction.
+stateDiagram-v2
+    [*] --> draft: create (V1)
+    draft --> sent: send (V2)
+    draft --> [*]: discard revision (V5)
+    sent --> superseded: newer version sent (V3)
+    sent --> signed: signature completed (V4)
+    superseded --> [*]
+    signed --> [*]

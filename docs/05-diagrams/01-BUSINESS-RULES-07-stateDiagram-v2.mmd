@@ -1,0 +1,8 @@
+%% Source: docs/01-specifications/BUSINESS-RULES.md — section: 17.7 SM-07 Task
+%% Extracted copy; edit the source document, then re-run the extraction.
+stateDiagram-v2
+    [*] --> open: create (T1)
+    open --> completed: complete (T2)
+    completed --> open: reopen (T3)
+    open --> cancelled: cancel / reversal (T4)
+    cancelled --> open: restore (T5)

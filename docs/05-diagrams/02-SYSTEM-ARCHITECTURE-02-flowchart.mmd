@@ -1,0 +1,48 @@
+%% Source: docs/02-hld/SYSTEM-ARCHITECTURE.md — section: 4. Containers (C4 level 2)
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart TB
+  classDef person fill:#08427b,stroke:#052e56,color:#ffffff
+  classDef container fill:#438dd5,stroke:#2e6295,color:#ffffff
+  classDef db fill:#2f6f9f,stroke:#1f4a6a,color:#ffffff
+  classDef ext fill:#999999,stroke:#6b6b6b,color:#ffffff
+
+  users["Internal users<br/>[Person]"]:::person
+  buyers["Buyers, forwarded viewers,<br/>website visitors<br/>[External person]"]:::person
+  hosts["Outlook / Gmail hosts<br/>[External system]"]:::ext
+
+  subgraph sys["Internal Sales CRM [Software system boundary]"]
+    direction TB
+    subgraph web["apps/web: one Vite project, three entries [Container: static SPA assets]"]
+      idx["index.html<br/>Internal app<br/>React 19, TanStack Router/Query/Table/Form, shadcn/ui, TipTap"]:::container
+      buy["buyer.html<br/>Buyer proposal view + hosted lead form<br/>minimal bundle, no internal auth"]:::container
+      add["addin.html<br/>Outlook task pane<br/>Office.js"]:::container
+    end
+    lb["Load balancer / WAF<br/>[Container: managed]<br/>TLS termination, coarse per-IP rate limit, host routing"]:::container
+    srv["server<br/>[Container: Node.js 26 LTS, Hono]<br/>/api/v1, /public/v1, /webhooks, /addin/v1, SSE, /auth, static assets"]:::container
+    wrk["worker<br/>[Container: Node.js 26 LTS, pg-boss]<br/>jobs except pdf, schedules, sync, e-sign, background AI, reconciliation"]:::container
+    rnd["renderer<br/>[Container: Node.js 26 LTS, pg-boss, Playwright Chromium]<br/>pdf queue only; egress to Postgres + object storage only"]:::container
+    pg[("PostgreSQL 18 (17 acceptable)<br/>[Container: managed DB]<br/>business data, pg-boss queues, LISTEN/NOTIFY, FTS")]:::db
+  end
+
+  obj[("Object storage<br/>[External system]")]:::ext
+  prov["Google / Microsoft APIs, e-sign provider,<br/>AI provider, transactional email, CAPTCHA<br/>[External systems]"]:::ext
+
+  users -->|"HTTPS app origin"| lb
+  buyers -->|"HTTPS buyer origin"| lb
+  hosts -->|"add-in HTTPS"| lb
+  lb --> srv
+  srv -->|"serves"| idx
+  srv -->|"serves on buyer origin"| buy
+  srv -->|"serves"| add
+  idx -->|"JSON /api/v1, SSE"| srv
+  buy -->|"JSON /public/v1"| srv
+  add -->|"JSON /addin/v1 bearer"| srv
+  srv -->|"SQL, tx job enqueue, NOTIFY/LISTEN"| pg
+  wrk -->|"SQL, job fetch, NOTIFY"| pg
+  srv -->|"presigned URLs, streamed downloads"| obj
+  wrk -->|"put signed files, imports, exports"| obj
+  rnd -->|"pdf job fetch and complete"| pg
+  rnd -->|"put rendered PDF/DOCX"| obj
+  srv -->|"OIDC, AI interactive calls, CAPTCHA verify"| prov
+  wrk -->|"mail/calendar sync and send, e-sign API, AI background, email delivery"| prov
+  prov -->|"webhooks"| lb

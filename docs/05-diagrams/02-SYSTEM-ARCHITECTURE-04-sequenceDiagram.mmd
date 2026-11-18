@@ -1,0 +1,37 @@
+%% Source: docs/02-hld/SYSTEM-ARCHITECTURE.md — section: 6.1 End-to-end flow: send → view → sign → Closed Won
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  actor SP as Salesperson
+  participant API as server /api/v1
+  participant DB as PostgreSQL
+  participant W as worker
+  participant R as renderer
+  participant OS as Object storage
+  actor B as Buyer
+  participant PUB as server /public/v1 (buyer origin)
+  participant ES as E-sign provider
+  participant WH as server /webhooks/esign
+
+  SP->>API: POST send version (Idempotency-Key)
+  API->>DB: tx: lock deal, freeze snapshot + SHA-256, version sent, prior version superseded,<br/>open SR on prior version Voided locally, share links, timeline, audit, enqueue jobs
+  API-->>SP: 202 version sent, PDF pending
+  R->>DB: fetch pdf job
+  R->>OS: put PDF, record SHA-256
+  W->>DB: jobs: esign.void (provider) for prior SR, automation AUT-001, schedule AUT-004 check
+  B->>PUB: open /p#token (fragment), page JS posts token to /public/v1/session/exchange
+  PUB->>DB: token hash lookup, clocks check, set HttpOnly buyer cookie, JS clears fragment
+  B->>PUB: heartbeat (JS)
+  PUB->>DB: tx: view session, proposal status Viewed (first counted view), notification row, NOTIFY
+  SP->>API: POST signature request
+  API->>DB: tx: lock deal, one-open-request index, SR Pending, enqueue esign.dispatch
+  W->>ES: create envelope with frozen PDF (hash asserted)
+  ES-->>WH: webhook signer signed / completed (HMAC)
+  WH->>DB: persist inbox event (dedupe provider event id), enqueue processing
+  WH-->>ES: 2xx
+  W->>ES: re-read authoritative status, fetch sealed PDF + certificate
+  W->>OS: put signed PDF + certificate (immutable)
+  W->>DB: tx: lock deal, SR Signed, version signed, proposal Signed, enqueue AUT-002
+  W->>DB: tx AUT-002: deal Closed Won, amount TCV, siblings Void, automation_execution snapshot
+  DB-->>API: NOTIFY poke
+  API-->>SP: SSE poke, client refetches notifications

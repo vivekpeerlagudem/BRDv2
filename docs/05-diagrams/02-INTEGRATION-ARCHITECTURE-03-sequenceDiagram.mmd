@@ -1,0 +1,32 @@
+%% Source: docs/02-hld/INTEGRATION-ARCHITECTURE.md — section: 10.2 Gmail / Graph delta sync including history expiry resync
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  participant C as cron mail.schedule
+  participant W as worker mail.sync
+  participant DB as PostgreSQL
+  participant P as Gmail API or Graph
+  C->>DB: enqueue mail.sync per active mailbox (singletonKey)
+  W->>DB: load connection, cursor, decrypt refresh token
+  W->>P: refresh access token
+  alt invalid_grant
+    W->>DB: TX status reauth_required, notification mailbox_reauth_required
+  else token ok
+    W->>P: list changes since cursor (Gmail history.list or Graph delta per folder), metadata only
+    alt cursor expired (Gmail 404 or Graph 410 syncStateNotFound)
+      W->>DB: mark resync, clear cursor
+      W->>P: list messages in backfill window (metadata only, paged)
+    end
+    loop each page
+      W->>W: pre-persist filter (internal-only, exclusions, known contact or linked thread)
+      W->>DB: insert email_sync_skip hashes for discarded
+      W->>P: get full message for kept ids (batched, rate limited)
+      W->>W: sanitise HTML, derive text, attachments metadata
+      W->>DB: TX messages (ON CONFLICT DO NOTHING), links (OD-28), timeline, deal.last_activity_at, domain_event, jobs, cursor if last page
+    end
+    W->>DB: lastSyncedAt, status active
+  end
+  opt 429 or 5xx
+    P-->>W: 429 Retry-After
+    W->>W: backoff, job rescheduled, after 24h continuous error notify user
+  end

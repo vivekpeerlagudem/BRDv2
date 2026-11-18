@@ -1,0 +1,13 @@
+%% Source: docs/03-tld/AUTHENTICATION-AUTHORIZATION.md — section: 4. Add-in authentication (ADR-074/085)
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  participant P as Outlook task pane
+  participant E as Entra ID
+  participant S as /addin/v1
+  P->>E: NAA acquireTokenSilent(scope api://<appId>/access_as_user)
+  E-->>P: access token (JWT)
+  P->>S: POST /addin/v1/auth/naa {entraAccessToken}
+  S->>S: verify JWKS signature, iss, aud, tid, scp, exp, map oid/email → active user, MFA policy (amr claim contains mfa or CRM TOTP previously enrolled per policy)
+  S-->>P: {token, expiresAt} (Better Auth bearer session kind=addin, 8 h)
+  P->>S: API calls with Authorization: Bearer

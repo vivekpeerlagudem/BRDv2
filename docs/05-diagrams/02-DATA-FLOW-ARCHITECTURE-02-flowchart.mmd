@@ -1,0 +1,19 @@
+%% Source: docs/02-hld/DATA-FLOW-ARCHITECTURE.md — section: 3. Common write pattern (unit of work)
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart TB
+  IN["Command: actor + input + Idempotency-Key (where required)"] --> P["Policy check: role + scopeFilter (ADR-006, ADR-026)"]
+  P --> TX
+  subgraph TX["ONE database transaction"]
+    L["Lock aggregate root if needed<br/>(SELECT ... FOR UPDATE on deal row for proposal/esign/automation)"]
+    V["Validate invariants + rowVersion check"]
+    BW["Business rows (owning module service)"]
+    TL["timeline.record(tx, ...) - append-only"]
+    AU["audit.record(tx, ...) - append-only, hash-chained"]
+    DE["domain_event insert - append-only history (not a dispatch queue)"]
+    JQ["jobs.enqueue(tx, ...) - pg-boss job rows, singletonKey / idempotency key"]
+    IK["idempotency_key row (response snapshot)"]
+    L --> V --> BW --> TL --> AU --> DE --> JQ --> IK
+  end
+  TX --> C{"commit"}
+  C -->|ok| N["Post-commit: NOTIFY id-only poke (SSE) if a notification row was written"]
+  C -->|conflict| E["409 CONCURRENT_MODIFICATION / retry job"]

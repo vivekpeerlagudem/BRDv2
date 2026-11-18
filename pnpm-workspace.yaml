@@ -1,0 +1,11 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Workspace lives inside OneDrive (deviation from ADR-033, see README "Deviations").
+# Hoisted linker = plain node_modules folders instead of a symlink farm, which OneDrive handles better.
+nodeLinker: hoisted
+# Always record exact versions (DEPENDENCY-PLAN §0).
+saveExact: true
+# Fail fast if Node does not match "engines".
+engineStrict: true

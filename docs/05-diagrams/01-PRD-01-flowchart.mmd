@@ -1,0 +1,10 @@
+%% Source: docs/01-specifications/PRD.md — section: 5. End-to-end process (BRD §11, 15 steps)
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart LR
+  S1[1 Lead in] --> S2[2 Email/meetings logged] --> S3[3 Qualify, deal] --> S4[4 Pipeline, stall flags]
+  S4 --> S5[5 Create proposal] --> S6[6 Data, pricing, AI draft] --> S7[7 Edit, preview, pre-send check]
+  S7 --> S8[8 Send, stage advances] --> S9[9 Views, forwards, alerts]
+  S9 -->|no engagement| S10[10 Follow-up task, AI email]
+  S9 --> S11[11 Revise, compare versions] --> S12[12 Request signatures]
+  S10 --> S11
+  S12 --> S13[13 All sign, PDF + certificate] --> S14[14 Closed Won automatically] --> S15[15 Timeline, dashboards]

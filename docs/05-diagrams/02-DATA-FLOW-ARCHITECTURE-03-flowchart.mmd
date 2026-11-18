@@ -1,0 +1,12 @@
+%% Source: docs/02-hld/DATA-FLOW-ARCHITECTURE.md — section: F-01 Lead form → contact/company/deal → assignment → notification
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart LR
+  V["Visitor on company website"] -->|"iframe of hosted form<br/>(buyer origin)"| F["GET /f/{publicKey}<br/>form definition (public data)"]
+  V -->|"POST /public/v1/forms/{publicKey}/submissions"| S1["server: validate payload size, fields,<br/>honeypot, min time-to-submit,<br/>per-IP bucket (Postgres)"]
+  S1 -->|"CAPTCHA enabled"| CP["Captcha.verify (server-side)"]
+  S1 -->|"TX-1"| DB1[("lead_form_submission (received)<br/>+ job lead.process")]
+  S1 -->|"200 success message"| V
+  DB1 --> W1["worker lead.process"]
+  W1 -->|"TX-2"| DB2[("dedupe: contact by normalised email,<br/>company by domain (non-free-mail) or name;<br/>upsert fill-empty; optional deal;<br/>assignment (row lock on assignment_state);<br/>timeline, audit, domain_event,<br/>notification row + job notify.email")]
+  DB2 --> N["NOTIFY poke -> SSE -> owner browser"]
+  DB2 --> E["worker notify.email -> TransactionalEmail"]

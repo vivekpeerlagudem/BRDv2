@@ -1,0 +1,16 @@
+%% Source: docs/03-tld/AUTHENTICATION-AUTHORIZATION.md — section: 5. Buyer authentication (ADR-071, OD-69)
+%% Extracted copy; edit the source document, then re-run the extraction.
+stateDiagram-v2
+  [*] --> Exchange: open /p#token
+  Exchange --> Unavailable: hash not found / revoked
+  Exchange --> SessionCreated: buyer_session + __Host-bs cookie
+  SessionCreated --> IdentityChoice: first visit on this device
+  SessionCreated --> Ready: returning device (device key known)
+  IdentityChoice --> Recipient: "Continue as <recipient>"
+  IdentityChoice --> Forwarded: "I'm someone else" (name, email, notice)
+  Recipient --> Verify: requireEmailVerification
+  Forwarded --> Verify: requireEmailVerification
+  Recipient --> Ready
+  Forwarded --> Ready
+  Verify --> Ready: OTP ok
+  Ready --> [*]

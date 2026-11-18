@@ -1,0 +1,19 @@
+%% Source: docs/02-hld/SECURITY-ARCHITECTURE.md — section: 6.8 Deactivation and session revocation
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  participant A as Admin (fresh session)
+  participant API as identity service
+  participant DB as PostgreSQL
+  participant W as worker
+  participant P as Google / Microsoft
+  A->>API: POST /users/{id}/deactivate {reassignments} (Idempotency-Key)
+  API->>DB: BEGIN, checks (not self, not last Admin, targets active)
+  API->>DB: reassign open deals/tasks/proposals, status=deactivated, roundRobinEligible=false
+  API->>DB: DELETE sessions (web + addin) for user, invalidate permission cache version
+  API->>DB: mailbox_connection status=disconnected, enqueue revoke-token job (in-tx, A4)
+  API->>DB: audit user.deactivated (+counts), COMMIT
+  W->>DB: load encrypted tokens
+  W->>P: revoke refresh token (best effort, retried)
+  W->>DB: delete token ciphertext, audit mailbox.disconnected
+  Note over API: next request with any old cookie/bearer -> 401, Gmail add-on -> status check fails

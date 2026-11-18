@@ -1,0 +1,49 @@
+%% Source: docs/02-hld/AI-ARCHITECTURE.md — section: 10.1 Draft generation (`draft_section`, streamed)
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  actor U as Salesperson (web)
+  participant API as server - POST /api/v1/ai/drafts
+  participant G as ai.Gatekeeper
+  participant CB as ai.ContextBuilder
+  participant PR as ai.PromptRegistry
+  participant AP as AiProvider (Anthropic driver)
+  participant C as Claude API
+  participant OP as ai.OutputProcessor
+  participant DB as PostgreSQL
+
+  U->>API: draft request {versionId, sectionId, draftType, instruction, tone, length}<br/>Accept: text/event-stream
+  API->>G: authorise(actor, feature=draft_section, target)
+  G->>DB: read aiSettings (cached ≤5 s, LISTEN/NOTIFY invalidation)
+  alt AI or feature off
+    G-->>API: AI_DISABLED
+    API->>DB: ai_usage(outcome=blocked_disabled)
+    API-->>U: 403 problem+json
+  end
+  G->>DB: PERM-134 scope check, version=draft, section editable
+  G->>DB: quota pre-check (SUM ai_usage month/day + in-flight estimate)
+  alt over budget
+    API->>DB: ai_usage(outcome=blocked_limit)
+    API-->>U: 429 AI_QUOTA_EXCEEDED
+  end
+  G->>CB: build(actor, draft_section, target)
+  CB->>DB: deal/company/contacts, notes, non-private linked emails, template guidance (scopeFilter)
+  CB-->>PR: AiContext {data blocks, contextRefs, stats}
+  PR-->>AP: AiRequest {model=claude-sonnet-5-5, effort=medium, system (cached prefix), user, maxTokens=4000}
+  AP->>C: messages.stream(...)
+  API-->>U: event: meta {requestId, contextStats}
+  loop text deltas
+    C-->>AP: delta
+    AP-->>API: delta
+    API-->>U: event: delta (preview only, plain text)
+  end
+  C-->>AP: final message {stop_reason, usage}
+  AP->>DB: ai_usage {feature, promptVersion, model, servedModel, tokens, cache tokens, latency, cost estimate, outcome}
+  AP->>OP: text + stopReason
+  OP->>OP: stop-reason check, parse Markdown subset → ProseMirror, sanitise, flag URLs/identifiers/[[MISSING]]
+  OP->>DB: tx: insert ai_generation(pending) + ai_pending node in draft section + audit
+  API-->>U: event: done {generationId, content, flags}
+  Note over U: Pending block "AI-generated — review before use"<br/>(blocks send via AI_CONTENT_PENDING)
+  U->>API: POST /api/v1/ai/generations/{id}/accept {finalContent?}
+  API->>DB: tx: replace node with content, provenance on version, status=accepted|edited_accepted, timeline ai_content_accepted, audit
+  API-->>U: 200

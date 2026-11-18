@@ -1,0 +1,59 @@
+%% Source: docs/01-specifications/DOMAIN-MODEL.md — section: 20.3 Sharing and e-signature
+%% Extracted copy; edit the source document, then re-run the extraction.
+classDiagram
+  class ProposalVersion
+  class DealContact
+  class Contact
+  class Recipient {
+    +Email emailSnapshot
+  }
+  class ShareLink {
+    +Hash tokenHash
+    +EncryptedText tokenCiphertext
+    +LinkStatus status
+    +DateTime expiresAt
+    +Boolean requireEmailVerification
+  }
+  class ViewerIdentity {
+    +Email normalizedEmail
+    +Boolean isOriginalRecipient
+  }
+  class ViewSession {
+    +DateTime startedAt
+    +Integer activeSeconds
+  }
+  class DownloadEvent
+  class BuyerResponse {
+    +Response response
+    +Text reason
+  }
+  class EmailVerificationChallenge
+  class SignatureRequest {
+    +SigningOrder signingOrder
+    +SigStatus status
+    +Hash documentSha256
+    +DateTime expiresAt
+  }
+  class Signer {
+    +Integer order
+    +SignerStatus status
+    +DateTime consentCapturedAt
+  }
+  class SignatureEvent
+  class SignedDocument {
+    +Hash signedPdfSha256
+  }
+  ProposalVersion "1" -- "0..*" Recipient
+  Recipient "0..*" --> "1" DealContact
+  Recipient "1" -- "1" ShareLink
+  ShareLink "1" *-- "0..*" ViewerIdentity
+  ViewerIdentity "0..*" --> "0..1" Contact : resolved
+  ShareLink "1" *-- "0..*" ViewSession
+  ShareLink "1" *-- "0..*" DownloadEvent
+  ShareLink "1" *-- "0..*" BuyerResponse
+  ShareLink "1" *-- "0..*" EmailVerificationChallenge
+  ProposalVersion "1" -- "0..*" SignatureRequest
+  SignatureRequest "1" *-- "1..*" Signer
+  Signer "0..*" --> "1" DealContact
+  SignatureRequest "1" *-- "0..*" SignatureEvent
+  SignatureRequest "1" -- "0..1" SignedDocument

@@ -1,0 +1,81 @@
+%% Source: docs/02-hld/DEPLOYMENT-ARCHITECTURE.md — section: 4. Production runtime topology (cloud-neutral)
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart TB
+  subgraph EXT_IN[Inbound clients]
+    U[Internal users<br/>browser SPA, Outlook add-in, Gmail add-on]
+    BUY[External buyers and signers<br/>proposal links]
+    LF[Website visitors<br/>lead-form iframe]
+    WH[E-sign provider webhooks]
+    UPM[External uptime monitor<br/>1-min checks, NFR-006]
+  end
+
+  DNS[Public DNS<br/>app.company.example<br/>proposals.company.example<br/>forms.company.example optional<br/>notify.company.example SPF DKIM DMARC only]
+
+  EDGE[Edge: TLS 1.2+ termination, managed certs<br/>WAF managed rules + per-IP rate limits<br/>host routing, origin lock]
+
+  U --> DNS
+  BUY --> DNS
+  LF --> DNS
+  WH --> DNS
+  UPM --> DNS
+  DNS --> EDGE
+
+  subgraph NET[Private network - single region, multi-zone]
+    subgraph APPNET[App subnet - egress via NAT static IP + allow-list]
+      S1[server 1]
+      S2[server 2]
+      WK[worker x1<br/>pg-boss queues + cron]
+    end
+    subgraph RNET[Render subnet - NO internet egress]
+      RD[renderer x1..2<br/>Chromium / Playwright<br/>pdf queue only]
+    end
+    subgraph PRIV[Private endpoints]
+      DB[(Managed PostgreSQL 18, 17 fallback<br/>HA standby in 2nd zone<br/>PITR 35 days)]
+      OBJ[(Object storage<br/>versioning + Object Lock<br/>documents, signed, exports, audit-archive)]
+      KV[Secrets manager + KMS<br/>app secrets, envelope KEK]
+    end
+    MIG[migrate job<br/>one-shot per release]
+  end
+
+  EDGE -->|HTTPS, origin-locked| S1
+  EDGE -->|HTTPS, origin-locked| S2
+  S1 --> DB
+  S2 --> DB
+  WK --> DB
+  RD --> DB
+  MIG -->|migrator role| DB
+  S1 --> OBJ
+  S2 --> OBJ
+  WK --> OBJ
+  RD --> OBJ
+  S1 --> KV
+  S2 --> KV
+  WK --> KV
+
+  NAT[NAT gateway<br/>static egress IP]
+  S1 --> NAT
+  S2 --> NAT
+  WK --> NAT
+
+  subgraph EXT_OUT[Allow-listed outbound destinations]
+    GOO[Google OAuth, Gmail, Calendar, add-on JWKS]
+    MS[Microsoft Entra, Graph]
+    ES[E-sign provider API]
+    AI[AI provider API]
+    TE[Transactional email API / SMTP]
+    CAP[CAPTCHA verify]
+    ERR[Error-tracking ingest]
+  end
+  NAT --> GOO
+  NAT --> MS
+  NAT --> ES
+  NAT --> AI
+  NAT --> TE
+  NAT --> CAP
+  NAT --> ERR
+
+  OBS[Platform logs, metrics, traces<br/>alerting]
+  S1 -. stdout JSON / OTLP .-> OBS
+  S2 -. stdout JSON / OTLP .-> OBS
+  WK -. stdout JSON / OTLP .-> OBS
+  RD -. stdout JSON only .-> OBS

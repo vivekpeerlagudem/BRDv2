@@ -1,0 +1,13 @@
+%% Source: docs/03-tld/NOTIFICATION-AUTOMATION-DESIGN.md — section: 1. Event → job → effect pipeline
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart LR
+  T["Business transaction (any module)"] -->|"uow.event(name, payload)"| DE[("domain_event (history)")]
+  T -->|"in-tx enqueue per subscriber (ADR-055)"| Q[["pg-boss queues evt.&lt;event&gt;.&lt;subscriber&gt;"]]
+  Q --> N["notifications handler"]
+  Q --> A["automation rule handler"]
+  N --> NT[("notification row (dedupe_key)")]
+  NT -->|"afterCommit NOTIFY crm_notify(userId, seq)"| SSE["SSE poke to user's browsers"]
+  NT -->|"email channel"| EQ[["notify.email"]] --> TX["TransactionalEmail"]
+  A --> AE[("automation_execution (idempotency_key)")]
+  A -->|"changes via owning module services"| T2["deal/proposal/task updates + timeline (automated)"]
+  S["Schedules (cron)"] --> Q

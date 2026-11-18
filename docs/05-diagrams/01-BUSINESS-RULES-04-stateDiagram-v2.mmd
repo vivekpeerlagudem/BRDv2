@@ -1,0 +1,20 @@
+%% Source: docs/01-specifications/BUSINESS-RULES.md — section: 17.4 SM-04 SignatureRequest (BR-SIG-007)
+%% Extracted copy; edit the source document, then re-run the extraction.
+stateDiagram-v2
+    [*] --> Pending: create (S1)
+    Pending --> Pending: dispatch retry (S3)
+    Pending --> Sent: provider dispatched (S2)
+    Pending --> Voided: void (S8)
+    Sent --> Viewed: signer viewed (S4)
+    Sent --> Signed: all signed (S5)
+    Viewed --> Signed: all signed (S5)
+    Sent --> Declined: signer declined (S6)
+    Viewed --> Declined: signer declined (S6)
+    Sent --> Expired: expiry (S7)
+    Viewed --> Expired: expiry (S7)
+    Sent --> Voided: void (S8)
+    Viewed --> Voided: void (S8)
+    Signed --> [*]
+    Declined --> [*]
+    Expired --> [*]
+    Voided --> [*]

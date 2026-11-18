@@ -1,0 +1,64 @@
+%% Source: docs/02-hld/SECURITY-ARCHITECTURE.md — section: 3.1 Trust zones and boundaries
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart LR
+  subgraph Z0["Z0 Internet (untrusted)"]
+    IU["Internal user browser"]
+    BU["Buyer / forwarded viewer / website visitor browser"]
+    SC["Mail security scanners (prefetch)"]
+    OL["Outlook client: task pane iframe"]
+    GWS["Google Workspace add-on platform"]
+    ESP["E-signature provider (webhooks)"]
+  end
+  subgraph Z1["Z1 Edge"]
+    WAF["WAF + TLS load balancer<br/>hosts: app.company-domain, proposals.company-domain"]
+  end
+  subgraph Z2["Z2 Application zone (private)"]
+    SRV["server (Hono)<br/>host-based route allow-lists"]
+  end
+  subgraph Z3["Z3 Worker zone (private, allow-listed egress)"]
+    WRK["worker: jobs, mail sync, AI, e-sign, email"]
+  end
+  subgraph Z4["Z4 Renderer sandbox (no internet egress)"]
+    RND["pdf worker + headless Chromium"]
+  end
+  subgraph Z5["Z5 Data zone (private endpoints)"]
+    PG[("PostgreSQL")]
+    OBJ[("Object storage")]
+    KMS[["KMS + secrets store"]]
+  end
+  subgraph Z6["Z6 Third-party APIs"]
+    GOO["Google OAuth / Gmail / Calendar"]
+    MS["Entra ID / Microsoft Graph"]
+    AIP["AI provider"]
+    TEM["Transactional email"]
+    ESPAPI["E-sign provider API"]
+    CAP["CAPTCHA (Turnstile)"]
+  end
+  subgraph Z7["Z7 Operations"]
+    CICD["CI/CD + release job (migrator)"]
+    OPS["Operators (break-glass)"]
+  end
+
+  IU -- "TB-02 cookie session" --> WAF
+  BU -- "TB-03 share token / buyer cookie" --> WAF
+  SC -- "TB-03 prefetch GET" --> WAF
+  OL -- "TB-04 bearer token" --> WAF
+  GWS -- "TB-04 Google-signed ID tokens" --> WAF
+  ESP -- "TB-05 HMAC webhooks" --> WAF
+  WAF -- "TB-01" --> SRV
+  SRV -- "TB-08" --> PG
+  SRV -- "TB-09" --> OBJ
+  SRV -- "TB-10" --> KMS
+  WRK -- "TB-08/09/10" --> PG
+  WRK --> OBJ
+  WRK --> KMS
+  WRK -- "TB-06 outbound" --> GOO
+  WRK --> MS
+  WRK --> AIP
+  WRK --> TEM
+  WRK --> ESPAPI
+  SRV -- "TB-06 token verify / CAPTCHA verify" --> CAP
+  RND -- "TB-07 jobs + PDFs only" --> PG
+  RND --> OBJ
+  CICD -- "TB-11" --> PG
+  OPS -- "TB-11" --> Z2

@@ -1,0 +1,29 @@
+%% Source: docs/02-hld/INTEGRATION-ARCHITECTURE.md — section: 10.3 Send from CRM
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  actor U as User
+  participant S as server
+  participant DB as PostgreSQL
+  participant P as Gmail API or Graph
+  U->>S: POST /api/v1/emails (Idempotency-Key, to, subject, body, related record)
+  S->>DB: idempotency lookup
+  alt replay with same key
+    S-->>U: stored response
+  else new
+    S->>S: policy, active mailbox, placeholders resolved, limits (RULE-EML-10/11)
+    S->>DB: TX email_message status sending, send-id, tracking row, idempotency_key
+    S->>P: send (Gmail messages.send raw MIME or Graph sendMail) with X-CRM-Send-Id
+    alt accepted
+      P-->>S: 200 id (Gmail) or 202 (Graph)
+      S->>DB: TX status sent, provider ids, explicit link, timeline, domain_event email.sent
+      S-->>U: 201 Email sent
+    else definite failure (4xx)
+      S->>DB: TX status failed, kept as draft
+      S-->>U: 502 PROVIDER_SEND_FAILED with reason
+    else timeout or ambiguous
+      S->>DB: TX status unknown
+      S-->>U: 202 delivery being confirmed
+      Note over S,P: next mail.sync matches X-CRM-Send-Id in Sent and sets sent, no automatic resend (ADR-084 proposed)
+    end
+  end

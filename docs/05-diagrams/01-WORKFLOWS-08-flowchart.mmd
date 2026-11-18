@@ -1,0 +1,23 @@
+%% Source: docs/01-specifications/WORKFLOWS.md — section: WF-28 Negotiation: new version, comparison, re-send
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart TD
+    A[Proposal status Sent/Viewed/Accepted/Declined/Expired] --> B{Void or Signed?}
+    B -- yes --> X[PROPOSAL_TERMINAL - offer copy to new proposal]
+    B -- no --> C{Draft version exists?}
+    C -- yes --> D[Open existing draft]
+    C -- no --> E[Create draft vN+1 from current sent version]
+    E --> F[Re-resolve placeholders, show changed values]
+    F --> G{Status was Declined/Expired?}
+    G -- yes --> H[Proposal status then Draft]
+    G -- no --> I[Status unchanged, hasDraftRevision]
+    H --> J[Edit content and pricing]
+    I --> J
+    D --> J
+    J --> K[Compare versions + pre-send check]
+    K --> L{Open signature request on vN?}
+    L -- yes --> M[Confirm: void request - provider void first]
+    M -->|void failed| Y[Abort send ESIGN_PROVIDER_ERROR]
+    M -->|voided| N
+    L -- no --> N[Send vN+1: freeze, links, status Sent]
+    N --> O[vN superseded: read-only links + banner]
+    N --> P[AUT-001 evaluated, AUT-004 scheduled for vN+1]

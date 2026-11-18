@@ -1,0 +1,44 @@
+%% Source: docs/02-hld/INTEGRATION-ARCHITECTURE.md — section: 10.6 Signature request create → signer events → completion webhook → reconciliation
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  actor U as User
+  participant S as server
+  participant DB as PostgreSQL
+  participant W as worker
+  participant O as Object storage
+  participant P as E-sign provider
+  actor SG as Signer
+  U->>S: POST /signature-requests (Idempotency-Key, versionId, signers, order)
+  S->>DB: TX lock deal FOR UPDATE, check one open SR per deal, SR pending, signers, job esign.dispatch
+  S-->>U: 201 Pending
+  W->>O: get version PDF
+  W->>W: assert sha256 equals proposal_version.pdfSha256
+  W->>P: createEnvelope (external ref = SR id, PDF, signers, order, expiry, reminders, ERSD)
+  P-->>W: envelope id
+  W->>DB: TX status sent, signers sent or waiting, signature_event dispatched, timeline
+  P->>SG: signing email (email verification, SMS optional)
+  SG->>P: views, consents, signs
+  P->>S: webhook signer events (raw body + signature header)
+  S->>S: verify HMAC and timestamp
+  S->>DB: TX insert inbox (unique provider event id), job esign.process
+  S-->>P: 200
+  W->>P: getEnvelope (authoritative)
+  W->>DB: TX lock deal, forward-only signer and SR status, signature_event, timeline, notification signer_signed
+  P->>S: webhook envelope completed
+  S->>DB: TX inbox + job
+  S-->>P: 200
+  W->>P: getEnvelope status completed
+  W->>P: downloadSignedDocument + downloadCertificate
+  W->>O: put signed bucket (Object Lock), sha256
+  W->>DB: TX lock deal, signed_document, SR signed
+  alt SR still current version and not voided or expired
+    W->>DB: version signed, proposal Signed, domain_event signature.completed, job automation.aut002 (AUT-002 key = SR id)
+  else stale (voided, superseded or expired)
+    W->>DB: keep legal record, deal flag Signed on stale version, notify owner, no AUT-002
+  end
+  loop hourly esign.reconcile
+    W->>DB: list open SRs
+    W->>P: getEnvelope for each
+    W->>DB: apply missed transitions through same handler
+  end

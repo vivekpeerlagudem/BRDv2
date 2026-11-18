@@ -1,0 +1,19 @@
+%% Source: docs/02-hld/SECURITY-ARCHITECTURE.md — section: 6.7 Gmail add-on request verification
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  participant GW as Google Workspace add-on platform
+  participant API as server /addons/v1/gmail
+  participant JW as Google JWKS (cached)
+  participant DB as PostgreSQL
+  GW->>API: POST /addons/v1/gmail/:card (Authorization: Bearer systemIdToken, body.authorizationEventObject.userIdToken)
+  API->>JW: verify signatures (cached keys, kid rotation)
+  API->>API: system token: iss Google, aud = this endpoint URL, email = add-on service identity
+  API->>API: user token: aud = our client, hd = company domain, email_verified, exp
+  API->>DB: user by bound sub (else first-use bind by email) + status active + MFA policy (IdP)
+  alt any check fails
+    API-->>GW: 200 card "Sign in / no access" (no data)
+  else ok
+    API->>DB: decide()/scopeFilter as the user
+    API-->>GW: card JSON (no secrets, minimal fields)
+  end

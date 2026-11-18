@@ -1,0 +1,28 @@
+%% Source: docs/03-tld/DATABASE-ERD.md — section: 4. Catalog, templates and proposals
+%% Extracted copy; edit the source document, then re-run the extraction.
+erDiagram
+  TAX_CATEGORY ||--o{ PRODUCT : tax
+  PRODUCT ||--|{ PRODUCT_PRICE : "prices per currency"
+  PROPOSAL_TEMPLATE ||--|{ TEMPLATE_VERSION : versions
+  PROPOSAL_TEMPLATE |o--o| TEMPLATE_VERSION : "current_published_version"
+  TEMPLATE_VERSION ||--o{ PROPOSAL : "pinned by"
+  DEAL ||--o{ PROPOSAL : proposals
+  PROPOSAL ||--|{ PROPOSAL_VERSION : versions
+  PROPOSAL_VERSION |o--o{ PROPOSAL_VERSION : "based_on"
+  PROPOSAL_VERSION ||--o{ PRICING_TABLE : tables
+  PRICING_TABLE ||--|{ PRICING_LINE : lines
+  PRODUCT |o--o{ PRICING_LINE : "snapshot source"
+  PROPOSAL_VERSION ||--o{ GENERATED_FILE : renditions
+  PROPOSAL_VERSION ||--o{ PROPOSAL_SEND_ATTEMPT : "send attempts"
+  PROPOSAL_VERSION ||--o{ AI_CHECK_RESULT : "pre-send checks"
+  FILE_OBJECT ||--o{ GENERATED_FILE : stores
+
+  PROPOSAL { uuid id PK uuid deal_id FK uuid template_version_id FK text status "draft|sent|viewed|accepted|signed|declined|expired|void" uuid current_version_id FK uuid last_sent_version_id FK date valid_until boolean signature_required }
+  PROPOSAL_VERSION { uuid id PK uuid proposal_id FK int version_number text state "draft|sent|superseded|signed" jsonb content jsonb totals char64 snapshot_sha256 char64 pdf_sha256 }
+  PRICING_TABLE { uuid id PK uuid proposal_version_id FK text section_id text overall_discount_type }
+  PRICING_LINE { uuid id PK uuid pricing_table_id FK text line_key numeric quantity numeric unit_price text billing_type text billing_period numeric line_total }
+  TEMPLATE_VERSION { uuid id PK uuid template_id FK int version_number text state "draft|published|retired" jsonb content }
+  PROPOSAL_SEND_ATTEMPT { uuid id PK uuid proposal_version_id FK text channel text status timestamptz expires_at }
+  CONTENT_BLOCK { uuid id PK text category int revision }
+  DISCOUNT_LIMIT { text role PK numeric max_line_discount_percent numeric max_overall_discount_percent }
+  EXCHANGE_RATE { uuid id PK char3 from_currency char3 to_currency numeric rate date effective_from }

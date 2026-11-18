@@ -1,0 +1,73 @@
+%% Source: docs/02-hld/COMPONENT-ARCHITECTURE.md — section: 2.1 Component diagram
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart TB
+  classDef surface fill:#438dd5,stroke:#2e6295,color:#ffffff
+  classDef mw fill:#85bbf0,stroke:#5d82a8,color:#0b2540
+  classDef core fill:#1168bd,stroke:#0b4884,color:#ffffff
+  classDef infra fill:#d9e6f2,stroke:#5b7083,color:#1b2733
+  classDef ext fill:#999999,stroke:#6b6b6b,color:#ffffff
+
+  subgraph http["HTTP layer (Hono app, host-based routing)"]
+    direction LR
+    rApi["/api/v1 router<br/>internal REST, OpenAPI"]:::surface
+    rSse["/api/v1/events/stream<br/>SSE poke"]:::surface
+    rAuth["/auth/*<br/>Better Auth handler"]:::surface
+    rPub["/public/v1 router<br/>buyer origin only"]:::surface
+    rWh["/webhooks router<br/>esign, leads"]:::surface
+    rAdd["/addin/v1 router<br/>Outlook bearer, Gmail cards"]:::surface
+    rStatic["static assets<br/>index/buyer/addin per host"]:::surface
+    rOps["/healthz /readyz<br/>private metrics"]:::surface
+  end
+
+  subgraph chain["Middleware chain (ordered, per surface profile)"]
+    direction LR
+    m1["requestId"]:::mw --> m2["logger"]:::mw --> m3["securityHeaders + CSP"]:::mw --> m4["rateLimit"]:::mw --> m5["authenticate"]:::mw --> m6["mfaPolicy"]:::mw --> m7["actorContext / scopeFilter inputs"]:::mw --> m8["validate (Zod)"]:::mw --> m9["idempotency"]:::mw
+    m0["errorMapper (onError)"]:::mw
+  end
+
+  subgraph core["Application core (framework-free)"]
+    direction TB
+    svc["Module services<br/>identity, crm, import, comms, leads, templates, catalog,<br/>proposals, sharing, esign, ai, notifications, automation,<br/>reporting, timeline, platform"]:::core
+    pol["Policy<br/>decide(), scopeFilter(), redact()"]:::core
+    uow["Unit of work<br/>tx + timeline.record + audit.record +<br/>jobs.enqueue + events.record"]:::core
+    repo["Repositories (Drizzle)<br/>per module, scope-filtered queries"]:::core
+  end
+
+  subgraph infra["Platform infrastructure"]
+    direction LR
+    db["Db pools<br/>app pool + 1 LISTEN connection"]:::infra
+    jobs["JobBus<br/>pg-boss send in tx"]:::infra
+    hub["RealtimeHub<br/>SSE connections, NOTIFY listener"]:::infra
+    cache["LocalCache<br/>settings, permission context"]:::infra
+    crypto["Crypto<br/>envelope encryption, token hashing"]:::infra
+    cfg["Config + Secrets"]:::infra
+    log["Logger / Tracer / Metrics"]:::infra
+  end
+
+  subgraph adapters["Adapters (ports)"]
+    direction LR
+    aMail["MailProvider / CalendarProvider"]:::infra
+    aSign["ESignatureProvider"]:::infra
+    aAi["AiProvider"]:::infra
+    aTe["TransactionalEmail"]:::infra
+    aObj["ObjectStorage"]:::infra
+    aCap["Captcha"]:::infra
+  end
+
+  pg[("PostgreSQL")]:::ext
+  extp["External providers"]:::ext
+
+  http --> chain --> svc
+  rSse --> hub
+  svc --> pol
+  svc --> uow
+  svc --> repo
+  uow --> repo
+  uow --> jobs
+  repo --> db
+  jobs --> db
+  hub --> db
+  cache -.-> hub
+  svc --> adapters
+  db --> pg
+  adapters --> extp

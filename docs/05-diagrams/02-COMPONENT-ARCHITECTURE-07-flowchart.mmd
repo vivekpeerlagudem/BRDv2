@@ -1,0 +1,48 @@
+%% Source: docs/02-hld/COMPONENT-ARCHITECTURE.md — section: 5.1 Component diagram
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart TB
+  classDef entry fill:#438dd5,stroke:#2e6295,color:#ffffff
+  classDef comp fill:#85bbf0,stroke:#5d82a8,color:#0b2540
+  classDef pkg fill:#e8f0fb,stroke:#2e6295,color:#0b2540
+
+  subgraph idx["index.html (internal app)"]
+    direction TB
+    rt["TanStack Router<br/>file routes, typed search params, route guards from permissions"]:::comp
+    qc["TanStack Query cache<br/>queries keyed by resource + params; mutations with rowVersion; invalidation map"]:::comp
+    api["API client<br/>typed from shared Zod contracts; problem+json parser; Idempotency-Key helper"]:::comp
+    perm["Permission context<br/>/me/permissions + allowedActions → can()"]:::comp
+    ui["Feature screens<br/>deals, contacts, companies, My Day, proposals, templates, catalog, reports, admin"]:::comp
+    tbl["List views<br/>TanStack Table, saved views, cursor paging"]:::comp
+    frm["Forms<br/>TanStack Form + Zod"]:::comp
+    ed["Editor<br/>TipTap constrained to packages/proposal schema; locked sections read-only"]:::comp
+    prev["Preview<br/>packages/proposal HTML renderer"]:::comp
+    rtm["Realtime client<br/>30 s poll + SSE poke → query invalidation"]:::comp
+    mail["Email body viewer<br/>sandboxed iframe, remote images blocked"]:::comp
+  end
+  subgraph buy["buyer.html"]
+    direction TB
+    bv["Proposal view<br/>snapshot render, banners, mobile"]:::comp
+    bg["Identity gate + OTP"]:::comp
+    bh["Heartbeat tracker"]:::comp
+    br["Accept / decline"]:::comp
+    lf["Hosted lead form<br/>honeypot, CAPTCHA widget, postMessage resize"]:::comp
+  end
+  subgraph add["addin.html"]
+    direction TB
+    oa["Office.js bootstrap + sign-in (dialog or NAA)"]:::comp
+    oc["Message context panel<br/>match / create / link"]:::comp
+  end
+  sh["packages/shared"]:::pkg
+  pp["packages/proposal"]:::pkg
+  ui --> rt
+  ui --> qc --> api
+  ui --> perm
+  ui --> tbl
+  ui --> frm
+  ui --> ed --> pp
+  prev --> pp
+  bv --> pp
+  api --> sh
+  frm --> sh
+  perm --> sh
+  rtm --> qc

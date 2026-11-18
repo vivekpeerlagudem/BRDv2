@@ -1,0 +1,11 @@
+%% Source: docs/01-specifications/BUSINESS-RULES.md — section: 17.1 SM-01 Deal
+%% Extracted copy; edit the source document, then re-run the extraction.
+stateDiagram-v2
+    [*] --> Open: create (D1)
+    Open --> Open: stage/pipeline change (D2, D3) / AUT-001 (D4)
+    Open --> Won: mark Closed Won (D5) / AUT-002 all signed (D6)
+    Open --> Lost: mark Closed Lost + lost reason (D7)
+    Won --> Open: reopen with reason (D8) / reverse AUT-002 (D10)
+    Lost --> Open: reopen with reason (D9)
+    Won --> Lost: switch with reason (D11)
+    Lost --> Won: switch with reason (D11)

@@ -1,0 +1,33 @@
+%% Source: docs/01-specifications/WORKFLOWS.md — section: WF-13 Incremental email and calendar sync with linking
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+    autonumber
+    participant SCH as pg-boss schedule
+    participant W as Worker
+    participant MP as MailProvider
+    participant DB as Postgres
+    participant AUT as Automation handlers
+    SCH->>W: sync(connectionId) every 2-5 min (singleton)
+    W->>DB: load cursor + decrypt tokens
+    W->>MP: list changes since cursor
+    alt token rejected
+        MP-->>W: invalid_grant
+        W->>DB: connection reauth_required + outbox mailbox.reauth_required
+    else throttled / 5xx
+        MP-->>W: 429 / 5xx
+        W->>DB: connection error, schedule backoff (cursor unchanged)
+    else changes
+        MP-->>W: messages + events page
+        loop each message
+            W->>W: participants internal-only? unknown & thread not linked? excluded?
+            alt keep
+                W->>DB: upsert email (by provider id), private flag, links (contacts, companies, deal per OD-28)
+                W->>DB: timeline event, deal.lastActivityAt, clear stalled flag
+            else drop
+                W->>W: discard (not stored)
+            end
+        end
+        W->>DB: upsert meetings with known attendees
+        W->>DB: commit page + new cursor (same txn)
+        DB-->>AUT: outbox email.stored / email.linked (AUT-004 answered marker)
+    end

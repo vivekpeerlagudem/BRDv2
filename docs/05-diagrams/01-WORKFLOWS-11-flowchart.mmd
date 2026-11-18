@@ -1,0 +1,11 @@
+%% Source: docs/01-specifications/WORKFLOWS.md — section: WF-34 Expiry: proposal validity, link expiry, signature request expiry
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart TD
+    T[Every 5 min + on each buyer request] --> A{Validity end passed and status Sent/Viewed?}
+    A -- yes --> A1[Proposal Expired, void+expire open SR, links show expired, notify owner]
+    A -- no --> B{Link expiry passed?}
+    B -- yes --> B1[That link expired only]
+    B -- no --> C{Provider reports SR expired?}
+    C -- yes --> C1[SR Expired, signers cancelled, proposal status unchanged, notify owner]
+    C -- no --> D{Within 48 h of earliest expiry?}
+    D -- yes --> D1[link_expiring notification once]

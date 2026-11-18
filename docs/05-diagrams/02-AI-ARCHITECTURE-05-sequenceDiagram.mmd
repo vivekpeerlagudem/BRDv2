@@ -1,0 +1,53 @@
+%% Source: docs/02-hld/AI-ARCHITECTURE.md — section: 10.2 Pre-send check
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  actor U as Salesperson (web)
+  participant API as server - POST presend-checks
+  participant PS as ai.PresendOrchestrator
+  participant DET as proposals.deterministicChecks
+  participant DB as PostgreSQL (+pg-boss)
+  participant W as worker - job ai.presend-llm
+  participant G as ai.Gatekeeper
+  participant AP as AiProvider
+  participant C as Claude API
+
+  U->>API: run check (or Send triggers it when result missing/stale)
+  API->>PS: run(actor, versionId)
+  PS->>DB: load draft snapshot, compute contentHash
+  alt fresh result exists for contentHash
+    PS-->>API: existing ai_check_result
+  else
+    PS->>DET: placeholders, required sections, pending AI, dates, currency, totals, discount, recipients
+    DET-->>PS: deterministic findings
+    PS->>DB: tx: insert ai_check_result {contentHash, findings(det), llmLayer} + enqueue ai.presend-llm (singletonKey=versionId:hash) if AI+feature on and org budget available
+    PS-->>API: result (llmLayer = pending | skipped_disabled | skipped_budget)
+  end
+  API-->>U: 201 deterministic findings (blocking/warning/info) + llmLayer status
+  W->>G: re-check switches + org budget (state may have changed)
+  alt disabled / no budget
+    W->>DB: llmLayer = skipped_*
+  else
+    W->>DB: build check context: version text + own deal facts + pricing (no emails/notes)
+    W->>AP: AiRequest {model=claude-opus-5-5, effort=medium, jsonSchema, maxTokens=8000}
+    AP->>C: messages.create(output_config.format=json_schema)
+    alt success
+      C-->>AP: JSON findings + usage
+      AP->>DB: ai_usage
+      W->>W: validate (sectionId exists, excerpt substring), cap severity=warning, dedupe vs deterministic
+      W->>DB: tx: findings(llm) appended, llmLayer=completed, event proposal.check_completed, notify
+    else error / timeout / refusal
+      AP->>DB: ai_usage(outcome=error|refused)
+      W->>DB: llmLayer=failed
+    end
+  end
+  DB-->>U: SSE poke → client refetches result
+  U->>API: Send version (Idempotency-Key)
+  API->>DB: contentHash unchanged? blocking findings = 0? warnings acknowledged?
+  alt blocking findings
+    API-->>U: 409 PRESEND_BLOCKING_FINDINGS
+  else llmLayer pending/failed/skipped
+    API-->>U: dialog: wait / "Send without AI check" (acknowledgement recorded)
+  else
+    API-->>U: proceed to SHR send flow (user action, BR-AIA-006)
+  end

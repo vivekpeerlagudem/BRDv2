@@ -1,0 +1,9 @@
+%% Source: docs/01-specifications/BUSINESS-RULES.md — section: 17.6 SM-06 ShareLink
+%% Extracted copy; edit the source document, then re-run the extraction.
+stateDiagram-v2
+    [*] --> active: created at send (L1)
+    active --> revoked: revoke (L2)
+    active --> expired: link expiry reached (L3)
+    expired --> active: expiry extended (L4)
+    expired --> revoked: revoke (L2)
+    revoked --> [*]

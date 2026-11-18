@@ -1,0 +1,72 @@
+%% Source: docs/02-hld/MODULE-ARCHITECTURE.md — section: 2. Module dependency graph (allowed directions)
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart TB
+  classDef top fill:#1168bd,stroke:#0b4884,color:#ffffff
+  classDef mid fill:#438dd5,stroke:#2e6295,color:#ffffff
+  classDef low fill:#85bbf0,stroke:#5d82a8,color:#0b2540
+  classDef base fill:#d9e6f2,stroke:#5b7083,color:#1b2733
+  classDef ro fill:#f5e6c8,stroke:#a07a2c,color:#3d2c08
+
+  automation:::top
+  reporting["reporting (read-only)"]:::ro
+  ai:::top
+  sharing:::mid
+  esign:::mid
+  import:::mid
+  leads:::mid
+  comms:::mid
+  proposals:::mid
+  templates:::low
+  catalog:::low
+  crm:::low
+  notifications:::base
+  timeline:::base
+  identity:::base
+  platform:::base
+
+  automation --> ai
+  automation --> sharing
+  automation --> esign
+  automation --> comms
+  automation --> proposals
+  automation --> crm
+  automation --> notifications
+  ai --> proposals
+  ai --> comms
+  ai --> templates
+  ai --> crm
+  sharing --> proposals
+  sharing --> comms
+  sharing --> crm
+  sharing --> notifications
+  esign --> proposals
+  esign --> crm
+  esign --> notifications
+  proposals --> templates
+  proposals --> catalog
+  proposals --> crm
+  proposals --> notifications
+  import --> templates
+  import --> crm
+  leads --> crm
+  leads --> notifications
+  comms --> crm
+  comms --> notifications
+  templates --> catalog
+  templates --> crm
+  crm --> timeline
+  crm --> notifications
+  crm --> identity
+  catalog --> identity
+  notifications --> identity
+  timeline --> identity
+  identity --> platform
+
+  esign -.->|"implements SignatureRequestPort"| proposals
+  ai -.->|"implements PreSendCheckContributor"| proposals
+  esign -.->|"implements DealClosingHook"| crm
+  proposals -.->|"implements DealClosingHook"| crm
+  comms -.->|"implements UserDeactivationHook"| identity
+  leads -.->|"implements UserDeactivationHook"| identity
+
+  reporting -.->|"reads views of all modules"| crm

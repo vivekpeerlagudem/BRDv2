@@ -1,0 +1,59 @@
+%% Source: docs/01-specifications/DOMAIN-MODEL.md — section: 20.4 Communications, leads, import
+%% Extracted copy; edit the source document, then re-run the extraction.
+classDiagram
+  class User
+  class MailboxConnection {
+    +Provider provider
+    +ConnStatus status
+  }
+  class EmailThread
+  class EmailMessage {
+    +Direction direction
+    +Boolean isPrivate
+    +Boolean sentViaCrm
+  }
+  class EmailLink {
+    +LinkSource linkSource
+    +Boolean reviewSuggested
+  }
+  class EmailExclusion
+  class EmailTemplate {
+    +Visibility visibility
+  }
+  class CalendarEvent
+  class CalendarEventLink
+  class EmailTracking
+  class LeadForm {
+    +FormStatus status
+  }
+  class LeadFormSubmission {
+    +SpamVerdict spamVerdict
+  }
+  class AssignmentRule {
+    +RuleKind kind
+  }
+  class AssignmentState
+  class ImportBatch {
+    +ImportStatus status
+  }
+  class ImportRow
+  class ImportRecordLink
+  class CrmRecord
+  User "1" -- "0..1" MailboxConnection
+  MailboxConnection "1" *-- "0..*" EmailThread
+  EmailThread "1" *-- "1..*" EmailMessage
+  EmailMessage "1" *-- "0..*" EmailLink
+  EmailLink --> CrmRecord
+  EmailMessage "1" -- "0..1" EmailTracking
+  MailboxConnection "1" *-- "0..*" CalendarEvent
+  CalendarEvent "1" *-- "0..*" CalendarEventLink
+  CalendarEventLink --> CrmRecord
+  User "1" -- "0..*" EmailExclusion
+  User "1" -- "0..*" EmailTemplate
+  LeadForm "1" -- "0..*" LeadFormSubmission
+  LeadForm "0..*" --> "0..*" AssignmentRule
+  AssignmentRule "1" -- "1" AssignmentState
+  LeadFormSubmission ..> CrmRecord : creates or matches
+  ImportBatch "1" *-- "0..*" ImportRow
+  ImportBatch "1" *-- "0..*" ImportRecordLink
+  ImportRecordLink --> CrmRecord

@@ -1,0 +1,12 @@
+%% Source: docs/01-specifications/BUSINESS-RULES.md — section: 17.9 SM-09 Lead form submission
+%% Extracted copy; edit the source document, then re-run the extraction.
+stateDiagram-v2
+    [*] --> received: valid submission (R1)
+    [*] --> spam_rejected: honeypot (R2)
+    received --> processing: job picks up (R3)
+    processing --> processed: records upserted, assigned, notified (R4)
+    processing --> received: transient error, retry (R5)
+    processing --> failed: retries exhausted (R6)
+    failed --> received: Admin reprocess (R7)
+    processed --> [*]
+    spam_rejected --> [*]

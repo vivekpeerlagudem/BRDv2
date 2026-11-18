@@ -1,0 +1,34 @@
+%% Source: docs/02-hld/SYSTEM-ARCHITECTURE.md — section: 4.2 Deployment view (summary; authoritative detail in DEPLOYMENT-ARCHITECTURE.md)
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart LR
+  classDef node fill:#f3f6fa,stroke:#5b7083,color:#1b2733
+  subgraph cloud["Company cloud subscription (Azure or AWS, OD-11)"]
+    direction LR
+    subgraph edge["Edge"]
+      waf["WAF + load balancer<br/>crm.company-domain<br/>proposals.company-domain"]:::node
+    end
+    subgraph runtime["Container runtime, private network"]
+      s1["server instance 1"]:::node
+      s2["server instance 2"]:::node
+      w1["worker instance<br/>egress allow-list for providers"]:::node
+      r1["renderer instance<br/>Chromium, no internet egress"]:::node
+      rel["migrate release job<br/>migrations + pg-boss schema as migrator"]:::node
+    end
+    subgraph data["Managed data services"]
+      db[("PostgreSQL 18<br/>PITR, encrypted")]:::node
+      bl[("Object storage<br/>versioned, Object Lock")]:::node
+      kv["Secrets store / KMS"]:::node
+    end
+  end
+  waf --> s1
+  waf --> s2
+  s1 --> db
+  s2 --> db
+  w1 --> db
+  rel --> db
+  s1 --> bl
+  w1 --> bl
+  r1 --> db
+  r1 --> bl
+  s1 -.-> kv
+  w1 -.-> kv

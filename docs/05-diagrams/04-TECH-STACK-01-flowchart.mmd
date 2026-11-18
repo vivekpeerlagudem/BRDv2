@@ -1,0 +1,21 @@
+%% Source: docs/04-engineering/TECH-STACK.md — section: 1. Recommended architecture in one picture
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart LR
+  subgraph Browser
+    APP["Internal app (React SPA, index.html)"]
+    BUY["Buyer view + hosted forms (buyer.html, separate origin)"]
+    ADD["Outlook add-in (addin.html)"]
+  end
+  subgraph Containers["One codebase · two images"]
+    S["server: Hono API + static assets + SSE"]
+    W["worker: pg-boss jobs, schedules, integrations"]
+    R["renderer: Chromium PDF / DOCX (no internet egress)"]
+  end
+  DB[("PostgreSQL 18 · data + pg-boss queue + LISTEN/NOTIFY + FTS")]
+  OBJ[("Object storage (S3 or Azure Blob)")]
+  APP & BUY & ADD --> S
+  S --> DB
+  W --> DB
+  R --> DB
+  S & W & R --> OBJ
+  W --> EXT["Google / Microsoft · e-sign provider · Claude API · transactional email"]

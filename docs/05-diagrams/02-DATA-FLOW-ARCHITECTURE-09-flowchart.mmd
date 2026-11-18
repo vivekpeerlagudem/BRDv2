@@ -1,0 +1,14 @@
+%% Source: docs/02-hld/DATA-FLOW-ARCHITECTURE.md — section: F-08 E-signature
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart TB
+  R["User: request signatures on current sent version"] -->|"Idempotency-Key"| T1["TX-1: lock deal row; partial unique index<br/>(one open SR per deal); signature_request pending,<br/>signers (snapshot name/email), job esign.dispatch"]
+  T1 --> D["worker esign.dispatch: read PDF from storage,<br/>assert sha256 == version.pdfSha256,<br/>ESignatureProvider.createEnvelope (external id = SR id)"]
+  D --> T2["TX-2: providerEnvelopeId, status Sent,<br/>signer statuses, signature_event dispatched"]
+  P["Provider webhook POST /webhooks/esign/{provider}"] --> V["verify HMAC over raw body + timestamp tolerance"]
+  V --> IB["TX-W: insert esign_webhook_inbox (unique provider event id),<br/>job esign.process; respond 2xx"]
+  IB --> PR["worker esign.process: re-read envelope status from provider API<br/>(authoritative); map to forward-only transitions"]
+  PR -->|"signer events"| T3["TX: lock deal; signer status, signature_event,<br/>timeline, notifications signer_signed"]
+  PR -->|"completed"| DLD["download sealed PDF + certificate;<br/>sha256; store in immutable bucket (Object Lock)"]
+  DLD --> T4["TX: lock deal; signed_document; SR Signed;<br/>if SR still current: version signed, proposal Signed,<br/>domain_event signature.completed, job automation.aut002<br/>else: legal record kept, deal flag 'Signed on stale version',<br/>notify owner, NO AUT-002"]
+  T4 --> AUT["worker automation.aut002 (key AUT-002:{srId}):<br/>Closed Won, amount = TCV, close date,<br/>sibling auto-void (OD-23), execution snapshot"]
+  REC["cron esign.reconcile (hourly, A9)"] --> PR

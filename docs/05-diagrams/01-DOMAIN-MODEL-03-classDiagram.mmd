@@ -1,0 +1,64 @@
+%% Source: docs/01-specifications/DOMAIN-MODEL.md — section: 20.2 Proposals, templates, catalog
+%% Extracted copy; edit the source document, then re-run the extraction.
+classDiagram
+  class ProposalTemplate {
+    +Text name
+    +Boolean isStarter
+  }
+  class TemplateVersion {
+    +Integer versionNumber
+    +TemplateState state
+    +RichContent content
+  }
+  class ContentBlock {
+    +Text name
+    +Integer revision
+  }
+  class Product {
+    +Text name
+    +Text unit
+    +Money price
+    +BillingType billingType
+  }
+  class TaxCategory {
+    +Text code
+    +Percent ratePercent
+  }
+  class DiscountLimit {
+    +Role role
+    +Percent maxLineDiscountPercent
+    +Percent maxOverallDiscountPercent
+  }
+  class Proposal {
+    +ProposalStatus status
+    +Currency currency
+    +Date validUntil
+    +Boolean signatureRequired
+  }
+  class ProposalVersion {
+    +Integer versionNumber
+    +VersionState state
+    +Integer termMonths
+    +ProposalTotals totals
+    +Hash pdfSha256
+  }
+  class PricingTable
+  class PricingLine {
+    +ProductSnapshot productSnapshot
+    +Quantity quantity
+    +Money unitPrice
+    +BillingType billingType
+  }
+  class GeneratedFile
+  class Deal
+  ProposalTemplate "1" *-- "1..*" TemplateVersion
+  Deal "1" *-- "0..*" Proposal
+  Proposal "0..*" --> "1" TemplateVersion : pinned
+  Proposal "1" *-- "1..*" ProposalVersion
+  ProposalVersion "1" *-- "0..*" PricingTable
+  PricingTable "1" *-- "1..*" PricingLine
+  PricingLine ..> Product : snapshot of
+  Product "0..*" --> "1" TaxCategory
+  ProposalVersion ..> ContentBlock : copied revision
+  ProposalVersion "1" *-- "0..*" GeneratedFile
+  ProposalVersion ..> DiscountLimit : warning check

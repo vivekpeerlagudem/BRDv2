@@ -1,0 +1,13 @@
+%% Source: docs/01-specifications/WORKFLOWS.md — section: WF-04 User deactivation with reassignment
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart TD
+    A[Admin: deactivate user] --> B{Last active Admin?}
+    B -- yes --> X[Refuse LAST_ADMIN]
+    B -- no --> C[Show impact counts]
+    C --> D{Open records exist?}
+    D -- yes --> E[Admin picks target per record type]
+    D -- no --> F
+    E --> F[Txn: deactivate, reassign, remove from pools, revoke sessions, mailbox revoked, outbox]
+    F --> G[Worker: revoke provider tokens]
+    F --> H[Worker: notify new owners]
+    F --> I[Flag assignment rules / forms needing fallback review]

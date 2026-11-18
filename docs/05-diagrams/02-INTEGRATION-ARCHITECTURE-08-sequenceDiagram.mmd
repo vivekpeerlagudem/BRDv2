@@ -1,0 +1,29 @@
+%% Source: docs/02-hld/INTEGRATION-ARCHITECTURE.md — section: 10.7 AI draft call
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  actor U as User (proposal editor)
+  participant S as server ai module
+  participant DB as PostgreSQL
+  participant A as AI provider (Messages API)
+  U->>S: POST /api/v1/ai/drafts {versionId, sectionId, type, instruction}
+  S->>DB: check org and feature switches, user can edit proposal, section editable
+  S->>DB: check org and user token caps (OD-53)
+  alt disabled or over cap
+    S-->>U: 403 AI_DISABLED or 429 AI_QUOTA_EXCEEDED
+  else allowed
+    S->>DB: build context as requester (scopeFilter, no private emails, strip hidden text)
+    S->>A: messages request (x-api-key, prompt version, delimited untrusted data, max tokens, 60 s timeout)
+    alt success
+      A-->>S: output, usage, request-id
+      S->>S: sanitise output, flag URLs not present in context
+      S->>DB: TX ai_generation pending (output), ai_usage (metadata, tokens, latency, request-id)
+      S-->>U: pending AI block labelled AI-generated
+    else 429, 529, 5xx or timeout
+      S->>A: one retry with backoff (honour retry-after)
+      S->>DB: ai_usage outcome error
+      S-->>U: 503 AI_PROVIDER_UNAVAILABLE (write it yourself or retry)
+    end
+  end
+  U->>S: accept / edit / reject
+  S->>DB: TX generation decided, content written as user with AI provenance, audit, timeline on accept

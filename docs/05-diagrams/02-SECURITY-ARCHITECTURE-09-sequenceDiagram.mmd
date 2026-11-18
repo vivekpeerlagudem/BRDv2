@@ -1,0 +1,26 @@
+%% Source: docs/02-hld/SECURITY-ARCHITECTURE.md — section: 9.1 E-signature webhooks (ADR-025)
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  participant P as E-sign provider
+  participant S as server /webhooks/v1/esign/:provider
+  participant DB as PostgreSQL
+  participant W as worker
+  participant API as Provider API
+  P->>S: POST event (raw body, signature header, timestamp)
+  S->>S: body ≤ 1 MB, read raw bytes before JSON parse
+  S->>S: HMAC-SHA256(secret_current or secret_previous, raw) constant-time compare, abs(now - ts) ≤ 5 min
+  alt invalid
+    S-->>P: 401, audit esign.webhook_rejected, metric
+  else valid
+    S->>DB: INSERT webhook_inbox(provider, providerEventId UNIQUE, envelopeId, raw (encrypted), receivedAt) ON CONFLICT DO NOTHING, enqueue job in-tx
+    S-->>P: 200 (fast)
+    W->>DB: lock deal row (SELECT ... FOR UPDATE) via proposals state machine
+    W->>API: GET envelope status + signer statuses (authoritative)
+    W->>W: forward-only transitions, stale-version guard (A9)
+    alt completed
+      W->>API: download sealed PDF + certificate
+      W->>W: SHA-256, verify source hash = request.documentSha256, seal validity if exposed
+      W->>DB: store SignedDocument (Object Lock bucket), status Signed, AUT-002 once (key signatureRequestId)
+    end
+  end

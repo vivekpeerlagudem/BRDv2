@@ -1,0 +1,56 @@
+%% Source: docs/01-specifications/DOMAIN-MODEL.md — section: 20.5 Automation, AI, notifications, timeline, platform
+%% Extracted copy; edit the source document, then re-run the extraction.
+classDiagram
+  class DomainEvent {
+    +Text name
+    +Snapshot payload
+  }
+  class AutomationRule {
+    +RuleKey key
+    +Boolean enabled
+  }
+  class AutomationExecution {
+    +Text idempotencyKey
+    +ExecStatus status
+    +Snapshot beforeSnapshot
+    +Snapshot afterSnapshot
+  }
+  class DealFlag {
+    +FlagKind kind
+  }
+  class Notification {
+    +EventType eventType
+    +DateTime readAt
+  }
+  class NotificationPreference
+  class DigestRun
+  class AiGeneration {
+    +AiFeature feature
+    +GenStatus status
+  }
+  class AiCheckResult
+  class AiUsage
+  class PromptVersion
+  class TimelineEvent {
+    +EventType eventType
+    +ActorRef actor
+    +Boolean isAutomated
+  }
+  class AuditLog
+  class Deal
+  class User
+  DomainEvent ..> AutomationRule : triggers
+  AutomationRule "1" -- "0..*" AutomationExecution
+  AutomationExecution --> Deal : changes
+  AutomationExecution "1" -- "0..*" TimelineEvent : labelled automated
+  Deal "1" -- "0..*" DealFlag
+  DomainEvent ..> Notification : produces
+  Notification "0..*" --> "1" User
+  User "1" -- "0..*" NotificationPreference
+  User "1" -- "0..*" DigestRun
+  AiGeneration "0..*" --> "1" User : requestedBy
+  AiGeneration "0..*" --> "1" PromptVersion
+  AiGeneration "1" -- "1" AiUsage
+  AiCheckResult "0..*" -- "0..1" AiUsage
+  TimelineEvent "0..*" --> "1..*" Deal : anchors
+  AuditLog ..> User : actor

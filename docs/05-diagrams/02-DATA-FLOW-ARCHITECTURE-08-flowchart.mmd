@@ -1,0 +1,17 @@
+%% Source: docs/02-hld/DATA-FLOW-ARCHITECTURE.md — section: F-07 Share and tracking
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart TB
+  L["Recipient clicks https://proposals.company/p#token<br/>(token in URL fragment, ADR-071)"] --> X["buyer bundle POSTs token to /public/v1/session/exchange;<br/>server: sha256(token) lookup; Referrer-Policy no-referrer"]
+  X -->|"unknown / revoked"| G["uniform 'no longer available' (no data)"]
+  X -->|"valid"| CK["Set HttpOnly Secure cookie (buyer origin,<br/>bound to shareLinkId) -> bundle navigates to /v/handle"]
+  CK --> APP["Buyer SPA loads; GET /public/v1/session"]
+  APP --> PREC{"BUSINESS-RULES 18.2 precedence:<br/>void, validity (a), link expiry (b),<br/>identity gate, superseded, signed, responded,<br/>deal closed, action rules"}
+  PREC -->|"gate needed"| GATE["Identity gate: name + email + privacy notice<br/>(optional OTP via TransactionalEmail)"]
+  GATE --> VI[("viewer_identity; if forwarded:<br/>match/create contact (OD-27/OD-26),<br/>deal_contact role Forwarded viewer,<br/>timeline, domain_event, notification job")]
+  PREC -->|"ok"| VIEW["Render frozen snapshot HTML (immutable, cacheable)"]
+  VIEW --> HB["JS heartbeat every 15 s (visible time)"]
+  HB --> VS[("view_session start/heartbeat/end<br/>counted after >= 3 s active")]
+  VS -->|"first counted view of version"| ST["proposals service TX: status Viewed,<br/>timeline, domain_event proposal.viewed,<br/>notification proposal_first_open / reopen"]
+  VIEW --> DL["Download PDF -> download_event -> stream file"]
+  VIEW --> AR["Accept / Decline (response mode accept_decline)"]
+  AR --> TXR["TX: lock deal; buyer_response (unique per version);<br/>proposal Accepted/Declined; evidence;<br/>task (OD-17 or AUT-003 job); notification"]

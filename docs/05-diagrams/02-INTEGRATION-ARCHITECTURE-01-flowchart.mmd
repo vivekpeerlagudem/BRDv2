@@ -1,0 +1,33 @@
+%% Source: docs/02-hld/INTEGRATION-ARCHITECTURE.md — section: 2. Integration context
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart LR
+  subgraph CRM["Sales CRM deployment"]
+    SRV["server (Hono)<br/>/api/v1 /public/v1 /webhooks /addon"]
+    WRK["worker (pg-boss)"]
+    ADP["Adapters: MailProvider, CalendarProvider,<br/>ESignatureProvider, AiProvider, TransactionalEmail,<br/>ObjectStorage, Captcha, IdentityProviders"]
+    DB[("PostgreSQL")]
+    SEC["Secrets store / KMS"]
+  end
+  G["Google: OIDC, Gmail API, Calendar API,<br/>Workspace add-on runtime"]
+  M["Microsoft: Entra ID, Graph Mail/Calendar,<br/>Outlook clients (Office.js)"]
+  E["E-signature provider"]
+  A["AI provider"]
+  T["Transactional email provider"]
+  O["Object storage"]
+  C["CAPTCHA provider"]
+  SRV --- ADP
+  WRK --- ADP
+  ADP --> G
+  ADP --> M
+  ADP --> E
+  ADP --> A
+  ADP --> T
+  ADP --> O
+  ADP --> C
+  G -- "add-on card requests" --> SRV
+  M -- "add-in API calls (bearer)" --> SRV
+  E -- "webhooks" --> SRV
+  T -.->|"delivery events (optional, O-07)"| SRV
+  SRV --- DB
+  WRK --- DB
+  ADP -.-> SEC

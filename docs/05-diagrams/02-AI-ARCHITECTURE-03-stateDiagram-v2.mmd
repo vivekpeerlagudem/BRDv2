@@ -1,0 +1,14 @@
+%% Source: docs/02-hld/AI-ARCHITECTURE.md — section: 7.1 States
+%% Extracted copy; edit the source document, then re-run the extraction.
+stateDiagram-v2
+  [*] --> pending: provider success, output sanitised, stored
+  pending --> accepted: user accepts unchanged (PERM-139)
+  pending --> edited_accepted: user edits then accepts
+  pending --> rejected: user rejects / discards suggestion
+  pending --> discarded: target gone (version sent/superseded, section locked, AUT-004 reversal RULE-AUT-64)
+  pending --> expired: pending > 30 days (proposed constant)
+  accepted --> [*]
+  edited_accepted --> [*]
+  rejected --> [*]
+  discarded --> [*]
+  expired --> [*]

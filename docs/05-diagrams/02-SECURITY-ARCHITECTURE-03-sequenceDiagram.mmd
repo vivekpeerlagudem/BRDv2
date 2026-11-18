@@ -1,0 +1,28 @@
+%% Source: docs/02-hld/SECURITY-ARCHITECTURE.md — section: 6.4 Google / Microsoft sign-in (invite-only, claim verification)
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  participant B as Browser
+  participant BA as Better Auth
+  participant IdP as Google / Entra (single tenant)
+  participant H as Our hooks
+  participant DB as PostgreSQL
+  B->>BA: GET /sign-in/social?provider=google|microsoft
+  BA-->>B: 302 to IdP (state, PKCE, nonce, hd hint or tenant authority)
+  B->>IdP: authenticate (IdP MFA as configured by IT)
+  IdP-->>B: 302 callback?code&state
+  B->>BA: GET /callback (state + PKCE verified)
+  BA->>IdP: token exchange (code + verifier)
+  IdP-->>BA: ID token
+  BA->>H: before sign-in hook (claims)
+  H->>H: verify iss, aud, exp, nonce, Google: hd ∈ allowedDomains, email_verified, Microsoft: tid = tenantId
+  H->>DB: find user by bound sub/oid, else by normalised email (first link only)
+  alt no active user and no pending invitation for this email
+    H-->>B: refuse auth.domain_not_allowed / no account (no user created)
+  else pending invitation flow
+    H->>DB: accept invitation (tx: user + profile + team, invitation accepted, audit user.activated)
+  else active user
+    H->>DB: link/bind identity if first time (audit auth.method_linked)
+  end
+  BA-->>B: Set-Cookie __Host-session (mfaLevel=idp or none)
+  Note over B,DB: Auth guard then applies MFA policy (SC-AUTHN-12) before any other API call

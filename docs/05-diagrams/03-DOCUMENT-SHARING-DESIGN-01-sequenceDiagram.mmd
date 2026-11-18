@@ -1,0 +1,20 @@
+%% Source: docs/03-tld/DOCUMENT-SHARING-DESIGN.md — section: 10. Sequence — buyer first open to notification
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  participant B as Buyer browser
+  participant S as server (buyer host)
+  participant DB as Postgres
+  participant W as worker
+  participant O as Owner (web app)
+  B->>S: GET /p (static) · JS reads #token
+  B->>S: POST /public/v1/session/exchange {token}
+  S->>DB: hash lookup · buyer_session
+  S-->>B: cookie + linkHandle
+  B->>S: GET /public/v1/session → needs_identity
+  B->>S: POST /public/v1/identity/continue
+  B->>S: GET /public/v1/proposal (snapshot)
+  B->>S: POST /views/start → POST /views/heartbeat (after 10–15 s)
+  S->>DB: tx: view_session counted · link first_viewed_at · proposals.applyBuyerEvent(first view → viewed) · timeline · domain_event proposal.view_counted · enqueue subscribers
+  W->>DB: notification proposal_first_open (dedupe key) · NOTIFY
+  S-->>O: SSE poke → client fetches notification (≤ 5 s typical)

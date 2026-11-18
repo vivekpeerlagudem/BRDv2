@@ -1,0 +1,12 @@
+%% Source: docs/02-hld/DATA-FLOW-ARCHITECTURE.md — section: F-06 Proposal generation and send
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart TB
+  A["Create proposal from open deal +<br/>published template version (pinned)"] -->|"TX-1"| B[("proposal, proposal_version v1 draft,<br/>content copied from template_version,<br/>placeholderBindings resolved, pricing lines<br/>from template defaults")]
+  B --> E["Edit editable sections + pricing<br/>(server recomputes totals per BUSINESS-RULES 7.2)"]
+  E --> AI["Optional AI draft (F-15) -> pending AI block"]
+  AI --> CHK["Pre-send check bound to content hash:<br/>deterministic (always) + LLM (if enabled)<br/>-> ai_check_result"]
+  CHK --> PREP["Prepare send (proposed two-phase send):<br/>build candidate frozen snapshot JSON (canonical),<br/>sha256(snapshot); job pdf.render"]
+  PREP --> R["worker pdf.render: Playwright offline,<br/>same HTML renderer; tagged PDF, embedded fonts"]
+  R --> ST[("object storage: proposal PDF;<br/>sha256(pdf); generated_file purpose=sent-candidate")]
+  ST --> CM["Commit send (TX-C): verify content hash unchanged;<br/>freeze version (state sent, frozenSnapshot,<br/>pdfFileId, pdfSha256, sentAt/By/Channel);<br/>supersede previous; void open SR (OD-21);<br/>recipients + share links; proposal status Sent;<br/>timeline, audit, domain_event; jobs AUT-001, AUT-004"]
+  CM --> DOCX["optional job docx.render (OD-43)"]

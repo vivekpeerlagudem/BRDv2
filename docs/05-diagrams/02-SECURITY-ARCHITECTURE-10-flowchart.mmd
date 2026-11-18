@@ -1,0 +1,13 @@
+%% Source: docs/02-hld/SECURITY-ARCHITECTURE.md — section: 14. AI security (BR-AIA-001..009, NFR-003, ADR-014, ADR-035)
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart LR
+  U["User action (PERM-134..138)"] --> P["policy.decide + feature switch + budget check"]
+  P --> CB["Context builder (scopeFilter as requester)"]
+  CB --> F["Filters: exclude private emails, archived, other deals,<br/>strip hidden text, cap size"]
+  F --> PT["Versioned prompt template: system rules + delimited untrusted data"]
+  PT --> AP["AiProvider adapter (server-side, TLS, ZDR terms)"]
+  AP --> OV["Output validation: schema allow-list, link/URL check, length"]
+  OV --> G["ai_generation (pending, labelled)"]
+  G --> HR["Human review: accept / edit / reject (PERM-139)"]
+  HR -->|accepted| C["Content as user, aiAssisted provenance"]
+  AP --> UL["ai_usage (metadata only)"]

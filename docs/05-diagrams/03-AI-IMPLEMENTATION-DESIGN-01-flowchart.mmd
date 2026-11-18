@@ -1,0 +1,15 @@
+%% Source: docs/03-tld/AI-IMPLEMENTATION-DESIGN.md — section: 2. Request pipeline (every feature)
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart LR
+  A[API route / job] --> P{policy.decide PERM-134..138}
+  P -->|deny| X[403/404]
+  P --> S{AI enabled org + feature? BR-AIA-008}
+  S -->|no| D[403 AI_DISABLED]
+  S --> B{budget.guard: org monthly cost cap, user daily cap, rpm}
+  B -->|exceeded| Q[429 AI_QUOTA_EXCEEDED · ai_usage blocked_budget]
+  B --> C[context.builder: scoped records, private emails excluded, AI-excluded fields removed, sanitised, delimited, truncated]
+  C --> R[prompt registry: active version → system + user messages + model config]
+  R --> V[AiProvider.stream/complete]
+  V --> O[output.processor: stop reason, schema validation, sanitisation]
+  O --> G[(ai_generation pending / ai_check_result)]
+  V --> U[(ai_usage metadata)]

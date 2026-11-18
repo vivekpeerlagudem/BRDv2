@@ -1,0 +1,65 @@
+%% Source: docs/01-specifications/DOMAIN-MODEL.md — section: 3. Overview class diagram
+%% Extracted copy; edit the source document, then re-run the extraction.
+classDiagram
+  direction LR
+  class OrganizationSettings
+  class User
+  class Team
+  class Company
+  class Contact
+  class Deal
+  class DealContact
+  class ContactRole
+  class Pipeline
+  class PipelineStage
+  class Proposal
+  class ProposalVersion
+  class ProposalTemplate
+  class TemplateVersion
+  class Product
+  class ShareLink
+  class Recipient
+  class ViewerIdentity
+  class SignatureRequest
+  class Signer
+  class EmailMessage
+  class CalendarEvent
+  class Task
+  class Note
+  class TimelineEvent
+  class AutomationExecution
+  class Notification
+  class AiGeneration
+
+  Team "1" -- "0..*" User : members
+  Team "1..*" -- "0..*" User : managers
+  User "1" -- "0..*" Deal : owns
+  User "1" -- "0..*" Company : owns
+  User "1" -- "0..*" Contact : owns
+  Company "0..1" -- "0..*" Contact : primary company
+  Company "1" -- "0..*" Deal : has
+  Deal "1" -- "0..*" DealContact : stakeholders
+  Contact "1" -- "0..*" DealContact : participates
+  DealContact "0..*" -- "1..*" ContactRole : roles
+  Pipeline "1" *-- "3..*" PipelineStage : stages
+  Deal "0..*" -- "1" PipelineStage : current stage
+  Deal "1" *-- "0..*" Proposal : proposals
+  Proposal "1" *-- "1..*" ProposalVersion : versions
+  Proposal "0..*" -- "1" TemplateVersion : pinned
+  ProposalTemplate "1" *-- "1..*" TemplateVersion : versions
+  ProposalVersion "1" -- "0..*" Recipient : intended recipients
+  Recipient "1" -- "1" ShareLink : link
+  ShareLink "1" -- "1..*" ViewerIdentity : viewers
+  ViewerIdentity "0..*" -- "0..1" Contact : resolves to
+  ProposalVersion "1" -- "0..*" SignatureRequest : signing
+  SignatureRequest "1" *-- "1..*" Signer : signers
+  Signer "0..*" -- "1" DealContact : must be deal contact
+  ProposalVersion ..> Product : snapshots
+  EmailMessage "0..*" -- "0..*" Deal : linked
+  CalendarEvent "0..*" -- "0..*" Deal : linked
+  Task "0..*" -- "0..1" Deal : related
+  Note "0..*" -- "1" Deal : related
+  TimelineEvent "0..*" -- "1..*" Deal : anchored
+  AutomationExecution "0..*" -- "1" Deal : changed
+  Notification "0..*" -- "1" User : recipient
+  AiGeneration "0..*" -- "1" User : requested by

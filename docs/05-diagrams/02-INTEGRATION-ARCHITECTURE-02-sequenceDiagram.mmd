@@ -1,0 +1,29 @@
+%% Source: docs/02-hld/INTEGRATION-ARCHITECTURE.md — section: 10.1 Mailbox OAuth connect
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  actor U as User (web app)
+  participant S as server /api/v1
+  participant DB as PostgreSQL
+  participant IdP as Google OAuth or Entra ID
+  participant KMS as KMS / secrets
+  participant W as worker
+  U->>S: POST /mailbox/connect {provider} (session cookie)
+  S->>S: policy check, no existing connection (RULE-EML-01)
+  S->>DB: store OAuth state + PKCE verifier (10 min), privacy notice ack (DR-EML-05)
+  S-->>U: 302 to IdP authorize URL (mailbox scopes, offline access, PKCE)
+  U->>IdP: consent (company account only)
+  IdP-->>U: 302 /mailbox/callback/{provider}?code&state
+  U->>S: GET callback
+  S->>DB: load and delete state (single use)
+  S->>IdP: token request (code + verifier + client credential)
+  IdP-->>S: refresh token, access token, scopes, id_token
+  S->>S: verify hd or tid, mailbox address = user email or allowed alias
+  alt validation fails
+    S-->>U: error page MAILBOX_DOMAIN_NOT_ALLOWED or MAILBOX_ADDRESS_MISMATCH
+  else ok
+    S->>KMS: generate or unwrap DEK
+    S->>DB: TX mailbox_connection active, encryptedTokens (AAD userId+provider), grantedScopes, audit mailbox.connected, domain_event, job mail.backfill
+    S-->>U: 302 profile "Mailbox connected, importing last N days"
+    W->>DB: pick mail.backfill (singletonKey mailbox)
+  end

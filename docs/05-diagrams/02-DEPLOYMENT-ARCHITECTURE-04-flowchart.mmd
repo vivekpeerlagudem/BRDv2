@@ -1,0 +1,31 @@
+%% Source: docs/02-hld/DEPLOYMENT-ARCHITECTURE.md — section: 5.2 AWS reference
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart LR
+  R53[Route 53] --> ALB[ALB + AWS WAF]
+  subgraph VPC[VPC - 2 AZs]
+    subgraph PRIVA[Private subnets]
+      SRV[ECS service server x2..4]
+      WRK[ECS service worker x1]
+      RND[ECS service renderer x1..2<br/>SG: RDS + S3 endpoint only]
+      MIG[ECS RunTask migrate]
+    end
+    RDS[(RDS PostgreSQL Multi-AZ<br/>PITR 35d)]
+    S3E[S3 gateway endpoint]
+    NATG[NAT Gateway + EIP]
+  end
+  ALB --> SRV
+  SRV --> RDS
+  WRK --> RDS
+  RND --> RDS
+  MIG --> RDS
+  SRV --> S3E
+  WRK --> S3E
+  RND --> S3E
+  S3E --> S3[(S3 versioning + Object Lock)]
+  SRV --> NATG
+  WRK --> NATG
+  NATG --> EXT[Allow-listed providers]
+  SM[Secrets Manager + KMS] -.-> SRV
+  SM -.-> WRK
+  ECR[ECR] -.pull.-> SRV
+  SRV -.-> CW[CloudWatch Logs / Metrics / Alarms]

@@ -1,0 +1,28 @@
+%% Source: docs/02-hld/DEPLOYMENT-ARCHITECTURE.md — section: 5.1 Azure reference
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart LR
+  AFD[Front Door Premium + WAF] -->|Private Link| CAE1
+  subgraph VNET[VNet]
+    subgraph CAE1[Container Apps env: app subnet]
+      SRV[server x2..4]
+      WRK[worker x1]
+      JOB[Job: migrate]
+    end
+    subgraph CAE2[Container Apps env: render subnet, NSG deny Internet]
+      RND[renderer x1..2]
+    end
+    PGF[(PostgreSQL Flexible Server<br/>zone-redundant HA, PITR 35d)]
+    BLOB[(Blob Storage<br/>versioning + immutability)]
+    KV[Key Vault]
+    NATG[NAT Gateway]
+  end
+  CAE1 --> PGF
+  CAE2 --> PGF
+  CAE1 --> BLOB
+  CAE2 --> BLOB
+  CAE1 --> KV
+  CAE1 --> NATG --> NET[Allow-listed providers]
+  ACR[Container Registry] -.pull.-> CAE1
+  ACR -.pull.-> CAE2
+  CAE1 -.-> LAW[Log Analytics + App Insights]
+  CAE2 -.-> LAW

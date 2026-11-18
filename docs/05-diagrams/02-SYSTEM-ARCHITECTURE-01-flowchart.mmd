@@ -1,0 +1,41 @@
+%% Source: docs/02-hld/SYSTEM-ARCHITECTURE.md — section: 3. System context (C4 level 1)
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart LR
+  classDef person fill:#08427b,stroke:#052e56,color:#ffffff
+  classDef system fill:#1168bd,stroke:#0b4884,color:#ffffff
+  classDef ext fill:#999999,stroke:#6b6b6b,color:#ffffff
+
+  admin["Admin / Sales Ops<br/>[Person]<br/>Configures users, pipelines, templates, catalog, automation, AI switches; imports and exports"]:::person
+  mgr["Sales Manager<br/>[Person]<br/>Team pipeline, dashboards, reassignment"]:::person
+  sp["Salesperson<br/>[Person]<br/>Deals, proposals, email, tasks; uses inbox add-in"]:::person
+  buyer["Buyer recipient / forwarded viewer<br/>[External person]<br/>Views, downloads, accepts or declines a proposal via share link"]:::person
+  signer["Signer<br/>[External person]<br/>Signs or declines in the e-signature provider UI"]:::person
+  visitor["Website visitor<br/>[External person]<br/>Submits a lead form"]:::person
+
+  crm["Internal Sales CRM<br/>[Software system]<br/>CRM records, proposals, sharing and tracking, e-signature orchestration, AI assistance, automation, reporting"]:::system
+
+  idp["Google Workspace / Microsoft 365<br/>[External system]<br/>OAuth sign-in; Gmail API / Graph mail and calendar; Workspace add-on and Outlook add-in hosts"]:::ext
+  esign["E-signature provider<br/>[External system, OD-03]<br/>Envelopes, signer auth, sealed PDF, completion certificate, webhooks"]:::ext
+  ai["AI model provider<br/>[External system, OD-05]<br/>LLM inference, no training on inputs"]:::ext
+  temail["Transactional email service<br/>[External system, OD-14]<br/>System notifications, invitations, buyer OTP codes"]:::ext
+  store["Object storage<br/>[External system, OD-11]<br/>PDFs, DOCX, signed documents, certificates, images, imports, exports"]:::ext
+  captcha["CAPTCHA provider<br/>[External system, optional, OD-46]<br/>Lead-form bot check"]:::ext
+  site["Company website<br/>[External system]<br/>Embeds hosted lead form iframe"]:::ext
+
+  admin -->|"HTTPS, browser"| crm
+  mgr -->|"HTTPS, browser"| crm
+  sp -->|"HTTPS, browser and inbox add-in"| crm
+  buyer -->|"HTTPS share link, buyer origin"| crm
+  visitor -->|"HTTPS form submit, buyer origin"| crm
+  site -.->|"iframe of hosted form"| crm
+  signer -->|"signs via provider UI"| esign
+
+  crm -->|"OIDC sign-in; mail and calendar delta sync; send as user"| idp
+  idp -->|"add-in requests with ID or bearer token"| crm
+  crm -->|"create, void, remind, fetch envelopes and documents"| esign
+  esign -->|"signed webhooks"| crm
+  crm -->|"prompts with scoped context"| ai
+  crm -->|"send system email"| temail
+  temail -->|"delivers to"| buyer
+  crm -->|"put, get, presigned URL"| store
+  crm -->|"verify token"| captcha

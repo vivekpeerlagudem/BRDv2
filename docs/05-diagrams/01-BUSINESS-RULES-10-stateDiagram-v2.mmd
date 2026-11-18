@@ -1,0 +1,20 @@
+%% Source: docs/01-specifications/BUSINESS-RULES.md — section: 17.10 SM-10 Mailbox connection
+%% Extracted copy; edit the source document, then re-run the extraction.
+stateDiagram-v2
+    [*] --> pending_authorization: start OAuth (M1)
+    pending_authorization --> active: callback OK (M2)
+    pending_authorization --> [*]: failed / abandoned (M3)
+    active --> error: transient failure (M4)
+    error --> active: sync succeeds (M5)
+    active --> reauth_required: token rejected (M6)
+    error --> reauth_required: token rejected (M6)
+    reauth_required --> active: re-authorised (M7)
+    active --> disconnected: user disconnects (M8)
+    error --> disconnected: user disconnects (M8)
+    reauth_required --> disconnected: user disconnects (M8)
+    disconnected --> pending_authorization: reconnect (M10)
+    active --> revoked: user deactivated (M9)
+    error --> revoked: user deactivated (M9)
+    reauth_required --> revoked: user deactivated (M9)
+    disconnected --> revoked: user deactivated (M9)
+    revoked --> [*]

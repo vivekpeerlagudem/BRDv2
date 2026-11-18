@@ -1,0 +1,10 @@
+%% Source: docs/02-hld/AI-ARCHITECTURE.md — section: 4.1 Pipeline
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart TB
+  A["Request: feature, target ref, options, actor"] --> B["Resolve target & assert scope<br/>(PERM-134..138; 404 if not visible)"]
+  B --> C["Select sources per feature<br/>(§4.3) through owning services<br/>with scopeFilter(actor, entity)"]
+  C --> D["Exclusions<br/>private emails/meetings (OD-30) · archived records ·<br/>excluded contacts/domains (BR-EML-003) ·<br/>fields flagged AI-excluded (proposed) · attachments"]
+  D --> E["Normalise untrusted text<br/>HTML → text with hidden-text stripping ·<br/>Unicode control/tag/bidi removal · quote-chain dedupe"]
+  E --> F["Classify & delimit<br/>trusted CRM facts vs untrusted data blocks<br/>(nonce-tagged)"]
+  F --> G["Budget & order<br/>most recent first · whole-item truncation ·<br/>'N older items omitted' notice"]
+  G --> H["AiContext {sections, contextRefs[], truncation, stats}"]

@@ -1,0 +1,19 @@
+%% Source: docs/03-tld/E-SIGNATURE-DESIGN.md — section: 2. Lifecycle
+%% Extracted copy; edit the source document, then re-run the extraction.
+stateDiagram-v2
+  [*] --> pending: create (validated)
+  pending --> sent: provider envelope created + first signer notified
+  pending --> voided: user void / supersede / deal lost / proposal void
+  sent --> viewed: any signer viewed
+  sent --> signed: all signed (no view event received)
+  viewed --> signed: all signers signed
+  sent --> declined: any signer declined (OD-25)
+  viewed --> declined
+  sent --> expired: expires_at reached / provider expired
+  viewed --> expired
+  sent --> voided
+  viewed --> voided
+  signed --> [*]
+  declined --> [*]
+  expired --> [*]
+  voided --> [*]

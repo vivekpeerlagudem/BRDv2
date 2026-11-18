@@ -1,0 +1,10 @@
+%% Source: docs/03-tld/FRONTEND-DESIGN.md — section: 3. Layout structure
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart TB
+  Root["__root: QueryClientProvider, RouterProvider, ThemeProvider, Toaster, ErrorBoundary"]
+  Root --> Auth["(auth) layout: centred card, no nav"]
+  Root --> App["_app layout (requires session): Sidebar · TopBar (global search ⌘K, notifications bell, user menu) · <Outlet/>"]
+  App --> List["List pages: PageHeader + FilterBar + SavedViewSwitcher + DataTable/Board"]
+  App --> Detail["Record workspace: RecordHeader (name, owner, stage, actions) + Tabs + RightRail (stakeholders, tasks, flags, AI panel)"]
+  App --> Editor["Proposal editor (full-width): Toolbar · SectionNav · Canvas (sections) · Inspector (pricing, placeholders, checks)"]
+  App --> Admin["Admin layout: SettingsNav + content"]

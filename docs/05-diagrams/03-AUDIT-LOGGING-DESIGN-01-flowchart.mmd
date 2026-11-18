@@ -1,0 +1,9 @@
+%% Source: docs/03-tld/AUDIT-LOGGING-DESIGN.md — section: 2. Integrity (ADR-072)
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart LR
+  TX["business tx: INSERT audit_log (seq)"] --> AL[("audit_log (INSERT/SELECT only for crm_app)")]
+  SEAL["audit.seal job (every minute, crm_sealer role)"] -->|"read unsealed seq in order"| AL
+  SEAL --> CH[("audit_chain: row_hash = sha256(JCS(row)); chain_hash = sha256(prev.chain_hash || row_hash)")]
+  ANCH["hourly anchor"] --> AN[("audit_anchor(up_to_seq, chain_hash)")]
+  EXP["daily audit.export (03:00)"] --> WORM[("object storage, Object Lock: JSONL segment + manifest with chain_hash")]
+  VER["daily verify job"] -->|"recompute chain for last 7 days + random older sample; compare with exports"| ALERT["alert audit_chain_mismatch"]

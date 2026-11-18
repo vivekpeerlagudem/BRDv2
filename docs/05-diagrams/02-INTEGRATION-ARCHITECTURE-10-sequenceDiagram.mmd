@@ -1,0 +1,30 @@
+%% Source: docs/02-hld/INTEGRATION-ARCHITECTURE.md — section: 10.9 Lead form iframe submit with CAPTCHA
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  actor V as Visitor
+  participant WS as Company website (parent page)
+  participant F as Hosted form iframe (buyer origin)
+  participant CF as Turnstile
+  participant S as server /public/v1
+  participant DB as PostgreSQL
+  participant W as worker
+  V->>WS: open page with form embed
+  WS->>F: iframe src https://proposals.company/f/{publicKey}
+  F->>S: GET form definition (published fields only)
+  F->>CF: load widget (site key)
+  CF-->>F: token after challenge
+  F-->>WS: postMessage height (auto-resize)
+  V->>F: submit
+  F->>S: POST /forms/{publicKey}/submissions (fields, honeypot, render timestamp, captcha token, UTM, page URL)
+  S->>DB: per-IP rate bucket check
+  S->>S: validate payload, honeypot, min time-to-submit
+  S->>CF: siteverify (secret, token, remoteip, idempotency_key)
+  alt captcha invalid
+    S-->>F: 422 CAPTCHA_FAILED
+  else captcha provider unreachable
+    Note over S,CF: fail mode undecided (FR fail-open pending, OD-55+ candidate) - submission marked unverified if fail-open
+  end
+  S->>DB: TX lead_form_submission received, job lead.process
+  S-->>F: 200 success message or redirect
+  W->>DB: TX dedupe, upsert, assign, timeline, notification new_lead_assigned

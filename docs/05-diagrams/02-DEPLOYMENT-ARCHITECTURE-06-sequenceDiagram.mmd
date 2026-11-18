@@ -1,0 +1,28 @@
+%% Source: docs/02-hld/DEPLOYMENT-ARCHITECTURE.md — section: 10.1 Mechanics
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  participant CD as CD pipeline
+  participant J as migrate job (crm-app, PROCESS_ROLE=migrate)
+  participant DB as PostgreSQL (as migrator)
+  participant P as Platform (server/worker/renderer)
+  CD->>J: start job with image digest N
+  J->>DB: connect as migrator (DATABASE_MIGRATOR_URL)
+  J->>DB: set lock_timeout 5s and statement_timeout 15min
+  J->>DB: SELECT pg_advisory_lock(CRM_MIGRATION_LOCK constant)
+  Note over J,DB: a second concurrent job blocks here, then finds nothing to do
+  J->>DB: read drizzle migrations journal + pg-boss schema version
+  alt pending migrations
+    J->>DB: record restore-point marker (timestamp to audit_log + job log)
+    loop each pending SQL file (in order)
+      J->>DB: BEGIN, apply file, record in journal, COMMIT
+    end
+    J->>DB: non-transactional files (CREATE INDEX CONCURRENTLY) run outside a transaction, idempotent IF NOT EXISTS
+    J->>DB: pg-boss schema migrate (runtime uses migrate=false)
+    J->>DB: re-apply grants / default privileges for app and readonly
+    J->>DB: verify invariants (audit_log REVOKE, immutability triggers present)
+  end
+  J->>DB: pg_advisory_unlock, then disconnect
+  J-->>CD: exit 0 (or non-zero: release stops)
+  CD->>P: deploy digest N
+  P->>DB: /health/ready checks schema version >= MIN_SCHEMA_VERSION

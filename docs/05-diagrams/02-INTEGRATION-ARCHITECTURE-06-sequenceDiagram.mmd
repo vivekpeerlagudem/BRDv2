@@ -1,0 +1,24 @@
+%% Source: docs/02-hld/INTEGRATION-ARCHITECTURE.md — section: 10.5 Gmail add-on card request
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  actor U as User in Gmail
+  participant G as Google add-on runtime
+  participant S as server /addon/google
+  participant DB as PostgreSQL
+  U->>G: opens message (contextual trigger)
+  G->>S: POST /addon/google/context (Authorization Bearer system ID token, event JSON with userIdToken, messageId, participants metadata)
+  S->>S: verify system ID token (Google JWKS, aud = endpoint URL, email = add-on service account)
+  S->>S: verify userIdToken (aud = add-on client, hd = company domain, email_verified)
+  alt user not an active invited CRM user
+    S-->>G: card "No CRM access - contact your Admin"
+  else ok
+    S->>DB: lookup contacts by normalised participant emails, scopeFilter for that user
+    S-->>G: Card JSON (contact, company, open deals, proposal status, actions)
+  end
+  G-->>U: renders card
+  U->>G: clicks "Insert proposal link"
+  G->>S: POST /addon/google/action/insert-link (tokens, chosen version, recipients, idempotency key)
+  S->>DB: TX prepare send (links per recipient)
+  S-->>G: compose action response with link text inserted into reply draft
+  Note over U,S: version becomes sent when user confirms "Mark as sent" (BR-EML-005, DR-PRP-06)

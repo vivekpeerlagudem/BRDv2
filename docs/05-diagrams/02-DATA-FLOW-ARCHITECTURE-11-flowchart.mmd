@@ -1,0 +1,13 @@
+%% Source: docs/02-hld/DATA-FLOW-ARCHITECTURE.md — section: F-10 Notifications and digest
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart LR
+  SRC["Producing TX (F-01, F-07, F-08, F-09)"] --> NR["notification row in same TX<br/>(recipient = current deal owner / assignee;<br/>dedupeKey unique; channels per preference)"]
+  NR --> NT["post-commit NOTIFY channel 'notif' payload = notification id"]
+  NT --> L["each server instance: dedicated LISTEN connection"]
+  L --> SSE["SSE poke to connected user (20 s heartbeat)"]
+  SSE --> GET["client GET /api/v1/notifications?since=cursor"]
+  CL["client 30 s polling baseline"] --> GET
+  NR --> EJ["job notify.email (startAfter = quiet-hours end if applicable)"]
+  EJ --> TE["TransactionalEmail adapter -> emailStatus"]
+  DG["cron every 15 min: users whose local digest time is due"] --> DR[("digest_run unique (userId, date)")]
+  DR --> DE["build digest from last 24 h (timeline/notifications/flags/tasks) -> TransactionalEmail"]

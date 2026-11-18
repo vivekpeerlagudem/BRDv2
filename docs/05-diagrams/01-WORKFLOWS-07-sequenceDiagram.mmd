@@ -1,0 +1,35 @@
+%% Source: docs/01-specifications/WORKFLOWS.md — section: WF-24 Buyer view: identity gate, verification, forward, download
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+    autonumber
+    actor B as Viewer
+    participant BA as Buyer app
+    participant S as Server /public/v1
+    participant DB as Postgres
+    participant TX as TxEmail
+    participant N as Notifications
+    B->>BA: open https://buyer-domain/p#{token} (token in fragment, ADR-071)
+    BA->>S: POST /public/v1/session/exchange {token} then GET link state
+    S->>S: rate limit, token hash lookup, §18 checks (revoked, void, expired, link expiry)
+    alt not available
+        S-->>BA: 410 notice page (no content)
+    else needs identity
+        S-->>BA: identity gate (privacy notice)
+        B->>BA: name + email
+        BA->>S: POST identify
+        alt email == recipient
+            S->>DB: viewer = recipient
+        else other email
+            S->>DB: match/create contact, add to deal as Forwarded viewer
+            DB-->>N: proposal_forwarded_new_viewer
+        end
+        opt verification required
+            S->>TX: send 6-digit code
+            B->>BA: enter code
+            BA->>S: verify
+        end
+        S-->>BA: viewer cookie + content (frozen snapshot)
+        BA->>S: view start / heartbeats 15 s / end
+        S->>DB: session, counted at at least 3 s, status Viewed on first
+        DB-->>N: proposal_first_open or proposal_reopen (throttled)
+    end

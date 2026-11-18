@@ -1,0 +1,30 @@
+%% Source: docs/02-hld/SECURITY-ARCHITECTURE.md — section: 8.3 Buyer link open, scanner prefetch and view counting
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  participant SC as Mail scanner (no JS)
+  participant BB as Buyer browser
+  participant S as server (buyer host)
+  participant DB as PostgreSQL
+  SC->>S: GET /p (fragment #token is never sent)
+  S-->>SC: static buyer.html only (no data, no session)
+  Note over SC,S: Scanner learns nothing: no lookup, no ViewSession, no identity gate, no notification
+  BB->>S: GET /p (static buyer.html, strict CSP, Referrer-Policy no-referrer)
+  BB->>BB: read location.hash, history.replaceState (clear fragment)
+  BB->>S: POST /public/v1/session/exchange {token}
+  S->>DB: per-IP limit, hash lookup, create buyer_session
+  S-->>BB: 200 {linkHandle}, Set-Cookie __Host-bs
+  BB->>S: GET /v/:handle (static buyer.html)
+  BB->>S: GET /public/v1/session (cookie)
+  S->>DB: §18.2 evaluation
+  alt identity not established
+    S-->>BB: {gate: identity | verify}
+    BB->>S: POST /public/v1/identity {name, email, noticeVersion} (Origin=buyer host, JSON)
+    S->>DB: rate limit (10/h per link), resolve recipient vs forwarded viewer (OD-26)
+  end
+  S-->>BB: frozen version render model
+  BB->>S: POST /public/v1/views/start (JS executed)
+  loop every 15 s while visible
+    BB->>S: POST /public/v1/views/heartbeat
+  end
+  S->>DB: ViewSession counted when active ≥ 3 s (RULE-SHR-04) -> share.viewed -> proposal viewed, notification

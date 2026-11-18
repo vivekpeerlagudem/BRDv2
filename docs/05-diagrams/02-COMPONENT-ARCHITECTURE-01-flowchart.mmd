@@ -1,0 +1,13 @@
+%% Source: docs/02-hld/COMPONENT-ARCHITECTURE.md — section: 1. Repository and package map (ADR-018, ADR-021)
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart LR
+  classDef pkg fill:#e8f0fb,stroke:#2e6295,color:#0b2540
+  web["apps/web<br/>index.html, buyer.html, addin.html"]:::pkg
+  server["apps/server<br/>http entry, worker entry,<br/>modules, platform, adapters, Drizzle schema"]:::pkg
+  shared["packages/shared<br/>Zod contracts, enums, error codes,<br/>permission matrix, money/tax utils, job and event contracts"]:::pkg
+  proposal["packages/proposal<br/>section + ProseMirror schema, placeholder resolution,<br/>HTML renderer, DOCX mapper, schema migrations"]:::pkg
+  web --> shared
+  web --> proposal
+  server --> shared
+  server --> proposal
+  proposal --> shared

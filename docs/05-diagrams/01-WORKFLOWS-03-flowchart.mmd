@@ -1,0 +1,23 @@
+%% Source: docs/01-specifications/WORKFLOWS.md — section: WF-05 Data import from CSV/Excel
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart TD
+    U[Admin uploads CSV/XLSX] --> V{Type, size, rows OK?}
+    V -- no --> R1[Reject IMPORT_FILE_* ]
+    V -- yes --> M[Batch uploaded: propose mapping]
+    M --> MA[Admin maps columns, defaults, duplicate policy]
+    MA --> VA[Worker validates rows + classifies duplicates]
+    VA --> RV[Admin reviews: valid / warnings / invalid / duplicates]
+    RV -->|remap| MA
+    RV -->|cancel| C[cancelled]
+    RV -->|commit with Idempotency-Key| IM[importing: chunked transactions]
+    IM --> DUP{Row duplicate at commit?}
+    DUP -- skip --> SK[skip row]
+    DUP -- merge --> MG[merge fill_empty or overwrite, store before-snapshot]
+    DUP -- create/new --> CR[create record]
+    SK --> NX[next row]
+    MG --> NX
+    CR --> NX
+    NX --> DONE{All chunks done?}
+    DONE -- yes --> CM[completed: counts, notify Admin]
+    DONE -- crash --> F[failed: resume or undo]
+    F -->|resume| IM

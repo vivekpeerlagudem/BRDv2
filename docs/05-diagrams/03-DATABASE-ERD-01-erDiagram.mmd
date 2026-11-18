@@ -1,0 +1,28 @@
+%% Source: docs/03-tld/DATABASE-ERD.md — section: 1. Overview (aggregate roots and principal relationships)
+%% Extracted copy; edit the source document, then re-run the extraction.
+erDiagram
+  APP_USER_PROFILE ||--o| TEAM_MEMBERSHIP : "belongs to (0..1 team)"
+  TEAM ||--o{ TEAM_MEMBERSHIP : has
+  TEAM ||--|{ TEAM_MANAGER : "managed by"
+  APP_USER_PROFILE ||--o{ COMPANY : owns
+  APP_USER_PROFILE ||--o{ CONTACT : owns
+  APP_USER_PROFILE ||--o{ DEAL : owns
+  COMPANY ||--o{ CONTACT : "primary company of"
+  COMPANY ||--o{ DEAL : "has"
+  PIPELINE ||--|{ PIPELINE_STAGE : contains
+  DEAL }o--|| PIPELINE_STAGE : "is at"
+  DEAL ||--o{ DEAL_CONTACT : "stakeholders"
+  CONTACT ||--o{ DEAL_CONTACT : "participates"
+  DEAL ||--o{ PROPOSAL : "has 0..*"
+  PROPOSAL ||--|{ PROPOSAL_VERSION : versions
+  PROPOSAL }o--|| TEMPLATE_VERSION : "pins"
+  PROPOSAL_VERSION ||--o{ RECIPIENT : "sent to"
+  RECIPIENT ||--|| SHARE_LINK : "has one"
+  PROPOSAL_VERSION ||--o{ SIGNATURE_REQUEST : "signed via"
+  SIGNATURE_REQUEST ||--|{ SIGNER : has
+  SIGNATURE_REQUEST ||--o| SIGNED_DOCUMENT : produces
+  MAILBOX_CONNECTION ||--o{ EMAIL_MESSAGE : syncs
+  EMAIL_MESSAGE ||--o{ EMAIL_LINK : "linked to records"
+  DEAL ||--o{ TASK : "related (polymorphic)"
+  DEAL ||--o{ TIMELINE_EVENT_ANCHOR : "timeline"
+  TIMELINE_EVENT ||--|{ TIMELINE_EVENT_ANCHOR : anchored

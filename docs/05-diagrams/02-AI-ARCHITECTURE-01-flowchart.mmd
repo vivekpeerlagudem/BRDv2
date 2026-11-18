@@ -1,0 +1,49 @@
+%% Source: docs/02-hld/AI-ARCHITECTURE.md — section: 3.1 Component diagram
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart LR
+  subgraph Browser["apps/web (internal SPA)"]
+    UI["Editor / deal page / compose<br/>AI actions, pending AI blocks,<br/>pre-send panel, Admin AI settings"]
+  end
+
+  subgraph Server["apps/server — 'server' process (Hono)"]
+    R["/api/v1/ai/* routes<br/>(thin adapters, Zod contracts)"]
+    POL["policy module<br/>scopeFilter(actor, entity)"]
+    subgraph AI["ai module (framework-free services)"]
+      GATE["Gatekeeper<br/>switches · permission · quota · concurrency"]
+      CB["Context builder<br/>scoped queries · private-email exclusion ·<br/>hidden-text stripping · untrusted delimiting ·<br/>token budgeting"]
+      PRG["Prompt registry<br/>versioned prompts + model config"]
+      OUT["Output processor<br/>stop-reason checks · parse · sanitise ·<br/>placeholder/URL validation"]
+      GEN["Generation service<br/>ai_generation lifecycle"]
+      USG["Usage recorder<br/>ai_usage (metadata only)"]
+      PSC["Pre-send check orchestrator"]
+    end
+    DET["proposals module:<br/>deterministic pre-send checks"]
+  end
+
+  subgraph Worker["apps/server — 'worker' process (pg-boss)"]
+    J1["job ai.presend-llm"]
+    J2["job ai.follow-up-draft (AUT-004)"]
+  end
+
+  ADP["AiProvider adapter<br/>(AnthropicDriver | FakeDriver;<br/>optional Bedrock/Foundry driver)"]
+  P[("Claude API<br/>Messages endpoint")]
+  DB[("PostgreSQL<br/>ai_generation · ai_usage ·<br/>ai_check_result · prompt_version<br/>+ CRM/comms/proposal tables (read)")]
+
+  UI -- "HTTPS JSON / streamed response" --> R
+  R --> GATE
+  GATE --> POL
+  GATE --> CB
+  CB -- "read via owning modules' services" --> DB
+  CB --> PRG
+  PRG --> ADP
+  ADP -- "TLS, API key from secrets store" --> P
+  ADP --> OUT
+  OUT --> GEN
+  GEN --> DB
+  ADP --> USG
+  USG --> DB
+  R --> PSC
+  PSC --> DET
+  PSC -- "jobs.enqueue(tx)" --> J1
+  J1 --> GATE
+  J2 --> GATE

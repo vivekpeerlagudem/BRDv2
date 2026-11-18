@@ -1,0 +1,14 @@
+%% Source: docs/02-hld/SECURITY-ARCHITECTURE.md — section: 7.2 Enforcement points
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart TB
+  R["HTTP route (thin Hono adapter)"] --> G["Auth guard: actor = {user|addin|gmail-addon|buyer|system}"]
+  G --> V["Zod contract validation (.strict)"]
+  V --> S["Domain service (framework-free, A1)"]
+  S --> D["policy.decide(actor, PERM, resource, input)"]
+  D -->|deny read| N404["404 resource.not_found"]
+  D -->|deny write on readable| F403["403 auth.forbidden / permission_denied + audit"]
+  D -->|allow| SG["State guards (409/422)"]
+  SG --> REPO["Repository: ScopedQuery built with scopeFilter(actor, entity, access)"]
+  REPO --> DB[("PostgreSQL")]
+  S --> RD["redact(actor, resource)"]
+  RD --> OUT["Response + allowedActions[]"]

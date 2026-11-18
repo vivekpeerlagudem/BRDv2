@@ -1,0 +1,44 @@
+%% Source: docs/02-hld/DATA-FLOW-ARCHITECTURE.md — section: 2. Runtime topology for data flows
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart LR
+  subgraph Clients
+    U["Internal user browser<br/>web entry (index.html)"]
+    B["Buyer / visitor browser<br/>buyer origin (buyer.html)"]
+    A["Outlook task pane (addin.html)<br/>or Gmail add-on (Google-rendered cards)"]
+  end
+  subgraph Deployment["Company cloud (OD-11)"]
+    LB["TLS load balancer / WAF<br/>coarse per-IP rate limits"]
+    S["server process(es)<br/>Hono /api/v1, /public/v1, /webhooks, /addon"]
+    W["worker process (1 instance, ADR-037)<br/>pg-boss jobs + cron, Playwright PDF"]
+    PG[("PostgreSQL 18/17<br/>single database")]
+    OS[("Object storage<br/>private buckets")]
+    SEC["Managed secrets store<br/>KEKs, API keys"]
+  end
+  subgraph External
+    GW["Google Workspace APIs"]
+    MS["Microsoft Graph / Entra"]
+    ES["E-signature provider"]
+    AI["AI provider"]
+    TE["Transactional email"]
+    CP["CAPTCHA"]
+  end
+  U --> LB
+  B --> LB
+  A --> LB
+  LB --> S
+  S <--> PG
+  W <--> PG
+  S <--> OS
+  W <--> OS
+  S -.-> SEC
+  W -.-> SEC
+  W <--> GW
+  W <--> MS
+  S <--> GW
+  S <--> MS
+  W <--> ES
+  ES -- webhooks --> LB
+  S <--> AI
+  W <--> AI
+  W --> TE
+  S <--> CP

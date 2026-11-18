@@ -1,0 +1,34 @@
+%% Source: docs/02-hld/DEPLOYMENT-ARCHITECTURE.md — section: 7.1 Flow
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart TB
+  subgraph PR[Pull request pipeline]
+    A1[Install<br/>pnpm frozen lockfile, cache] --> A2
+    subgraph A2[Static checks - parallel]
+      L[Biome lint + format check]
+      T[tsc -b typecheck]
+      DC[dependency-cruiser module boundaries<br/>ADR-021, NFR-014]
+      ML[Migration lint<br/>destructive-op guard]
+      SEC[Secret scan + SAST]
+    end
+    A2 --> U[Unit tests - Vitest<br/>coverage gate]
+    U --> I[Integration tests<br/>real PostgreSQL 18 + MinIO<br/>migrate as migrator, run as app<br/>permission matrix, state machines]
+    I --> BI[Build images crm-app + crm-renderer]
+    BI --> E2E[E2E - Playwright vs built images<br/>compose + stub providers + Mailpit]
+    BI --> SB[SBOM + dependency audit + image scan<br/>licence check]
+  end
+
+  PR -->|merge to main| MAIN
+
+  subgraph MAIN[Main pipeline - same steps, then]
+    P1[Push images by digest to registry] --> ST1
+    ST1[Staging: migrate job] --> ST2[Staging: deploy server, worker, renderer]
+    ST2 --> ST3[Staging smoke + provider-sandbox E2E subset]
+    ST3 --> GATE{Manual approval<br/>release manager}
+    GATE --> PR1[Production: migrate job<br/>expand only]
+    PR1 --> PR2[Production: deploy server<br/>new revision / rolling]
+    PR2 --> PR3[Production: deploy worker + renderer]
+    PR3 --> PR4[Production smoke tests]
+    PR4 --> PR5{15-min watch window<br/>5xx, latency, queue lag, DLQ}
+    PR5 -->|healthy| DONE[Release recorded<br/>tag + change log]
+    PR5 -->|alarm or smoke fail| RB[Rollback: previous digest<br/>RB-02]
+  end

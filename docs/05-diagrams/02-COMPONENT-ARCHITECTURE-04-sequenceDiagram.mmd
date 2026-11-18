@@ -1,0 +1,28 @@
+%% Source: docs/02-hld/COMPONENT-ARCHITECTURE.md — section: 3.1 Buyer request lifecycle (token exchange, view counting)
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  actor B as Buyer browser
+  participant PUB as server /public/v1 (buyer origin)
+  participant SH as sharing service
+  participant PR as proposals service
+  participant DB as PostgreSQL
+
+  B->>PUB: GET /p (token only in URL fragment #token, never sent to edge or server logs)
+  PUB-->>B: buyer.html (static, strict CSP, Referrer-Policy no-referrer)
+  B->>PUB: POST /public/v1/session/exchange {token} (page JS), then JS clears fragment
+  PUB->>SH: exchangeToken(sha256(token))
+  SH->>DB: share_link by hash, evaluate link, proposal status, three clocks (BUSINESS-RULES §18.2)
+  PUB-->>B: Set-Cookie buyer session bound to the link (HttpOnly, Secure, SameSite=Strict, buyer origin)
+  B->>PUB: GET /public/v1/view (cookie)
+  PUB->>SH: getViewModel(external actor) re-evaluating access
+  alt first open on this device
+    PUB-->>B: "Continue as recipient" or "I'm someone else" (name, email, privacy notice, OTP if BR-SHR-006 enabled)
+  end
+  PUB-->>B: frozen version snapshot (no internal ids)
+  B->>PUB: POST heartbeat (JS only, after visible time)
+  PUB->>SH: recordHeartbeat
+  SH->>DB: tx: view_session upsert, first counted view?
+  SH->>PR: recordBuyerView(tx, versionId) via proposals service
+  PR->>DB: proposal Sent→Viewed, timeline, notification proposal_first_open, NOTIFY
+  Note over B,PUB: mail-scanner prefetch cannot see the fragment and never runs the exchange or heartbeats, so it never opens or counts a view (ADR-026, ADR-071)

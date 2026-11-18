@@ -1,0 +1,9 @@
+%% Source: docs/02-hld/DATA-FLOW-ARCHITECTURE.md — section: F-05 Send email from CRM
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart LR
+  C["Compose (template, placeholders,<br/>tracking toggle)"] -->|"POST /api/v1/emails<br/>Idempotency-Key"| S["server: policy, mailbox active,<br/>placeholders resolved, limits"]
+  S -->|"TX-1"| O[("email_message (sentViaCrm, status sending)<br/>email_tracking (if on)<br/>idempotency_key")]
+  O --> P["MailProvider.send (outside TX)<br/>MIME with CRM send-id header"]
+  P -->|accepted| T2["TX-2: status sent, provider ids,<br/>email_link explicit, timeline, domain_event email.sent,<br/>deal.last_activity_at"]
+  P -->|"definite failure"| T3["TX-2: status failed, kept as CRM draft"]
+  P -->|"ambiguous (timeout)"| T4["TX-2: status unknown;<br/>reconcile via next sync (send-id header match)"]

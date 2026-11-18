@@ -1,0 +1,28 @@
+%% Source: docs/03-tld/AUTHENTICATION-AUTHORIZATION.md — section: 3. Sign-in flows
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  participant U as User (browser, app origin)
+  participant W as Web app
+  participant A as /auth (Better Auth)
+  participant G as Google / Entra
+  participant M as mfaPolicy middleware
+  U->>W: open /sign-in
+  alt password
+    W->>A: POST /auth/sign-in/email {email,password}
+  else Google or Microsoft
+    W->>A: GET /auth/sign-in/social?provider=google
+    A->>G: OIDC authorization (PKCE, state)
+    G-->>A: code → tokens (verify hd/tid, email_verified)
+  end
+  A->>A: user exists & active? (invite-only) · lockout check
+  A-->>W: Set-Cookie crm.session_token (or twoFactorRedirect)
+  opt TOTP enrolled
+    W->>A: POST /auth/two-factor/verify-totp {code}
+  end
+  W->>M: GET /api/v1/me
+  alt policy requires MFA and user not enrolled
+    M-->>W: 403 MFA_ENROLMENT_REQUIRED → /settings/security?enrol=1
+  else
+    M-->>W: 200 me + permissions
+  end

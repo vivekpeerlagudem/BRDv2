@@ -1,0 +1,13 @@
+%% Source: docs/01-specifications/WORKFLOWS.md — section: WF-01 Organization bootstrap and admin setup
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart TD
+    A[Operator runs bootstrap CLI] --> B{Any user exists?}
+    B -- yes --> X[Refuse: BOOTSTRAP_ALREADY_DONE]
+    B -- no --> C[Create org settings + seed pipeline, roles, rules, starter template]
+    C --> D[Email Admin one-time sign-in link]
+    D --> E[Admin signs in, MFA if required]
+    E --> F[Setup checklist: settings, branding, domains]
+    F --> G[Pipelines, stages, probabilities, automation params]
+    G --> H[Lists: lost reasons, custom fields, tax, products, discount limits, FX]
+    H --> I[AI switches and budget, tracking, visibility, retention]
+    I --> J[Connect mailbox WF-12 / invite users WF-02 / import WF-05]

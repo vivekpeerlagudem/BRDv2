@@ -1,0 +1,29 @@
+%% Source: docs/02-hld/INTEGRATION-ARCHITECTURE.md — section: 10.4 Outlook add-in sign-in and record lookup
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+  autonumber
+  actor U as User in Outlook
+  participant TP as Task pane (addin.html)
+  participant NAA as MSAL nested app auth (host broker)
+  participant E as Entra ID
+  participant S as server /api/v1
+  participant DB as PostgreSQL
+  U->>TP: open add-in on a message
+  TP->>NAA: acquireTokenSilent(scope api://app/access_as_user)
+  alt NAA available
+    NAA->>E: token request via host
+    E-->>NAA: access token (aud = our API, tid, oid)
+    NAA-->>TP: access token
+    TP->>S: POST /addin/token-exchange (Entra token)
+    S->>S: validate JWT signature, iss, aud, tid, scp
+  else NAA not available or password user
+    TP->>S: displayDialogAsync opens /addin/sign-in on app origin
+    Note over TP,S: user signs in (password, Google or Microsoft) and MFA, page returns one-time code via messageParent
+    TP->>S: POST /addin/token-exchange (one-time code)
+  end
+  S->>DB: map to active invited user, MFA policy satisfied, issue bearer token (short-lived), audit
+  S-->>TP: bearer token
+  TP->>TP: read item.from, to, cc via Office.js
+  TP->>S: GET /api/v1/addin/lookup?emails=... (Bearer)
+  S->>DB: contacts by normalised email, scopeFilter, open deals, latest proposal status, recent timeline
+  S-->>TP: permission-scoped record cards or "Add to CRM"

@@ -1,0 +1,96 @@
+%% Source: docs/01-specifications/DOMAIN-MODEL.md — section: 20.1 Identity and CRM core
+%% Extracted copy; edit the source document, then re-run the extraction.
+classDiagram
+  class OrganizationSettings {
+    +Text organizationName
+    +Currency defaultCurrency
+    +Text timeZone
+    +Integer fiscalYearStartMonth
+    +Branding branding
+    +CrossVisibility salespersonCrossVisibility
+    +AiSettings aiSettings
+  }
+  class User {
+    +Email email
+    +Text fullName
+    +Role role
+    +UserStatus status
+    +Boolean canManageContent
+  }
+  class Team {
+    +Text name
+  }
+  class Company {
+    +Text name
+    +Text normalizedDomain
+    +Ref ownerId
+    +Map customFields
+  }
+  class Contact {
+    +Text firstName
+    +Text lastName
+    +Email normalizedEmail
+    +Ref companyId
+    +Ref ownerId
+  }
+  class Deal {
+    +Text name
+    +Money amount
+    +Currency currency
+    +Date closeDate
+    +DealStatus status
+    +Ref ownerId
+  }
+  class DealContact {
+    +Boolean isPrimary
+    +AddedVia addedVia
+  }
+  class ContactRole {
+    +Text name
+    +Boolean isSystem
+  }
+  class Pipeline {
+    +Text name
+  }
+  class PipelineStage {
+    +Text name
+    +StageKind kind
+    +Integer order
+    +Percent probability
+    +Integer stallThresholdDays
+  }
+  class DealStageHistory
+  class LostReason
+  class CustomFieldDefinition {
+    +ObjectType objectType
+    +Text key
+    +FieldType dataType
+  }
+  class Task {
+    +DateTime dueAt
+    +TaskStatus status
+    +TaskSource source
+  }
+  class Note
+  class ActivityLog
+  Team "1" -- "0..*" User : members
+  Team "1..*" -- "0..*" User : managed by
+  User "1" -- "0..*" Company : owns
+  User "1" -- "0..*" Contact : owns
+  User "1" -- "0..*" Deal : owns
+  Company "0..1" -- "0..*" Contact : primary
+  Company "1" -- "0..*" Deal
+  Deal "1" *-- "0..*" DealContact
+  Contact "1" -- "0..*" DealContact
+  DealContact "0..*" -- "1..*" ContactRole
+  Pipeline "1" *-- "3..*" PipelineStage
+  Deal "0..*" -- "1" PipelineStage
+  Deal "1" *-- "0..*" DealStageHistory
+  Deal "0..*" -- "0..1" LostReason
+  CustomFieldDefinition ..> Company : defines values
+  CustomFieldDefinition ..> Contact : defines values
+  CustomFieldDefinition ..> Deal : defines values
+  Task "0..*" -- "1" User : assignee
+  Task ..> Deal : related
+  Note ..> Deal : related
+  ActivityLog ..> Deal : related

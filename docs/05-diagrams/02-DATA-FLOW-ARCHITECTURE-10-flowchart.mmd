@@ -1,0 +1,19 @@
+%% Source: docs/02-hld/DATA-FLOW-ARCHITECTURE.md — section: F-09 Automation and scheduled scans
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart LR
+  subgraph Event_triggered
+    E1["proposal.version_sent"] --> J1["aut.001 stage move<br/>key AUT-001:{versionId}"]
+    E1 --> J4["aut.004 check (startAfter = sentAt + N days)<br/>key AUT-004:{versionId}"]
+    E2["signature.completed"] --> J2["aut.002 Closed Won + sibling void<br/>key AUT-002:{signatureRequestId}"]
+    E3["proposal.declined"] --> J3["aut.003 outcome task<br/>key AUT-003:{versionId}"]
+    E5["proposal.accepted"] --> J17["OD-17 'Confirm Closed Won' task"]
+  end
+  subgraph Scheduled
+    C1["hourly: stalled scan"] --> J5["aut.005 flag + notification"]
+    C2["daily 00:15 org tz: overdue scan"] --> J6["aut.006 flag"]
+    C3["every 5 min: validity expiry (clock a)"] --> X1["proposal Expired, SR expire/void job"]
+    C4["every 5 min: link expiry (clock b)"] --> X2["share_link expired"]
+    C5["every 15 min: link_expiring scan"] --> X3["notification link_expiring"]
+    C6["every 1 min: task reminders / due / overdue"] --> X4["notifications task_due / task_overdue"]
+  end
+  J1 & J2 & J3 & J4 & J5 & J6 & J17 --> EX[("automation_execution:<br/>before/after snapshot, status,<br/>idempotency key unique")]

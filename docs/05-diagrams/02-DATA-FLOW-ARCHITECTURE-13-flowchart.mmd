@@ -1,0 +1,13 @@
+%% Source: docs/02-hld/DATA-FLOW-ARCHITECTURE.md — section: F-14 Erasure and retention
+%% Extracted copy; edit the source document, then re-run the extraction.
+flowchart TB
+  ER["Admin creates erasure_request for a contact"] --> J["job erasure.run (per module handlers, A12)"]
+  J --> CRM["crm: anonymise contact personal fields,<br/>keep deals/amounts; deal_contact kept with anonymised contact"]
+  J --> COM["comms: email/calendar data of the subject (scope open, see O-05)"]
+  J --> SHR["sharing: viewer_identity, view_session IP/UA, buyer_response name/email anonymised"]
+  J --> LED["leads: submission payload personal fields redacted"]
+  J --> AIX["ai: ai_generation outputs referencing the subject (scope open, O-05)"]
+  J --> EX["EXEMPT: signed_document, certificate, signer evidence,<br/>signature_event, audit_log (OD-36 WA)"]
+  CRM & COM & SHR & LED & AIX --> DONE["erasure_request completed, summary, audit"]
+  RS["cron retention.sweep (daily)"] --> RP[("retention_policy per category")]
+  RP --> DEL["batched delete/anonymise (<= 5,000 rows per TX),<br/>object deletions, audit summary row per category"]

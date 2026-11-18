@@ -1,0 +1,29 @@
+%% Source: docs/01-specifications/WORKFLOWS.md — section: WF-32 Signature completion → documents → Closed Won
+%% Extracted copy; edit the source document, then re-run the extraction.
+sequenceDiagram
+    autonumber
+    participant ES as ESignProvider
+    participant S as Server (webhook)
+    participant W as Worker
+    participant OS as Object storage
+    participant DB as Postgres (+outbox)
+    participant A as AUT-002 handler
+    participant N as Notifications
+    ES->>S: webhook completed (signature header)
+    S->>S: verify HMAC, dedupe event id
+    S->>DB: store provider event, enqueue completion(requestId)
+    W->>ES: download sealed PDF + certificate
+    W->>W: verify provider hash, compute SHA-256
+    W->>OS: store files (private)
+    W->>DB: TXN request Signed, version signed, proposal Signed, documents, timeline, outbox
+    ES-->>ES: email final PDF to all signers
+    DB-->>N: proposal_signed then owner
+    DB-->>A: signature_request.completed
+    A->>DB: lock deal, idempotency AUT-002:{requestId}
+    alt deal open
+        A->>DB: stage Closed Won, amount=TCV excl tax, close date=signing date, before/after snapshot
+        A->>DB: void other Draft/Sent/Viewed/Accepted proposals (child executions)
+        A->>DB: automated timeline entries (Reverse available)
+    else deal already won / lost
+        A->>DB: execution skipped + notify owner (+ review task if lost)
+    end
