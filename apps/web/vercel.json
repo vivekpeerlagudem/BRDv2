@@ -5,9 +5,9 @@
   "buildCommand": "pnpm build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://REPLACE-WITH-RAILWAY-API-HOST/api/:path*" },
-    { "source": "/auth/:path*", "destination": "https://REPLACE-WITH-RAILWAY-API-HOST/auth/:path*" },
-    { "source": "/public/:path*", "destination": "https://REPLACE-WITH-RAILWAY-API-HOST/public/:path*" },
+    { "source": "/api/:path*", "destination": "https://REPLACE-WITH-RENDER-API-HOST/api/:path*" },
+    { "source": "/auth/:path*", "destination": "https://REPLACE-WITH-RENDER-API-HOST/auth/:path*" },
+    { "source": "/public/:path*", "destination": "https://REPLACE-WITH-RENDER-API-HOST/public/:path*" },
     { "source": "/p", "has": [{ "type": "host", "value": "REPLACE-WITH-BUYER-DOMAIN" }], "destination": "/buyer.html" },
     { "source": "/f", "has": [{ "type": "host", "value": "REPLACE-WITH-BUYER-DOMAIN" }], "destination": "/buyer.html" },
     { "source": "/((?!api/|auth/|public/|assets/).*)", "destination": "/index.html" }

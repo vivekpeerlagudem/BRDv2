@@ -1,90 +1,141 @@
-# Deploying the Sales CRM (Railway + Vercel)
+# Deploying the Sales CRM — Render + Vercel
 
 ```
-Browser ──► Vercel (web app, global CDN)  crm.<your-domain>, proposals.<your-domain>
-              │  /api /auth /public are forwarded (same origin, so sign-in cookies work)
+Browser ──► Vercel (apps/web, global CDN)      https://crm.<domain>   https://proposals.<domain>
+              │  /api, /auth, /public are rewritten to Render (same origin for the browser)
               ▼
-            Railway: API service ── PostgreSQL
-                     Worker service ─┘   (+ volume /data for proposal PDFs)
+            Render web service "crm-api" (Docker)  ── disk /data (proposal PDFs, signatures)
+              API + job loop (RUN_JOBS_IN_PROCESS=true)
+              │
+            Render PostgreSQL "crm-db"
 ```
 
-The API and the worker are built by Railway from the `Dockerfile` in this repo. You do not need Docker locally.
+Files: `render.yaml` (Render Blueprint), `Dockerfile`, `apps/web/vercel.json`.
 
-> **Demo only, for now.** E-signature is the simulator and email is only logged (no real providers are built
-> yet). The server refuses to start in production with them unless `ALLOW_SIMULATED_PROVIDERS=true`.
+## What was verified in the repository
 
-## 1. Secrets (generate once, keep them safe)
+| Item | Value (from the repo) |
+|---|---|
+| API start | `pnpm --filter @crm/server serve` → `tsx src/main.ts` (Dockerfile `CMD`) |
+| Worker start | `pnpm --filter @crm/server worker` → `tsx src/worker.ts` (not used on Render, see below) |
+| Migrations | `pnpm --filter @crm/server db:migrate` → `tsx src/cli/migrate.ts`, uses `DATABASE_URL_MIGRATOR` |
+| First admin | `pnpm --filter @crm/server bootstrap:admin` → `tsx src/cli/bootstrap-admin.ts` |
+| Health check | `GET /readyz` (200 when the database answers) |
+| Port | `PORT` env var (Render sets it; default 10000) |
+| Files | `LocalFsStorage(STORAGE_DIR)`; Dockerfile sets `STORAGE_DIR=/data/storage` |
+| Web build | `apps/web`: `vite build` → `dist/index.html` + `dist/buyer.html` |
+| Node | `engines.node >=26` with `engineStrict` — Render uses `node:26` (Dockerfile); Vercel's default is 26.x |
+
+### Why there is no separate Render worker
+
+The API **and** the worker read and write the same files: the API saves proposal PDFs when a proposal is sent;
+the worker's `esign.dispatch` job reads that PDF, and its `fetchSigned` step saves the signed PDF and certificate.
+On Render a persistent disk "is accessible by only a single service instance" and "You can't access a service's
+disk from any other service" (render.com/docs/disks). So the job loop runs inside the API instead
+(`RUN_JOBS_IN_PROCESS=true`: same cadence as the worker — jobs every second, scheduled scans every 5 minutes).
+
+Consequences of having a disk (Render docs): the service cannot scale to more than one instance, and each deploy has
+a short downtime (Render stops the old instance before starting the new one). Render snapshots the disk daily
+(kept 7 days).
+
+## Before you start
+
+- **Paid plans are required.** On Render's free plan there are no disks, no pre-deploy command and no shell, and a
+  free Postgres is deleted 30 days after creation. `render.yaml` uses `1c-2g` for the API (headless Chromium
+  renders PDFs) and `0.1c-256mb` for Postgres. Change them in `render.yaml` before applying if you want.
+- **Region** (`oregon` in `render.yaml`) cannot be changed later. Set the same region for the API and database.
+- **Branch**: `render.yaml` deploys `main`. Merge `kensium-redesign-leads-people` into `main` first.
+- **Domains**: two hostnames — `crm.<domain>` (staff) and `proposals.<domain>` (buyers, must be different).
+- **Demo only**: e-signature is the simulator and email is logged, not sent (`ALLOW_SIMULATED_PROVIDERS=true`).
+  In production the "Simulate sign" action is not available (it is registered only when `NODE_ENV` is not
+  `production`), so signatures cannot be completed until a real e-signature provider is added.
+
+Generate the one secret you must type yourself (Git Bash):
 
 ```bash
-openssl rand -base64 48   # BETTER_AUTH_SECRET
-openssl rand -hex 32      # KEYRING_LOCAL_MASTER_KEY (64 hex characters)
-openssl rand -hex 24      # ESIGN_WEBHOOK_SECRET
+openssl rand -hex 32      # KEYRING_LOCAL_MASTER_KEY — 64 hex characters; never change it after go-live
 ```
 
-Never change `KEYRING_LOCAL_MASTER_KEY` after go-live: it encrypts the stored share-link tokens.
+Pick a strong password for the `crm_app` database role and keep it in your password manager.
 
-## 2. Railway — database
+## Render — step by step
 
-1. New project → **Deploy PostgreSQL**. Pick the region closest to your users.
-2. Open the database → **Data** → **Query**, and create the two roles the app uses
-   (the migrator owns the tables; the app role cannot rewrite audit history):
+1. **Dashboard → New → Blueprint** → connect the GitHub repository → branch `main`. Render reads `render.yaml`
+   and shows: web service `crm-api`, disk `crm-storage`, PostgreSQL `crm-db`.
+2. Render asks for the `sync: false` values:
+   - `APP_ORIGIN` = `https://crm.<domain>`
+   - `BUYER_ORIGIN` = `https://proposals.<domain>`
+   - `KEYRING_LOCAL_MASTER_KEY` = the 64-hex value
+   - `DATABASE_URL` = `postgresql://pending` for now (the database host does not exist yet; set it in step 5)
 
-```sql
-CREATE ROLE crm_migrator LOGIN PASSWORD '<strong password 1>';
-CREATE ROLE crm_app LOGIN PASSWORD '<strong password 2>';
-GRANT ALL ON SCHEMA public TO crm_migrator;
-GRANT USAGE ON SCHEMA public TO crm_app;
-```
+   `BETTER_AUTH_SECRET` and `ESIGN_WEBHOOK_SECRET` are generated by Render. `DATABASE_URL_MIGRATOR` is filled
+   from the database automatically.
+3. **Apply.** The first deploy is expected to **fail at the pre-deploy (migration) step**: the migrations grant
+   table access to a role named `crm_app`, which does not exist yet. The database itself is created.
+4. **Create the `crm_app` role.** Open `crm-db` → **Connect** → **External** → copy the **PSQL Command** and run it
+   in a terminal on your computer (needs `psql`, which comes with PostgreSQL). Then:
 
-3. Note the database host, port and name from its **Connect** tab.
+   ```sql
+   CREATE ROLE crm_app LOGIN PASSWORD '<crm_app password>';
+   ```
 
-## 3. Railway — API service
+   Render's docs do not state whether the database user may create roles. If this command is refused, stop here
+   and do not continue — the setup needs a different approach.
+5. **Set `DATABASE_URL`.** Copy `crm-db` → **Connect** → **Internal Database URL**
+   (`postgresql://crm_migrator:<password>@<host>/crm`) and replace the user and password:
+   `postgresql://crm_app:<crm_app password>@<host>/crm`. Put it in `crm-api` → **Environment** → `DATABASE_URL`.
+6. **Deploy again**: `crm-api` → **Manual Deploy** → **Deploy latest commit**. The pre-deploy migrations now run
+   (they are forward-only and continue where step 3 stopped), then the health check `/readyz` must turn green.
+   The log shows `server listening` with `"env":"production"` and
+   `jobs run in the API process (RUN_JOBS_IN_PROCESS=true)`.
+7. **Create the first admin** (once): `crm-api` → **Shell**, run
 
-1. **New → GitHub repo** → this repository (branch `main`, or the branch you deploy).
-   Railway detects the `Dockerfile`.
-2. **Variables**:
+   ```bash
+   ADMIN_EMAIL='you@kensium.com' ADMIN_NAME='Your Name' ADMIN_PASSWORD='<12+ characters>' ORG_NAME='Kensium' \
+     pnpm --filter @crm/server bootstrap:admin
+   ```
 
-| Variable | Value |
-|---|---|
-| `APP_ORIGIN` | `https://crm.<your-domain>` |
-| `BUYER_ORIGIN` | `https://proposals.<your-domain>` |
-| `DATABASE_URL` | `postgresql://crm_app:<password 2>@<host>:<port>/<db>` |
-| `DATABASE_URL_MIGRATOR` | `postgresql://crm_migrator:<password 1>@<host>:<port>/<db>` |
-| `BETTER_AUTH_SECRET` | from step 1 |
-| `KEYRING_LOCAL_MASTER_KEY` | from step 1 |
-| `ESIGN_WEBHOOK_SECRET` | from step 1 |
-| `ALLOW_SIMULATED_PROVIDERS` | `true` (demo) |
-| `AI_PROVIDER` | `fake`, or `anthropic` with `ANTHROPIC_API_KEY` |
+   It creates the organization, the default pipeline and one admin — no demo data — and does nothing if the
+   database is already set up. Add other users later in **Admin → Users**.
+8. Note the service URL on the `crm-api` page, e.g. `https://crm-api-xxxx.onrender.com` (use your actual URL).
 
-   (`NODE_ENV`, `PORT`, `STORAGE_DIR`, `PDF_BROWSER_CHANNEL` are set by the Dockerfile.)
-3. **Settings → Deploy → Pre-deploy command**: `pnpm --filter @crm/server db:migrate`
-4. **Volume**: attach one mounted at `/data` (proposal PDFs and signed documents live there).
-5. **Networking → Generate domain** (e.g. `crm-api-production.up.railway.app`). This is the API host.
-6. First admin (once): add `ADMIN_EMAIL`, `ADMIN_NAME`, `ADMIN_PASSWORD` (12+ characters), `ORG_NAME`
-   to the variables, then in the service's shell run `pnpm --filter @crm/server bootstrap:admin`.
-   Remove `ADMIN_PASSWORD` afterwards. Add the other users from **Admin → Users** in the app.
+## Vercel — step by step
 
-## 4. Railway — worker service
+1. In `apps/web/vercel.json` replace:
+   - `REPLACE-WITH-RENDER-API-HOST` (3 places) with the host from Render step 8, without `https://`
+   - `REPLACE-WITH-BUYER-DOMAIN` (2 places) with `proposals.<domain>`
 
-**New → GitHub repo** → same repository again. Same variables as the API (Railway: *Shared variables* or copy them),
-same volume is not needed. **Settings → Deploy → Custom start command**: `pnpm --filter @crm/server worker`.
-It sends alerts and runs signing and automation jobs.
+   Commit and push to `main`.
+2. **Add New → Project** → import the repository → **Root Directory: `apps/web`**. `vercel.json` sets the install
+   command (`pnpm install --frozen-lockfile`), build command (`pnpm build`) and output (`dist`). Leave
+   "Include files outside the root directory" on (default) — the build needs the workspace packages.
+3. **Deploy**, then **Settings → Domains**: add `crm.<domain>` and `proposals.<domain>` and create the DNS records
+   Vercel shows at your domain registrar.
 
-## 5. Vercel — web app
+## Deployment checklist
 
-1. In `apps/web/vercel.json` replace `REPLACE-WITH-RAILWAY-API-HOST` with the API host from step 3.5 and
-   `REPLACE-WITH-BUYER-DOMAIN` with `proposals.<your-domain>`. Commit and push.
-2. Vercel → **Add New → Project** → import the repository → **Root Directory: `apps/web`** → Deploy.
-3. **Settings → Domains**: add `crm.<your-domain>` and `proposals.<your-domain>`, then create the DNS records
-   Vercel shows (CNAME to `cname.vercel-dns.com`) at your domain registrar.
-
-## 6. Check
-
-- `https://crm.<your-domain>` → sign in as the admin.
-- Create a template, a proposal, send it, open the buyer link on `proposals.<your-domain>`, download the PDF.
-- Railway logs: API shows `server listening` with `env: production`; the worker shows no errors.
+- [ ] `kensium-redesign-leads-people` merged into `main`
+- [ ] Plans and region in `render.yaml` reviewed
+- [ ] `KEYRING_LOCAL_MASTER_KEY` and `crm_app` password stored safely
+- [ ] Render Blueprint applied; `crm-db` created
+- [ ] `CREATE ROLE crm_app …` succeeded
+- [ ] `DATABASE_URL` set to the `crm_app` internal URL
+- [ ] Redeploy: migrations passed, `/readyz` healthy, log shows `env: production`
+- [ ] `bootstrap:admin` run once
+- [ ] `vercel.json` placeholders replaced, pushed
+- [ ] Vercel project (Root Directory `apps/web`) deployed, both domains verified
+- [ ] Sign in at `https://crm.<domain>` — confirms the Vercel → Render rewrite carries the sign-in cookie
+      (Vercel's docs do not state this for external rewrites; check it on the first sign-in)
+- [ ] Create a template and a proposal, send it, open the buyer link on `https://proposals.<domain>`, download the PDF
+- [ ] Redeploy `crm-api` once and confirm the PDF still downloads (the disk keeps files)
 
 ## Updating
 
-Push to the deployed branch: Railway rebuilds the API and worker (running migrations first) and Vercel rebuilds the
-web app automatically.
+Push to `main`: Render rebuilds `crm-api` (migrations run first, short downtime because of the disk) and Vercel
+rebuilds the web app.
+
+## Other hosts
+
+The `worker` script still works where the API and worker can share storage: run the same image twice with
+start commands `pnpm --filter @crm/server serve` and `pnpm --filter @crm/server worker`, and leave
+`RUN_JOBS_IN_PROCESS` unset.

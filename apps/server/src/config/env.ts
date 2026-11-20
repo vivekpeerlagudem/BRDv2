@@ -37,6 +37,12 @@ const envSchema = z.object({
   PDF_BROWSER_CHANNEL: z.string().default('msedge'),
   /** Explicit, logged opt-in to run production with stand-in providers (never appropriate for real customers). */
   ALLOW_SIMULATED_PROVIDERS: z.enum(['true', 'false']).default('false'),
+  /**
+   * Run the job outbox and scheduled scans inside the API process instead of a separate worker. For single-instance
+   * hosts whose persistent disk cannot be shared between services (e.g. Render): the worker reads and writes the
+   * same proposal and signature files as the API, so it must run where the disk is.
+   */
+  RUN_JOBS_IN_PROCESS: z.enum(['true', 'false']).default('false'),
 });
 
 export type Config = z.infer<typeof envSchema>;

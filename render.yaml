@@ -1,0 +1,60 @@
+# Render Blueprint for the Sales CRM API + PostgreSQL. The web app is deployed separately on Vercel (apps/web).
+# Keys verified against https://render.com/schema/render.yaml.json and https://render.com/docs/blueprint-spec.
+#
+# Why there is no separate background worker here:
+#   The worker (src/worker.ts) reads and writes the same files as the API — sent proposal PDFs (esign.dispatch),
+#   e-signature envelopes and signed documents (fetchSigned). A Render persistent disk "is accessible by only a
+#   single service instance" (https://render.com/docs/disks), so a separate worker could not see them.
+#   RUN_JOBS_IN_PROCESS=true runs the same job loop and scheduled scans inside the API, next to its disk.
+#
+# Region and Postgres plan cannot be changed after creation: review them before applying.
+
+services:
+  - type: web
+    name: crm-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    branch: main
+    region: oregon # oregon | ohio | virginia | frankfurt | singapore — keep the API and database in the same region
+    plan: 1c-2g # paid plan required for the disk and pre-deploy command; headless Chromium renders the PDFs
+    healthCheckPath: /readyz
+    preDeployCommand: pnpm --filter @crm/server db:migrate
+    autoDeployTrigger: commit
+    disk:
+      name: crm-storage
+      mountPath: /data # the Dockerfile sets STORAGE_DIR=/data/storage
+      sizeGB: 1
+    envVars:
+      # Migrations run as the database's own user (it owns the tables).
+      - key: DATABASE_URL_MIGRATOR
+        fromDatabase:
+          name: crm-db
+          property: connectionString
+      # The app connects as the restricted crm_app role (cannot rewrite audit history) — see DEPLOY.md step 3.
+      - key: DATABASE_URL
+        sync: false
+      - key: APP_ORIGIN
+        sync: false # https://crm.<your-domain>
+      - key: BUYER_ORIGIN
+        sync: false # https://proposals.<your-domain>
+      - key: KEYRING_LOCAL_MASTER_KEY
+        sync: false # 64 hex characters: openssl rand -hex 32
+      - key: BETTER_AUTH_SECRET
+        generateValue: true # random base64 256-bit value (44 characters; the app needs at least 32)
+      - key: ESIGN_WEBHOOK_SECRET
+        generateValue: true
+      - key: RUN_JOBS_IN_PROCESS
+        value: "true"
+      # Demo only: e-signature simulator and logged (not sent) email. See DEPLOY.md.
+      - key: ALLOW_SIMULATED_PROVIDERS
+        value: "true"
+      - key: AI_PROVIDER
+        value: fake
+
+databases:
+  - name: crm-db
+    databaseName: crm
+    user: crm_migrator
+    region: oregon # must match the API's region
+    plan: 0.1c-256mb # paid; the free plan is deleted 30 days after creation (+14-day grace)
