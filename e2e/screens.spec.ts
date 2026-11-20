@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { login } from './helpers.ts';
+import { login, publishedTemplate } from './helpers.ts';
 
 /** Every screen opens for an Admin without a script error; the hosted lead form creates a lead; roles are enforced. */
 const stamp = Date.now().toString(36);
@@ -11,10 +11,10 @@ test('admin can open every screen without errors', async ({ page }) => {
 
   const screens: [path: string, heading: string][] = [
     ['/', 'Dashboard'],
-    ['/deals', 'Deals'],
+    ['/deals', 'Opportunities'],
     ['/companies', 'Companies'],
-    ['/contacts', 'Contacts'],
-    ['/tasks', 'My tasks'],
+    ['/contacts', 'People'],
+    ['/tasks', 'Tasks'],
     ['/leads', 'Leads'],
     ['/templates', 'Proposal templates'],
     ['/catalog', 'Product catalogue'],
@@ -35,11 +35,12 @@ test('admin can open every screen without errors', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Activity timeline' })).toBeVisible();
   await page.screenshot({ path: 'test-results/screens/deal-detail.png', fullPage: true });
   await page.goto('/templates');
-  await page.getByRole('link', { name: 'Services proposal' }).click();
+  await page.getByRole('link', { name: (await publishedTemplate(page)).name, exact: true }).click();
   await expect(page.getByRole('button', { name: 'Save draft' })).toBeVisible();
 
   // Global search finds a seeded company.
-  await page.getByLabel('Search companies, contacts and deals').fill('E2E');
+  await page.keyboard.press('Control+K'); // global search lives in the ⌘K / Ctrl+K command menu
+  await page.getByLabel('Search companies, people and opportunities').fill('E2E');
   expect(errors).toEqual([]);
 });
 
@@ -61,7 +62,7 @@ test('hosted lead form creates a lead that appears in the CRM', async ({ page })
   await page.goto('http://localhost:5273/leads');
   const row = page.getByRole('row').filter({ hasText: email });
   await expect(row.getByText('Accepted')).toBeVisible();
-  await expect(row.getByRole('link', { name: 'Open deal' })).toBeVisible();
+  await expect(row.getByRole('link', { name: 'Open opportunity' })).toBeVisible();
 });
 
 test('a salesperson cannot use admin functions', async ({ page }) => {

@@ -1,8 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
+import { Check, FileText, Trophy, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { ApiError, dateOnly, get, money, patch, personName, post } from '../lib/api.ts';
 import {
+  Avatar,
   Badge,
   Button,
   Card,
@@ -10,16 +12,23 @@ import {
   Dialog,
   EmptyState,
   Field,
+  FieldList,
   formValues,
   Input,
   PageHeader,
+  PersonChip,
   Query,
+  recordLink,
   Select,
   statusTone,
   Textarea,
   useAction,
   useToast,
 } from '../lib/ui.tsx';
+
+/** Stage accent dots for the Kanban lanes (cycled by pipeline order). */
+const STAGE_DOT = ['bg-sky-500', 'bg-violet-500', 'bg-amber-500', 'bg-orange-500', 'bg-teal-500', 'bg-pink-500'];
+
 import { DealSummaryPanel, FollowUpDialog, useAiFeature } from './ai.tsx';
 import { ActionError, type Column, OwnerDialog, SortableTable, Timeline } from './crm.tsx';
 
@@ -49,22 +58,32 @@ const FLAG: Record<string, string> = { stalled: 'Stalled', past_close_date: 'Ove
 const dealColumns: Column<DealRow>[] = [
   {
     key: 'name',
-    label: 'Deal',
+    label: 'Opportunity',
     sortValue: (x) => x.name,
     render: (x) => (
-      <>
-        <Link to="/deals/$id" params={{ id: x.id }} className="font-medium text-brand hover:underline">
+      <span className="inline-flex flex-wrap items-center gap-1.5">
+        <Link to="/deals/$id" params={{ id: x.id }} className={recordLink}>
           {x.name}
-        </Link>{' '}
+        </Link>
         {x.flags.map((f) => (
           <Badge key={f} tone="warn">
             {FLAG[f] ?? f}
           </Badge>
         ))}
-      </>
+      </span>
     ),
   },
-  { key: 'company', label: 'Company', sortValue: (x) => x.companyName, render: (x) => x.companyName },
+  {
+    key: 'company',
+    label: 'Company',
+    sortValue: (x) => x.companyName,
+    render: (x) => (
+      <Link to="/companies/$id" params={{ id: x.companyId }} className={recordLink}>
+        <Avatar name={x.companyName} shape="square" />
+        <span className="truncate">{x.companyName}</span>
+      </Link>
+    ),
+  },
   { key: 'stage', label: 'Stage', sortValue: (x) => x.stageName, render: (x) => <Badge tone={statusTone(x.status)}>{x.stageName}</Badge> },
   {
     key: 'amount',
@@ -73,7 +92,7 @@ const dealColumns: Column<DealRow>[] = [
     render: (x) => <span className="tabular-nums">{money(x.amount, x.currency)}</span>,
   },
   { key: 'closeDate', label: 'Close date', sortValue: (x) => x.closeDate, render: (x) => dateOnly(x.closeDate) },
-  { key: 'owner', label: 'Owner', sortValue: (x) => x.ownerName, render: (x) => x.ownerName },
+  { key: 'owner', label: 'Owner', sortValue: (x) => x.ownerName, render: (x) => <PersonChip name={x.ownerName} /> },
 ];
 interface DealDetail {
   id: string;
@@ -91,7 +110,7 @@ function DealEditDialog({ deal, onClose, onDone }: { deal: DealDetail; onClose: 
     (v: Record<string, string | undefined>) =>
       patch(`/deals/${base.id}`, { name: v.name, amount: v.amount ?? null, closeDate: v.closeDate ?? null, rowVersion: base.rowVersion }),
     {
-      success: 'Deal updated',
+      success: 'Opportunity updated',
       onDone: () => {
         onDone();
         onClose();
@@ -99,9 +118,9 @@ function DealEditDialog({ deal, onClose, onDone }: { deal: DealDetail; onClose: 
     },
   );
   return (
-    <Dialog open onClose={onClose} title="Edit deal">
+    <Dialog open onClose={onClose} title="Edit opportunity">
       <form className="space-y-3" onSubmit={(e) => save.run(formValues(e))}>
-        <Field label="Deal name" error={save.fieldError('name')}>
+        <Field label="Opportunity name" error={save.fieldError('name')}>
           <Input name="name" required maxLength={255} defaultValue={base.name} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
@@ -151,7 +170,7 @@ export function DealsPage() {
   });
   const companies = useQuery({ queryKey: ['companies', ''], queryFn: () => get<{ items: { id: string; name: string }[] }>('/companies?limit=100') });
   const create = useAction((v: Record<string, string | undefined>) => post<{ id: string }>('/deals', v), {
-    success: 'Deal created',
+    success: 'Opportunity created',
     onDone: (d) => void navigate({ to: '/deals/$id', params: { id: d.id } }),
   });
   const move = useAction((v: { deal: DealRow; stageId: string }) => post(`/deals/${v.deal.id}/stage`, { stageId: v.stageId, rowVersion: v.deal.rowVersion }), {
@@ -165,8 +184,8 @@ export function DealsPage() {
   return (
     <>
       <PageHeader
-        title="Deals"
-        subtitle={deals.data ? `${deals.data.total} ${layout === 'board' ? 'open ' : ''}deals` : undefined}
+        title="Opportunities"
+        subtitle={deals.data ? `${deals.data.total} ${layout === 'board' ? 'open ' : ''}opportunities` : undefined}
         actions={
           <>
             <fieldset aria-label="Layout" className="flex rounded-md border border-line bg-white p-0.5">
@@ -182,7 +201,7 @@ export function DealsPage() {
                 </button>
               ))}
             </fieldset>
-            <Button onClick={() => setOpen(true)}>New deal</Button>
+            <Button onClick={() => setOpen(true)}>New opportunity</Button>
           </>
         }
       />
@@ -190,61 +209,67 @@ export function DealsPage() {
         {(d) =>
           d.items.length === 0 ? (
             <EmptyState
-              title="No deals yet"
-              hint="Create a deal for a company to start tracking it through the pipeline."
-              action={<Button onClick={() => setOpen(true)}>New deal</Button>}
+              title="No opportunities yet"
+              hint="Create an opportunity for a company to start tracking it through the pipeline."
+              action={<Button onClick={() => setOpen(true)}>New opportunity</Button>}
             />
           ) : layout === 'list' ? (
-            <SortableTable label="Deals" columns={dealColumns} rows={d.items} rowKey={(x) => x.id} total={d.total} />
+            <SortableTable label="Opportunities" columns={dealColumns} rows={d.items} rowKey={(x) => x.id} total={d.total} />
           ) : (
             // Kanban board (BR-CRM-011). Drag a card to another column, or use the stage menu on the card (keyboard).
-            <div className="flex gap-3 overflow-x-auto pb-2">
-              {openStages.map((s) => {
+            <div className="-mx-4 flex gap-2.5 overflow-x-auto px-4 pb-3 lg:-mx-6 lg:px-6">
+              {openStages.map((s, si) => {
                 const cards = d.items.filter((x) => x.stageId === s.id);
                 return (
                   <section
                     key={s.id}
                     aria-label={s.name}
-                    className="w-72 shrink-0 rounded-lg border border-line bg-white"
+                    className="flex w-72 shrink-0 flex-col rounded-lg bg-surface/80"
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={(e) => {
                       const deal = d.items.find((x) => x.id === e.dataTransfer.getData('text/deal'));
                       if (deal && deal.stageId !== s.id) move.run({ deal, stageId: s.id });
                     }}
                   >
-                    <header className="flex items-center justify-between border-b border-line px-3 py-2">
-                      <h2 className="text-sm font-semibold">{s.name}</h2>
-                      <span className="text-xs tabular-nums text-muted">
-                        {cards.length} · {money(cards.reduce((t, c) => t + Number(c.amount ?? 0), 0))}
-                      </span>
+                    <header className="flex items-center justify-between gap-2 px-2.5 pb-1.5 pt-2.5">
+                      <h2 className="flex min-w-0 items-center gap-1.5 text-sm font-semibold">
+                        <span aria-hidden className={`size-2 shrink-0 rounded-full ${STAGE_DOT[si % STAGE_DOT.length]}`} />
+                        <span className="truncate">{s.name}</span>
+                        <span className="rounded bg-white px-1.5 text-xs font-medium text-muted ring-1 ring-line">{cards.length}</span>
+                      </h2>
+                      <span className="shrink-0 text-xs tabular-nums text-muted">{money(cards.reduce((t, c) => t + Number(c.amount ?? 0), 0))}</span>
                     </header>
-                    <ul className="min-h-24 space-y-2 p-2">
+                    <ul className="min-h-24 flex-1 space-y-1.5 p-1.5">
                       {cards.map((c) => (
                         <li
                           key={c.id}
                           draggable
                           onDragStart={(e) => e.dataTransfer.setData('text/deal', c.id)}
-                          className="cursor-grab rounded-md border border-line bg-surface p-2.5 text-sm active:cursor-grabbing"
+                          className="cursor-grab rounded-lg border border-line bg-white p-3 text-sm shadow-xs transition-colors hover:border-line-strong active:cursor-grabbing"
                         >
-                          <Link to="/deals/$id" params={{ id: c.id }} className="font-medium text-brand hover:underline">
+                          <Link to="/deals/$id" params={{ id: c.id }} className={`${recordLink} text-base font-semibold`}>
                             {c.name}
                           </Link>
-                          <p className="text-xs text-muted">
-                            {c.companyName} · {c.ownerName}
+                          <p className="mt-1.5 flex min-w-0 items-center gap-1.5 text-xs text-muted">
+                            <Avatar name={c.companyName} shape="square" />
+                            <span className="truncate">{c.companyName}</span>
                           </p>
-                          <p className="mt-1 flex items-center justify-between">
-                            <span className="tabular-nums">{money(c.amount, c.currency)}</span>
-                            <span className="flex gap-1">
+                          <p className="mt-2 flex items-center justify-between gap-2">
+                            <span className="text-base font-semibold tabular-nums">{money(c.amount, c.currency)}</span>
+                            <span className="flex items-center gap-1">
                               {c.flags.map((f) => (
                                 <Badge key={f} tone="warn">
                                   {FLAG[f] ?? f}
                                 </Badge>
                               ))}
+                              <span title={`Owner: ${c.ownerName}`}>
+                                <Avatar name={c.ownerName} />
+                              </span>
                             </span>
                           </p>
                           <Select
                             aria-label={`Move ${c.name} to stage`}
-                            className="mt-2 py-1 text-xs"
+                            className="mt-2.5 h-7 text-xs"
                             value={c.stageId}
                             onChange={(e) => move.run({ deal: c, stageId: e.target.value })}
                           >
@@ -261,34 +286,37 @@ export function DealsPage() {
                 );
               })}
               {/* Closed outcomes — read-only, visually separated from the active pipeline (not drag targets). */}
-              <div aria-hidden className="w-px shrink-0 self-stretch bg-line" />
+              <div aria-hidden className="mx-1 w-px shrink-0 self-stretch bg-line" />
               {(
                 [
-                  { key: 'won', label: 'Closed Won', head: 'border-green-200 bg-green-50', deals: closed.data?.won ?? [] },
-                  { key: 'lost', label: 'Closed Lost', head: 'border-red-200 bg-red-50', deals: closed.data?.lost ?? [] },
+                  { key: 'won', label: 'Closed Won', dot: 'bg-green-500', lane: 'bg-green-50/60', deals: closed.data?.won ?? [] },
+                  { key: 'lost', label: 'Closed Lost', dot: 'bg-red-500', lane: 'bg-red-50/50', deals: closed.data?.lost ?? [] },
                 ] as const
               ).map((col) => (
-                <section key={col.key} aria-label={col.label} className="w-72 shrink-0 rounded-lg border border-line bg-white">
-                  <header className={`flex items-center justify-between rounded-t-lg border-b px-3 py-2 ${col.head}`}>
-                    <h2 className="text-sm font-semibold">{col.label}</h2>
-                    <span className="text-xs tabular-nums text-muted">
-                      {col.deals.length} · {money(col.deals.reduce((t, c) => t + Number(c.amount ?? 0), 0))}
-                    </span>
+                <section key={col.key} aria-label={col.label} className={`flex w-72 shrink-0 flex-col rounded-lg ${col.lane}`}>
+                  <header className="flex items-center justify-between gap-2 px-2.5 pb-1.5 pt-2.5">
+                    <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+                      <span aria-hidden className={`size-2 rounded-full ${col.dot}`} />
+                      {col.label}
+                      <span className="rounded bg-white px-1.5 text-xs font-medium text-muted ring-1 ring-line">{col.deals.length}</span>
+                    </h2>
+                    <span className="text-xs tabular-nums text-muted">{money(col.deals.reduce((t, c) => t + Number(c.amount ?? 0), 0))}</span>
                   </header>
-                  <ul className="min-h-24 space-y-2 p-2">
+                  <ul className="min-h-24 flex-1 space-y-1.5 p-1.5">
                     {col.deals.length === 0 ? (
-                      <li className="px-1 py-6 text-center text-xs text-muted">No {col.key} deals yet</li>
+                      <li className="px-1 py-6 text-center text-xs text-muted">No {col.key} opportunities yet</li>
                     ) : (
                       col.deals.map((c) => (
-                        <li key={c.id} className="rounded-md border border-line bg-surface p-2.5 text-sm">
-                          <Link to="/deals/$id" params={{ id: c.id }} className="font-medium text-brand hover:underline">
+                        <li key={c.id} className="rounded-lg border border-line bg-white p-3 text-sm shadow-xs">
+                          <Link to="/deals/$id" params={{ id: c.id }} className={`${recordLink} text-base font-semibold`}>
                             {c.name}
                           </Link>
-                          <p className="text-xs text-muted">
-                            {c.companyName} · {c.ownerName}
+                          <p className="mt-1.5 flex min-w-0 items-center gap-1.5 text-xs text-muted">
+                            <Avatar name={c.companyName} shape="square" />
+                            <span className="truncate">{c.companyName}</span>
                           </p>
-                          <p className="mt-1 flex items-center justify-between">
-                            <span className="tabular-nums">{money(c.amount, c.currency)}</span>
+                          <p className="mt-2 flex items-center justify-between">
+                            <span className="text-base font-semibold tabular-nums">{money(c.amount, c.currency)}</span>
                             <Badge tone={statusTone(c.status)}>{c.status === 'won' ? 'Won' : 'Lost'}</Badge>
                           </p>
                         </li>
@@ -301,9 +329,9 @@ export function DealsPage() {
           )
         }
       </Query>
-      <Dialog open={open} onClose={() => setOpen(false)} title="New deal">
+      <Dialog open={open} onClose={() => setOpen(false)} title="New opportunity">
         <form className="space-y-3" onSubmit={(e) => create.run(formValues(e))}>
-          <Field label="Deal name" error={create.fieldError('name')}>
+          <Field label="Opportunity name" error={create.fieldError('name')}>
             <Input name="name" required />
           </Field>
           <Field label="Company" error={create.fieldError('companyId')}>
@@ -331,7 +359,7 @@ export function DealsPage() {
               Cancel
             </Button>
             <Button type="submit" disabled={create.busy}>
-              Create deal
+              Create opportunity
             </Button>
           </div>
         </form>
@@ -369,7 +397,7 @@ export function DealPage() {
     },
   });
   const move = useAction((v: { stageId: string; rowVersion: number }) => post(`/deals/${id}/stage`, v), done('Stage updated'));
-  const won = useAction(() => post(`/deals/${id}/won`, {}), done('Deal marked Closed Won'));
+  const won = useAction(() => post(`/deals/${id}/won`, {}), done('Opportunity marked Closed Won'));
   const lost = useAction(async (v: Record<string, string | undefined>) => {
     try {
       return await post(`/deals/${id}/lost`, v);
@@ -379,7 +407,7 @@ export function DealPage() {
         return post(`/deals/${id}/lost`, { ...v, confirm: ['OPEN_SIGNATURE_REQUEST_CONFIRM'] });
       throw e;
     }
-  }, done('Deal marked Closed Lost'));
+  }, done('Opportunity marked Closed Lost'));
   const note = useAction((v: Record<string, string | undefined>) => post('/notes', { ...v, relatedType: 'deal', relatedId: id }), done('Note added'));
   const task = useAction(
     (v: Record<string, string | undefined>) =>
@@ -393,7 +421,7 @@ export function DealPage() {
   );
   const addContact = useAction(
     (v: Record<string, string | undefined>) => post(`/deals/${id}/contacts`, { contactId: v.contactId, roles: v.role ? [v.role] : [] }),
-    done('Contact added to deal'),
+    done('Person added to opportunity'),
   );
   const newProposal = useAction(
     (v: Record<string, string | undefined>) =>
@@ -410,13 +438,14 @@ export function DealPage() {
         return (
           <>
             <PageHeader
+              icon={<Avatar name={d.company.name} shape="square" size="lg" />}
               title={d.name}
               subtitle={
                 <>
                   <Link to="/companies/$id" params={{ id: d.company.id }} className="text-brand hover:underline">
                     {d.company.name}
                   </Link>{' '}
-                  · Owner {d.owner.fullName}
+                  · {money(d.amount, d.currency)} · Owner {d.owner.fullName}
                 </>
               }
               actions={
@@ -430,7 +459,7 @@ export function DealPage() {
                   {!canEdit && <Badge>View only</Badge>}
                   {canEdit && (
                     <Button variant="secondary" onClick={() => setDialog('edit')}>
-                      Edit deal
+                      Edit opportunity
                     </Button>
                   )}
                   {d.permissions.reassign && (
@@ -452,7 +481,7 @@ export function DealPage() {
                           </option>
                         ))}
                       </Select>
-                      <ConfirmButton variant="secondary" label="Mark won" confirm="Mark this deal as Closed Won?" onConfirm={() => won.run(undefined)} />
+                      <ConfirmButton variant="secondary" label="Mark won" confirm="Mark this opportunity as Closed Won?" onConfirm={() => won.run(undefined)} />
                       {followUp && (
                         <Button variant="secondary" onClick={() => setDialog('followup')}>
                           Follow-up email…
@@ -466,8 +495,47 @@ export function DealPage() {
                 </>
               }
             />
-            <div className="grid gap-4 lg:grid-cols-3">
-              <div className="space-y-4 lg:col-span-2">
+            {/* Pipeline stepper: where the deal is, and one click to move it (reuses the stage-move action). */}
+            {d.status === 'open' ? (
+              <ol aria-label="Pipeline stage" className="mb-5 flex overflow-x-auto rounded-lg border border-line bg-white">
+                {stages.map((s, i) => {
+                  const cur = stages.findIndex((x) => x.id === d.stageId);
+                  const state = i < cur ? 'done' : i === cur ? 'current' : 'todo';
+                  return (
+                    <li key={s.id} className="min-w-32 flex-1 border-r border-line last:border-0">
+                      <button
+                        type="button"
+                        aria-current={state === 'current' ? 'step' : undefined}
+                        aria-label={state === 'current' ? `${s.name} (current stage)` : `Move to ${s.name}`}
+                        disabled={!canEdit || state === 'current' || move.busy}
+                        onClick={() => move.run({ stageId: s.id, rowVersion: d.rowVersion })}
+                        className={`flex h-9 w-full items-center justify-center gap-1.5 px-3 text-[13px] font-medium transition-colors disabled:cursor-default ${
+                          state === 'current'
+                            ? 'bg-brand text-white'
+                            : state === 'done'
+                              ? 'cursor-pointer bg-brand-soft text-brand-dark hover:bg-brand-soft/70'
+                              : 'cursor-pointer text-muted hover:bg-surface hover:text-ink'
+                        }`}
+                      >
+                        {state === 'done' && <Check className="size-3.5" aria-hidden />}
+                        <span className="truncate">{s.name}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+            ) : (
+              <div
+                className={`mb-5 flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium ${
+                  d.status === 'won' ? 'border-green-200 bg-green-50 text-green-800' : 'border-red-200 bg-red-50 text-red-800'
+                }`}
+              >
+                {d.status === 'won' ? <Trophy className="size-4" aria-hidden /> : <XCircle className="size-4" aria-hidden />}
+                {d.status === 'won' ? 'Closed Won' : 'Closed Lost'} — this opportunity is closed. Reopen it from the timeline actions if it needs more work.
+              </div>
+            )}
+            <div className="grid items-start gap-4 lg:grid-cols-3">
+              <div className="min-w-0 space-y-4 lg:col-span-2">
                 <Card
                   title="Proposals"
                   actions={d.permissions.manageProposals && d.status === 'open' && <Button onClick={() => setDialog('proposal')}>New proposal</Button>}
@@ -477,11 +545,12 @@ export function DealPage() {
                       ps.length === 0 ? (
                         <p className="text-sm text-muted">No proposals yet. Create one from a template — it fills in CRM data and pricing.</p>
                       ) : (
-                        <ul className="divide-y divide-line text-sm">
+                        <ul className="-my-2 divide-y divide-line text-sm">
                           {ps.map((p) => (
-                            <li key={p.id} className="flex items-center justify-between py-2">
-                              <Link to="/proposals/$id" params={{ id: p.id }} className="font-medium text-brand hover:underline">
-                                {p.title}
+                            <li key={p.id} className="flex items-center justify-between gap-3 py-2">
+                              <Link to="/proposals/$id" params={{ id: p.id }} className={recordLink}>
+                                <FileText className="size-4 shrink-0 text-muted" aria-hidden />
+                                <span className="truncate">{p.title}</span>
                               </Link>
                               <span className="flex items-center gap-2 text-xs text-muted">
                                 Valid until {dateOnly(p.validUntil)} <Badge tone={statusTone(p.status)}>{p.status}</Badge>
@@ -513,20 +582,20 @@ export function DealPage() {
               </div>
               <div className="space-y-4">
                 <Card title="Summary">
-                  <dl className="space-y-1.5 text-sm">
-                    {[
-                      ['Amount', money(d.amount, d.currency)],
+                  <FieldList
+                    rows={[
+                      [
+                        'Amount',
+                        <span key="amount" className="font-semibold tabular-nums">
+                          {money(d.amount, d.currency)}
+                        </span>,
+                      ],
                       ['Expected close', dateOnly(d.closeDate)],
-                      ['Owner', d.owner.fullName],
+                      ['Owner', <PersonChip key="owner" name={d.owner.fullName} />],
                       ['Proposal views', engagement.data ? `${engagement.data.views} by ${engagement.data.viewers} viewer(s)` : '—'],
-                      ['Time spent reading', engagement.data ? `${Math.round(engagement.data.seconds / 60)} min` : '—'],
-                    ].map(([k, v]) => (
-                      <div key={k} className="flex justify-between">
-                        <dt className="text-muted">{k}</dt>
-                        <dd className="font-medium">{v}</dd>
-                      </div>
-                    ))}
-                  </dl>
+                      ['Time reading', engagement.data ? `${Math.round(engagement.data.seconds / 60)} min` : '—'],
+                    ]}
+                  />
                   <DealSummaryPanel dealId={id} canEdit={canEdit} />
                 </Card>
                 <Card
@@ -540,20 +609,25 @@ export function DealPage() {
                   }
                 >
                   {d.contacts.length === 0 ? (
-                    <p className="text-sm text-muted">No contacts on this deal. Add one to send a proposal.</p>
+                    <p className="text-sm text-muted">No people on this deal. Add one to send a proposal.</p>
                   ) : (
-                    <ul className="space-y-2 text-sm">
+                    <ul className="-my-1 space-y-3 text-sm">
                       {d.contacts.map((c: any) => (
-                        <li key={c.id}>
-                          <span className="font-medium">{personName(c)}</span>
-                          <span className="block text-xs text-muted">{c.email}</span>
-                          <span className="flex flex-wrap gap-1">
-                            {c.roles.map((r: string) => (
-                              <Badge key={r} tone={r === 'Forwarded viewer' ? 'info' : 'neutral'}>
-                                {r}
-                              </Badge>
-                            ))}
-                          </span>
+                        <li key={c.id} className="flex gap-2.5">
+                          <Avatar name={personName(c)} size="md" />
+                          <div className="min-w-0">
+                            <Link to="/contacts/$id" params={{ id: c.id }} className={recordLink}>
+                              <span className="truncate">{personName(c)}</span>
+                            </Link>
+                            <span className="block truncate text-xs text-muted">{c.email}</span>
+                            <span className="mt-1 flex flex-wrap gap-1">
+                              {c.roles.map((r: string) => (
+                                <Badge key={r} tone={r === 'Forwarded viewer' ? 'info' : 'neutral'}>
+                                  {r}
+                                </Badge>
+                              ))}
+                            </span>
+                          </div>
                         </li>
                       ))}
                     </ul>
@@ -607,7 +681,7 @@ export function DealPage() {
                 onDone={refresh}
               />
             )}
-            <Dialog open={dialog === 'lost'} onClose={() => setDialog(null)} title="Mark deal as lost">
+            <Dialog open={dialog === 'lost'} onClose={() => setDialog(null)} title="Mark opportunity as lost">
               <form className="space-y-3" onSubmit={(e) => lost.run(formValues(e))}>
                 <Field label="Lost reason" hint="Required — used in win/loss reporting" error={lost.fieldError('lostReasonId')}>
                   <Select name="lostReasonId" required defaultValue="">
@@ -685,10 +759,10 @@ export function DealPage() {
             {dialog === 'followup' && <FollowUpDialog dealId={id} contacts={d.contacts.filter((c: any) => c.email)} onClose={() => setDialog(null)} />}
             <Dialog open={dialog === 'contact'} onClose={() => setDialog(null)} title="Add stakeholder">
               <form className="space-y-3" onSubmit={(e) => addContact.run(formValues(e))}>
-                <Field label="Contact">
+                <Field label="Person">
                   <Select name="contactId" required defaultValue="">
                     <option value="" disabled>
-                      Choose a contact
+                      Choose a person
                     </option>
                     {contacts.data?.items.map((c) => (
                       <option key={c.id} value={c.id}>
@@ -706,7 +780,7 @@ export function DealPage() {
                 </Field>
                 <div className="flex justify-end">
                   <Button type="submit" disabled={addContact.busy}>
-                    Add to deal
+                    Add to opportunity
                   </Button>
                 </div>
               </form>

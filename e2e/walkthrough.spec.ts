@@ -23,7 +23,7 @@ test('admin walkthrough: dashboard, CRM, reports, settings, import, AI', async (
   await stop(page, 'dashboard', 3);
 
   await page.goto('/deals');
-  await expect(page.getByRole('heading', { name: 'Deals', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Opportunities', level: 1 })).toBeVisible();
   await stop(page, 'deals-board', 3);
 
   // Open a seeded deal to show detail + timeline + AI summary control.
@@ -66,15 +66,18 @@ test('admin walkthrough: dashboard, CRM, reports, settings, import, AI', async (
 test('salesperson walkthrough: a proposal with the AI panel', async ({ page }) => {
   test.setTimeout(120_000);
   await login(page, 'riley@northwind.example');
-  await page.goto('/deals');
-  await page.getByRole('button', { name: 'list' }).click();
-  // Open a deal that has a proposal.
-  const row = page
-    .getByRole('table')
-    .getByRole('row')
-    .filter({ hasText: /Northwind|Globex|Acme|Contoso|Fabrikam|Adatum|Tailspin/ })
-    .first();
-  await row.getByRole('link').first().click();
+  // Open a deal of Riley's that has a proposal (found through the API, so it works on any dev data).
+  const deals = (await (await page.request.get('/api/v1/deals?limit=100')).json()).items as { id: string }[];
+  let dealWithProposal: string | undefined;
+  for (const d of deals) {
+    const ps = await (await page.request.get(`/api/v1/deals/${d.id}/proposals`)).json();
+    if (Array.isArray(ps) && ps.length) {
+      dealWithProposal = d.id;
+      break;
+    }
+  }
+  expect(dealWithProposal, 'Riley needs at least one deal with a proposal').toBeTruthy();
+  await page.goto(`/deals/${dealWithProposal}`);
   await expect(page.getByRole('heading', { name: 'Activity timeline' })).toBeVisible();
   await stop(page, 'sp-deal', 2.5);
   const proposalLink = page.getByRole('link', { name: /proposal/i }).first();

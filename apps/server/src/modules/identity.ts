@@ -106,7 +106,12 @@ async function assertNotLastAdmin(tx: Tx, userId: string): Promise<void> {
   if (!row || row.n === 0) throw rule('LAST_ADMIN', 'At least one active Admin is required');
 }
 
-export async function patchUser(ctx: AppContext, actor: UserActor, userId: string, patch: { role?: Role; canManageContent?: boolean; teamId?: string | null }) {
+export async function patchUser(
+  ctx: AppContext,
+  actor: UserActor,
+  userId: string,
+  patch: { fullName?: string; role?: Role; canManageContent?: boolean; teamId?: string | null },
+) {
   requirePerm(actor, 'user.manage');
   return unitOfWork(ctx, actor, async (u) => {
     const [target] = await u.tx.select().from(appUserProfile).where(eq(appUserProfile.userId, userId));
@@ -119,17 +124,24 @@ export async function patchUser(ctx: AppContext, actor: UserActor, userId: strin
     await u.tx
       .update(appUserProfile)
       .set({
+        fullName: patch.fullName ?? target.fullName,
         role: patch.role ?? target.role,
         canManageContent: patch.canManageContent ?? target.canManageContent,
         updatedAt: ctx.now(),
         updatedBy: actor.userId,
       })
       .where(eq(appUserProfile.userId, userId));
+    if (patch.fullName && patch.fullName !== target.fullName)
+      await u.tx.update(authUser).set({ name: patch.fullName, updatedAt: ctx.now() }).where(eq(authUser.id, userId));
     if (patch.teamId !== undefined) {
       await u.tx.delete(teamMembership).where(eq(teamMembership.userId, userId));
       if (patch.teamId) await u.tx.insert(teamMembership).values({ userId, teamId: patch.teamId });
     }
-    await u.audit('user.updated', { type: 'user', id: userId }, { role: patch.role, canManageContent: patch.canManageContent, teamId: patch.teamId });
+    await u.audit(
+      'user.updated',
+      { type: 'user', id: userId },
+      { fullName: patch.fullName, role: patch.role, canManageContent: patch.canManageContent, teamId: patch.teamId },
+    );
     return { id: userId };
   });
 }

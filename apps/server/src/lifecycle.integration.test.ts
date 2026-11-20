@@ -369,6 +369,17 @@ describe.skipIf(!testUrl)('sales lifecycle (PostgreSQL integration)', () => {
     expect(links[0].views[0].activeSeconds).toBe(30);
     expect(links[0].views[0].sectionSeconds.pricing).toBe(30);
     expect(links[0].downloads).toHaveLength(1);
+
+    // Documents dashboard (Phase 2): the same tracked engagement, aggregated per proposal, scoped by deal ownership.
+    const dash = (await call('rep1', 'GET', '/api/v1/proposals')).json;
+    const row = dash.items.find((x: any) => x.id === ids.proposal);
+    expect(row).toMatchObject({ status: 'viewed', views: 1, viewers: 1, seconds: 30, downloads: 1, dealId: ids.deal });
+    expect(row.sentAt).toBeTruthy();
+    expect(row.lastViewedAt).toBeTruthy();
+    expect((await call('rep1', 'GET', '/api/v1/proposals?status=draft')).json.items.some((x: any) => x.id === ids.proposal)).toBe(false);
+    expect((await call('rep1', 'GET', '/api/v1/proposals?status=viewed')).json.items.some((x: any) => x.id === ids.proposal)).toBe(true);
+    expect((await call('rep2', 'GET', '/api/v1/proposals')).json.items.some((x: any) => x.id === ids.proposal)).toBe(false); // not their deal
+    expect((await call('admin', 'GET', '/api/v1/proposals')).json.items.some((x: any) => x.id === ids.proposal)).toBe(true);
   });
 
   it('e-signature (simulated provider): ordered signers, verified webhooks, duplicates, Closed Won automation', async () => {

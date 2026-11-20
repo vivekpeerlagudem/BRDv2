@@ -1,5 +1,5 @@
 import { type Browser, expect, type Page, test } from '@playwright/test';
-import { login } from './helpers.ts';
+import { login, publishedTemplate } from './helpers.ts';
 
 /**
  * The five AI capabilities through the real CRM screens, on the built-in simulator (no external or paid call):
@@ -78,9 +78,7 @@ test('salesperson uses AI drafting, rewriting and review inside the proposal edi
     relatedId: deal.json.id,
     dueAt: new Date(Date.now() + 2 * 86_400_000).toISOString(),
   });
-  const template = (await apiCall(page, 'GET', '/templates')).json.find(
-    (t: { name: string; published: boolean }) => t.name === 'Services proposal' && t.published,
-  );
+  const template = await publishedTemplate(page);
   const proposal = await apiCall(page, 'POST', `/deals/${deal.json.id}/proposals`, { templateId: template.id });
   expect(proposal.status).toBe(201);
   proposalUrl = `/proposals/${proposal.json.id}`;
@@ -154,12 +152,12 @@ test('salesperson uses AI drafting, rewriting and review inside the proposal edi
   await expect(
     review
       .getByRole('listitem')
-      .filter({ hasText: 'Contact name' })
+      .filter({ hasText: 'Person name' })
       .getByText(/"Bob" is not a contact on this deal/),
   ).toBeVisible();
   await expect(review.getByRole('listitem').filter({ hasText: '“$15,000”' }).getByText('AI finding (simulator)')).toBeVisible();
   // Rule findings come from the database, are labelled as rules, and sit beside the AI findings.
-  await expect(review.getByRole('listitem').filter({ hasText: 'Deal amount' }).getByText('Rule', { exact: true })).toBeVisible();
+  await expect(review.getByRole('listitem').filter({ hasText: 'Opportunity amount' }).getByText('Rule', { exact: true })).toBeVisible();
   await claim.getByRole('button', { name: 'Not an issue' }).click();
   await expect(review.getByText('1 finding(s) reviewed by you.')).toBeVisible();
   await expect(review.getByRole('listitem').filter({ hasText: 'Unsupported claim' })).toHaveCount(0);
@@ -169,7 +167,7 @@ test('salesperson uses AI drafting, rewriting and review inside the proposal edi
   await expect(review.getByText('The draft changed after this review.')).toBeVisible();
   await page.getByRole('button', { name: 'Review again' }).click();
   await expect(review.getByText('The draft changed after this review.')).toHaveCount(0);
-  await expect(review.getByRole('listitem').filter({ hasText: 'Contact name' })).toHaveCount(0);
+  await expect(review.getByRole('listitem').filter({ hasText: 'Person name' })).toHaveCount(0);
 });
 
 test('salesperson gets a deal summary and a follow-up email draft, and nothing is sent', async ({ page }) => {
@@ -177,8 +175,8 @@ test('salesperson gets a deal summary and a follow-up email draft, and nothing i
   await page.goto(dealUrl);
 
   // ── C. Deal summary: recorded facts and AI interpretation are shown separately ──
-  await page.getByRole('button', { name: 'Summarise this deal with AI' }).click();
-  const summary = page.getByRole('region', { name: 'AI deal summary' });
+  await page.getByRole('button', { name: 'Summarise this opportunity with AI' }).click();
+  const summary = page.getByRole('region', { name: 'AI opportunity summary' });
   await expect(summary.getByText('Recorded in the CRM (facts)')).toBeVisible();
   await expect(summary.getByText('AI-generated summary (simulator)')).toBeVisible();
   await expect(summary.getByText(new RegExp(`E2E AI Deal ${stamp} with ${company}`))).toBeVisible();
@@ -187,7 +185,7 @@ test('salesperson gets a deal summary and a follow-up email draft, and nothing i
   await expect(summary.getByText(/Based on 1 note\(s\)/)).toBeVisible();
   await summary.screenshot({ path: 'test-results/screens/ai-summary.png' });
   await summary.getByRole('button', { name: 'Save as note' }).click();
-  await expect(page.getByRole('region', { name: 'AI deal summary' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'AI opportunity summary' })).toHaveCount(0);
   await expect(page.getByText(/AI-assisted summary \(reviewed\)/).first()).toBeVisible(); // on the timeline, attributed to the user
 
   // ── E. Follow-up email: a draft the user edits and approves; the CRM never sends it ──
@@ -220,7 +218,7 @@ test('salesperson gets a deal summary and a follow-up email draft, and nothing i
   await expect(page.getByText(/Running on the built-in simulator/)).toBeVisible();
   const rows = page.getByRole('row');
   await expect(rows.filter({ hasText: 'Follow-up email draft' }).filter({ hasText: 'Edited, then accepted' }).first()).toBeVisible();
-  await expect(rows.filter({ hasText: 'Deal summary' }).filter({ hasText: 'Accepted' }).first()).toBeVisible();
+  await expect(rows.filter({ hasText: 'Opportunity summary' }).filter({ hasText: 'Accepted' }).first()).toBeVisible();
   await expect(rows.filter({ hasText: 'Rewrite selected text' }).filter({ hasText: 'Rejected' }).first()).toBeVisible();
   await expect(rows.filter({ hasText: 'Proposal drafting' }).filter({ hasText: 'Replaced by a newer suggestion' }).first()).toBeVisible();
   await expect(rows.filter({ hasText: 'Pre-send review' }).filter({ hasText: 'Completed' }).first()).toBeVisible();
@@ -244,7 +242,7 @@ test('admin sees organization usage and can turn AI off; the server enforces it'
   await page.getByRole('button', { name: 'Save settings' }).click();
   await expect(page.getByText('AI settings saved')).toBeVisible();
   await page.goto(dealUrl);
-  await expect(page.getByRole('button', { name: 'Summarise this deal with AI' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Summarise this opportunity with AI' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Follow-up email…' })).toHaveCount(0);
 
   await page.goto('/admin/ai');
@@ -253,7 +251,7 @@ test('admin sees organization usage and can turn AI off; the server enforces it'
   await expect(page.getByText('AI settings saved').first()).toBeVisible();
   await page.goto(dealUrl);
   await expect(page.getByRole('heading', { name: 'Activity timeline' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Summarise this deal with AI' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Summarise this opportunity with AI' })).toHaveCount(0);
   // Hiding the button is not the control: the API itself refuses.
   const refused = await apiCall(page, 'POST', `/deals/${dealUrl.split('/').pop()}/ai-summary`);
   expect([refused.status, refused.json.code]).toEqual([403, 'AI_DISABLED']);

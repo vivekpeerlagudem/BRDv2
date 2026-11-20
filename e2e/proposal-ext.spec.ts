@@ -1,5 +1,5 @@
 import { type Browser, expect, type Page, test } from '@playwright/test';
-import { login } from './helpers.ts';
+import { login, publishedTemplate } from './helpers.ts';
 
 /**
  * Proposal and sharing extensions through the real CRM and buyer screens:
@@ -89,9 +89,7 @@ test('validity date, link expiry, version comparison and copy to another deal', 
   };
   const dealAId = await mk(companyA, dealA, 'a', 'Erin');
   const dealBId = await mk(companyB, dealB, 'b', 'Omar');
-  const template = (await apiCall(page, 'GET', '/templates')).json.find(
-    (t: { name: string; published: boolean }) => t.name === 'Services proposal' && t.published,
-  );
+  const template = await publishedTemplate(page);
   const created = await apiCall(page, 'POST', `/deals/${dealAId}/proposals`, { templateId: template.id, signatureRequired: false });
   expect(created.status).toBe(201);
   const proposalId = created.json.id as string;
@@ -132,7 +130,7 @@ test('validity date, link expiry, version comparison and copy to another deal', 
   await page.reload();
   await expect(page.getByLabel('Valid until')).toHaveValue(chosen); // and re-read into the editor
   await expect(page.getByRole('button', { name: 'Use default' })).toBeVisible();
-  await expect(page.getByText('No issues found. Ready to send.').or(page.getByText('Deal amount', { exact: false }).first())).toBeVisible();
+  await expect(page.getByText('No issues found. Ready to send.').or(page.getByText('Opportunity amount', { exact: false }).first())).toBeVisible();
 
   // The preview (the buyer's document and the PDF source) carries the date.
   await page.getByRole('button', { name: 'Preview' }).click();
@@ -276,17 +274,17 @@ test('validity date, link expiry, version comparison and copy to another deal', 
   await compare.getByRole('button', { name: 'Close' }).click();
 
   // ── 4. Copy to another deal (BR-PRP-010) ─────────────────────────────────────────────────────────────────────────
-  await page.getByRole('button', { name: 'Copy to another deal…' }).click();
+  await page.getByRole('button', { name: 'Copy to another opportunity…' }).click();
   const copy = dialog(page, 'Copy to another deal');
   // Another owner's deal is not offered…
-  await copy.getByLabel('Find a deal').fill(jordanDeal);
-  await expect(copy.getByText('No matching deals')).toBeVisible();
+  await copy.getByLabel('Find an opportunity').fill(jordanDeal);
+  await expect(copy.getByText('No matching opportunities')).toBeVisible();
   await expect(copy.getByRole('button', { name: 'Create copy' })).toBeDisabled();
   // …and the server refuses it even when asked directly.
   const sneaky = await apiCall(page, 'POST', `${proposalUrl}/copy`, { targetDealId: jordanDealId });
   expect([403, 404]).toContain(sneaky.status);
-  await copy.getByLabel('Find a deal').fill(dealB);
-  await copy.getByLabel('Target deal').selectOption(dealBId);
+  await copy.getByLabel('Find an opportunity').fill(dealB);
+  await copy.getByLabel('Target opportunity').selectOption(dealBId);
   await copy.getByRole('button', { name: 'Create copy' }).click();
   await expect(page.getByText(`Draft proposal created on ${dealB}`)).toBeVisible();
   await expect(page).not.toHaveURL(new RegExp(proposalId));
@@ -296,7 +294,7 @@ test('validity date, link expiry, version comparison and copy to another deal', 
   // A new draft on deal B with the same text and prices; nothing of the sent state came along.
   await expect(page.getByRole('link', { name: dealB })).toBeVisible();
   await expect(page.getByText('Version 1 (draft)')).toBeVisible();
-  await expect(page.getByRole('heading', { name: `Services proposal — ${dealB}` })).toBeVisible();
+  await expect(page.getByRole('heading', { name: `${template.name} — ${dealB}` })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Scope of work', exact: true })).toHaveValue(
     'Discovery, implementation and a second rollout phase for the {{company.name}} team.',
   );

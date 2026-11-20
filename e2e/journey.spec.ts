@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
-import { login } from './helpers.ts';
+import { login, publishedTemplate } from './helpers.ts';
 
 /**
  * The core sales journey, through the real UI:
@@ -30,23 +30,23 @@ test('salesperson takes a deal from first contact to Closed Won', async ({ page,
 
   // --- Contact -----------------------------------------------------------------------------------------------------
   await page.goto('/contacts');
-  await page.getByRole('button', { name: 'New contact' }).first().click();
-  const contactDialog = dialog(page, 'New contact');
+  await page.getByRole('button', { name: 'New person' }).first().click();
+  const contactDialog = dialog(page, 'New person');
   await contactDialog.getByLabel('First name').fill('Erin');
   await contactDialog.getByLabel('Last name').fill(`Buyer${stamp}`);
   await contactDialog.getByLabel('Email').fill(contactEmail);
   await contactDialog.getByLabel('Company').selectOption({ label: company });
-  await page.getByRole('button', { name: 'Create contact' }).click();
+  await page.getByRole('button', { name: 'Create person' }).click();
   await expect(page.getByRole('cell', { name: contactEmail })).toBeVisible();
 
   // --- Deal --------------------------------------------------------------------------------------------------------
   await page.goto('/deals');
-  await page.getByRole('button', { name: 'New deal' }).first().click();
-  const dealDialog = dialog(page, 'New deal');
-  await dealDialog.getByLabel('Deal name').fill(dealName);
+  await page.getByRole('button', { name: 'New opportunity' }).first().click();
+  const dealDialog = dialog(page, 'New opportunity');
+  await dealDialog.getByLabel('Opportunity name').fill(dealName);
   await dealDialog.getByLabel('Company').selectOption({ label: company });
   await dealDialog.getByLabel('Amount').fill('20000');
-  await page.getByRole('button', { name: 'Create deal' }).click();
+  await page.getByRole('button', { name: 'Create opportunity' }).click();
   await expect(page.getByRole('heading', { name: dealName })).toBeVisible();
   const dealUrl = page.url();
 
@@ -66,13 +66,15 @@ test('salesperson takes a deal from first contact to Closed Won', async ({ page,
   // --- Stakeholder (the proposal recipient and signer must be a contact on the deal) ----------------------------------
   await page.getByRole('button', { name: 'Add stakeholder' }).click();
   const stakeholder = dialog(page, 'Add stakeholder');
-  await stakeholder.getByLabel('Contact').selectOption({ label: `Erin Buyer${stamp} (${contactEmail})` });
-  await page.getByRole('button', { name: 'Add to deal' }).click();
-  await expect(page.getByText('Contact added to deal')).toBeVisible();
+  await stakeholder.getByLabel('Person').selectOption({ label: `Erin Buyer${stamp} (${contactEmail})` });
+  await page.getByRole('button', { name: 'Add to opportunity' }).click();
+  await expect(page.getByText('Person added to opportunity')).toBeVisible();
 
   // --- Proposal: generate from template, price it, save ------------------------------------------------------------
   await page.getByRole('button', { name: 'New proposal' }).click();
-  await dialog(page, 'New proposal').getByLabel('Template').selectOption({ label: 'Services proposal' });
+  await dialog(page, 'New proposal')
+    .getByLabel('Template')
+    .selectOption({ label: (await publishedTemplate(page)).name });
   await page.getByRole('button', { name: 'Create proposal' }).click();
   await expect(page).toHaveURL(/\/proposals\//);
   const proposalUrl = page.url();

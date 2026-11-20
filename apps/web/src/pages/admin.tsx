@@ -149,7 +149,7 @@ export function AdminUsersPage() {
             if (v.to) deactivate.run({ id: deactivating.id, to: v.to });
           }}
         >
-          <p className="text-sm text-muted">Their deals, companies, contacts and open tasks move to another user, and they are signed out immediately.</p>
+          <p className="text-sm text-muted">Their opportunities, companies, people and open tasks move to another user, and they are signed out immediately.</p>
           <Field label="Reassign records to">
             <Select name="to" required defaultValue="">
               <option value="" disabled>

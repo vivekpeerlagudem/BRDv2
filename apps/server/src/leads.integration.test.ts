@@ -158,4 +158,26 @@ describe.skipIf(!testUrl)('Managed leads (PostgreSQL integration)', () => {
     expect(after.status).toBe('unqualified');
     expect(after.disqualifyReason).toBe('No budget');
   });
+  it('reopens a disqualified lead and clears the old reason', async () => {
+    const created = await call('rep1', 'POST', '/leads', { name: 'Sam Again', email: 'sam@again.example' });
+    const id = created.json.id;
+    expect((await call('rep1', 'POST', `/leads/${id}/disqualify`, { reason: 'Timing' })).status).toBe(200);
+    const lost = (await call('rep1', 'GET', `/leads/${id}`)).json;
+    const r = await call('rep1', 'PATCH', `/leads/${id}`, { status: 'new', rowVersion: lost.rowVersion });
+    expect(r.status, r.text).toBe(200);
+    const after = (await call('rep1', 'GET', `/leads/${id}`)).json;
+    expect(after.status).toBe('new');
+    expect(after.disqualifyReason).toBeNull();
+  });
+
+  it('links an existing company with the same name instead of creating a duplicate on conversion', async () => {
+    const co = await call('rep1', 'POST', '/companies', { name: 'Globex Corporation', domain: 'globex.example' });
+    expect(co.status, co.text).toBe(201);
+    const created = await call('rep1', 'POST', '/leads', { name: 'Hank Scorpio', email: 'hank@globex.example', companyName: '  globex   CORPORATION ' });
+    const conv = await call('rep1', 'POST', `/leads/${created.json.id}/convert`, { createDeal: false });
+    expect(conv.status, conv.text).toBe(200);
+    expect(conv.json.companyId).toBe(co.json.id);
+    const all = (await call('rep1', 'GET', '/companies?q=globex')).json;
+    expect(all.items.filter((c: { name: string }) => c.name.toLowerCase().includes('globex'))).toHaveLength(1);
+  });
 });

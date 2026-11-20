@@ -25,7 +25,11 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
     headers: body === undefined ? {} : { 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (res.ok) return (res.status === 204 ? undefined : await res.json()) as T;
+  if (res.ok) {
+    // Some actions (qualify, assign, …) succeed with an empty body: treat that as success, not a JSON error.
+    const text = res.status === 204 ? '' : await res.text();
+    return (text ? JSON.parse(text) : undefined) as T;
+  }
   const parsed = problemSchema.safeParse(await res.json().catch(() => null));
   if (res.status === 401 && path.startsWith('/api/') && !location.pathname.startsWith('/login')) location.assign('/login');
   if (parsed.success) throw new ApiError(res.status, parsed.data.code, parsed.data.title, parsed.data.errors ?? [], parsed.data.meta ?? {});

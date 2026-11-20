@@ -21,3 +21,14 @@ export async function login(page: Page, email: string) {
   }
   throw new Error('Could not sign in: still rate-limited after several attempts');
 }
+
+/**
+ * A published proposal template: the seeded "Services proposal" when it exists, otherwise the first published one.
+ * Keeps specs runnable on a dev database whose templates were created by hand (no reset or reseed needed).
+ */
+export async function publishedTemplate(page: Page): Promise<{ id: string; name: string }> {
+  const list = (await (await page.request.get('/api/v1/templates')).json()) as { id: string; name: string; published: boolean }[];
+  const t = list.find((x) => x.name === 'Services proposal' && x.published) ?? list.find((x) => x.published);
+  if (!t) throw new Error('No published proposal template exists — publish one under Templates first.');
+  return t;
+}

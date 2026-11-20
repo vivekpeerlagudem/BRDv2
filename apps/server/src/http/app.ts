@@ -169,7 +169,7 @@ export function createApp(ctx: AppContext, auth: identity.Auth): Hono<Env> {
   api.post('/companies/:id/owner', async (c) => c.json(await crm.changeCompanyOwner(ctx, A(c), id(c), (await body(c, C.ownerInput)).ownerId)));
 
   api.get('/contacts', async (c) => c.json(await crm.listContacts(ctx, A(c), parse(C.pageQuerySchema, c.req.query()))));
-  api.post('/contacts', async (c) => c.json(await crm.createContact(ctx, A(c), await body(c, C.contactInput)), 201));
+  api.post('/contacts', async (c) => c.json(await crm.createContact(ctx, A(c), await body(c, C.contactCreateInput)), 201));
   api.get('/contacts/:id', async (c) => c.json(await crm.getContact(ctx, A(c), id(c))));
   api.patch('/contacts/:id', async (c) => c.json(await crm.updateContact(ctx, A(c), id(c), await body(c, C.contactInput))));
 
@@ -197,6 +197,13 @@ export function createApp(ctx: AppContext, auth: identity.Auth): Hono<Env> {
   });
   api.post('/deals/:id/owner', async (c) => c.json(await crm.changeDealOwner(ctx, A(c), id(c), (await body(c, C.ownerInput)).ownerId)));
   api.post('/deals/:id/contacts', async (c) => c.json(await crm.addDealContact(ctx, A(c), id(c), await body(c, C.dealContactInput)), 201));
+  // Documents dashboard: all proposals the actor can see, with aggregated buyer engagement (Papermark-style).
+  api.get('/proposals', async (c) => {
+    const q = c.req.query();
+    const statuses = ['draft', 'sent', 'viewed', 'accepted', 'signed', 'declined', 'expired', 'void'];
+    const status = statuses.includes(q.status ?? '') ? (q.status as 'draft') : undefined;
+    return c.json(await proposals.listAllProposals(ctx, A(c), { ...parse(C.pageQuerySchema, q), status }));
+  });
   api.get('/deals/:id/proposals', async (c) => c.json(await proposals.listProposals(ctx, A(c), id(c))));
   api.post('/deals/:id/proposals', async (c) => c.json(await proposals.createProposal(ctx, A(c), id(c), await body(c, C.proposalCreateInput)), 201));
   api.get('/deals/:id/automation', async (c) => c.json(await workflow.listExecutions(ctx, A(c), id(c))));

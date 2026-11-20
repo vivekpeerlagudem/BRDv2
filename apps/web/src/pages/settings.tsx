@@ -122,7 +122,7 @@ function OrganizationSection() {
               </Field>
               <Field
                 label="Default currency"
-                hint="Three-letter code, for example USD. It can only change while no deal or proposal uses another currency."
+                hint="Three-letter code, for example USD. It can only change while no opportunity or proposal uses another currency."
                 error={save.fieldError('defaultCurrency')}
               >
                 <Input name="defaultCurrency" defaultValue={s.defaultCurrency} required minLength={3} maxLength={3} className="uppercase" />
@@ -155,7 +155,7 @@ function OrganizationSection() {
             <div className="space-y-3">
               <label className="flex items-center gap-2 text-sm text-ink">
                 <input type="checkbox" name="aut001Enabled" defaultChecked={s.automationSettings.aut001Enabled} />
-                Move the deal to the "proposal sent" stage when a proposal is sent
+                Move the opportunity to the "proposal sent" stage when a proposal is sent
               </label>
               <label className="flex items-center gap-2 text-sm text-ink">
                 <input type="checkbox" name="aut002Enabled" defaultChecked={s.automationSettings.aut002Enabled} />
@@ -173,8 +173,8 @@ function OrganizationSection() {
               {(
                 [
                   ['cvCompanies', 'Companies', s.salespersonCrossVisibility.companies],
-                  ['cvContacts', 'Contacts', s.salespersonCrossVisibility.contacts],
-                  ['cvDeals', 'Deals', s.salespersonCrossVisibility.deals],
+                  ['cvContacts', 'People', s.salespersonCrossVisibility.contacts],
+                  ['cvDeals', 'Opportunities', s.salespersonCrossVisibility.deals],
                 ] as const
               ).map(([name, label, value]) => (
                 <Field key={name} label={`Other salespeople's ${label.toLowerCase()}`}>
@@ -266,7 +266,7 @@ function PipelineSection() {
               <p className="text-sm text-muted">Win probability feeds the weighted forecast. Closed Won and Closed Lost are fixed and always come last.</p>
               <Button onClick={() => setAdding(true)}>Add stage</Button>
             </div>
-            <Table head={['Order', 'Stage', 'Type', 'Win probability', 'Stalls after', 'Deals', 'Proposal sent stage', '']}>
+            <Table head={['Order', 'Stage', 'Type', 'Win probability', 'Stalls after', 'Opportunities', 'Proposal sent stage', '']}>
               {stages.map((s) => {
                 const i = open.findIndex((o) => o.id === s.id);
                 return (
@@ -312,7 +312,7 @@ function PipelineSection() {
                       {s.kind === 'open' && (
                         <ConfirmButton
                           label={`Remove ${s.name}`}
-                          confirm={`Remove the stage "${s.name}"? A stage that holds deals, or that deals have passed through, cannot be removed.`}
+                          confirm={`Remove the stage "${s.name}"? A stage that holds opportunities, or that opportunities have passed through, cannot be removed.`}
                           disabled={busy}
                           onConfirm={() => remove.run(s.id)}
                         />
@@ -366,7 +366,7 @@ function StageFields({ stage, error }: { stage?: Stage; error: (name: string) =>
           </Field>
           <Field
             label="Stall threshold (days)"
-            hint="A deal with no activity for this long is flagged. Leave empty for no flag."
+            hint="An opportunity with no activity for this long is flagged. Leave empty for no flag."
             error={error('stallThresholdDays')}
           >
             <Input name="stallThresholdDays" type="number" min={1} max={365} step={1} defaultValue={stage?.stallThresholdDays ?? ''} />
@@ -429,15 +429,17 @@ function LostReasonsSection() {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted">Reasons offered when a deal is closed as lost. A deactivated reason stays on the deals that already use it.</p>
+        <p className="text-sm text-muted">
+          Reasons offered when an opportunity is closed as lost. A deactivated reason stays on the opportunities that already use it.
+        </p>
         <Button onClick={() => setAdding(true)}>Add lost reason</Button>
       </div>
       <Query q={q}>
         {(reasons) =>
           reasons.length === 0 ? (
-            <EmptyState title="No lost reasons yet" hint="Add at least one so deals can be closed as lost." />
+            <EmptyState title="No lost reasons yet" hint="Add at least one so opportunities can be closed as lost." />
           ) : (
-            <Table head={['Reason', 'Status', 'Deals using it', '']}>
+            <Table head={['Reason', 'Status', 'Opportunities using it', '']}>
               {reasons.map((r) => (
                 <tr key={r.id} data-reason={r.name}>
                   <td className="font-medium">{r.name}</td>
@@ -453,7 +455,7 @@ function LostReasonsSection() {
                       <ConfirmButton
                         variant="secondary"
                         label={`Deactivate ${r.name}`}
-                        confirm={`Deactivate "${r.name}"? It will no longer be offered for new lost deals. Deals that already use it keep it.`}
+                        confirm={`Deactivate "${r.name}"? It will no longer be offered for new lost deals. Opportunities that already use it keep it.`}
                         disabled={setActive.busy}
                         onConfirm={() => setActive.run({ id: r.id, isActive: false })}
                       />
@@ -470,7 +472,7 @@ function LostReasonsSection() {
                     {r.dealCount === 0 && (
                       <ConfirmButton
                         label={`Remove ${r.name}`}
-                        confirm={`Remove the lost reason "${r.name}"? No deal uses it. This cannot be undone.`}
+                        confirm={`Remove the lost reason "${r.name}"? No opportunity uses it. This cannot be undone.`}
                         disabled={remove.busy}
                         onConfirm={() => remove.run(r.id)}
                       />

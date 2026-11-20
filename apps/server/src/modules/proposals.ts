@@ -63,6 +63,9 @@ const {
   organizationSettings,
   fileObject,
   aiGeneration,
+  shareLink,
+  viewSession,
+  downloadEvent,
 } = schema;
 
 /** OD-39 working assumption: maximum discount per role; exceeding it is a warning, not a block (BR-PRC-007). */
@@ -323,6 +326,60 @@ export async function listProposals(ctx: AppContext, actor: UserActor, dealId: s
     .from(proposal)
     .where(eq(proposal.dealId, dealId))
     .orderBy(desc(proposal.createdAt));
+}
+
+type ProposalListStatus = 'draft' | 'sent' | 'viewed' | 'accepted' | 'signed' | 'declined' | 'expired' | 'void';
+/**
+ * Documents dashboard (Papermark-style): every proposal the actor can see — scoped through deal ownership exactly like
+ * the deals list (ADR-076) — with its deal, company, owner, contract value and aggregated buyer engagement taken from
+ * the existing tracking tables (counted view sessions, distinct viewers, active reading time, downloads).
+ */
+export async function listAllProposals(ctx: AppContext, actor: UserActor, page: { q?: string; status?: ProposalListStatus; limit: number; offset: number }) {
+  const term = page.q?.trim().replace(/[%_]/g, (c) => `\${c}`);
+  const where = and(
+    ownerScope(actor, deal.ownerId, 'deals'),
+    page.status ? eq(proposal.status, page.status) : undefined,
+    term ? sql`(${proposal.title} ilike ${`%${term}%`} or ${company.name} ilike ${`%${term}%`} or ${deal.name} ilike ${`%${term}%`})` : undefined,
+  );
+  const engagedLinks = sql`select id from ${shareLink} where ${shareLink.proposalId} = ${proposal.id}`;
+  const items = await ctx.db
+    .select({
+      id: proposal.id,
+      title: proposal.title,
+      status: proposal.status,
+      validUntil: proposal.validUntil,
+      updatedAt: proposal.updatedAt,
+      currency: proposal.currency,
+      dealId: deal.id,
+      dealName: deal.name,
+      companyId: company.id,
+      companyName: company.name,
+      ownerName: appUserProfile.fullName,
+      value: sql<
+        string | null
+      >`(select ${proposalVersion.totals}->>'tcvExclTax' from ${proposalVersion} where ${proposalVersion.id} = ${proposal.currentVersionId})`,
+      sentAt: sql<string | null>`(select ${proposalVersion.sentAt} from ${proposalVersion} where ${proposalVersion.id} = ${proposal.lastSentVersionId})`,
+      views: sql<number>`(select count(*)::int from ${viewSession} where ${viewSession.counted} and ${viewSession.shareLinkId} in (${engagedLinks}))`,
+      viewers: sql<number>`(select count(distinct ${viewSession.viewerIdentityId})::int from ${viewSession} where ${viewSession.counted} and ${viewSession.shareLinkId} in (${engagedLinks}))`,
+      seconds: sql<number>`(select coalesce(sum(${viewSession.activeSeconds}), 0)::int from ${viewSession} where ${viewSession.shareLinkId} in (${engagedLinks}))`,
+      downloads: sql<number>`(select count(*)::int from ${downloadEvent} where ${downloadEvent.shareLinkId} in (${engagedLinks}))`,
+      lastViewedAt: sql<string | null>`(select max(${shareLink.lastViewedAt}) from ${shareLink} where ${shareLink.proposalId} = ${proposal.id})`,
+    })
+    .from(proposal)
+    .innerJoin(deal, eq(deal.id, proposal.dealId))
+    .innerJoin(company, eq(company.id, deal.companyId))
+    .innerJoin(appUserProfile, eq(appUserProfile.userId, deal.ownerId))
+    .where(where)
+    .orderBy(desc(proposal.updatedAt))
+    .limit(page.limit)
+    .offset(page.offset);
+  const [count] = await ctx.db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(proposal)
+    .innerJoin(deal, eq(deal.id, proposal.dealId))
+    .innerJoin(company, eq(company.id, deal.companyId))
+    .where(where);
+  return { items, total: count?.n ?? 0 };
 }
 
 export async function getProposal(ctx: AppContext, actor: UserActor, id: string) {

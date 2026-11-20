@@ -31,7 +31,7 @@ export interface AiMeta {
 export const FEATURE_LABEL: Record<string, string> = {
   draft_section: 'Proposal drafting',
   presend_review: 'Pre-send review',
-  deal_summary: 'Deal summary',
+  deal_summary: 'Opportunity summary',
   rewrite_text: 'Rewrite selected text',
   follow_up_email: 'Follow-up email draft',
 };
@@ -41,7 +41,7 @@ const SCENARIO_LABEL: Record<(typeof AI_FOLLOW_UP_SCENARIOS)[number], string> = 
   revisited: 'Buyer keeps coming back to it',
   not_viewed: 'Proposal not opened yet',
   changes_requested: 'Buyer asked for changes',
-  gone_quiet: 'Deal has gone quiet',
+  gone_quiet: 'Opportunity has gone quiet',
 };
 export const MODE_LABEL: Record<(typeof AI_REWRITE_MODES)[number], string> = {
   improve: 'Improve clarity',
@@ -137,12 +137,12 @@ export function DealSummaryPanel({ dealId, canEdit }: { dealId: string; canEdit:
     <div className="mt-3 border-t border-line pt-3">
       {!result && !generate.busy && (
         <Button variant="secondary" onClick={() => generate.run(undefined)}>
-          Summarise this deal with AI
+          Summarise this opportunity with AI
         </Button>
       )}
-      {generate.busy && <Spinner label="Reading the deal record and writing a summary…" />}
+      {generate.busy && <Spinner label="Reading the opportunity record and writing a summary…" />}
       {result && (
-        <section aria-label="AI deal summary" className="space-y-3 text-sm">
+        <section aria-label="AI opportunity summary" className="space-y-3 text-sm">
           <div className="rounded-md border border-line bg-surface p-3">
             <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Recorded in the CRM (facts)</p>
             <dl className="grid grid-cols-2 gap-x-3 gap-y-1">
@@ -257,7 +257,7 @@ export function FollowUpDialog({ dealId, proposalId, contacts, onClose }: { deal
       <div className="grid gap-3 md:grid-cols-2">
         <Field label="To">
           <Select value={contactId} disabled={approved} onChange={(e) => setContactId(e.target.value)}>
-            {contacts.length === 0 && <option value="">No contact on this deal</option>}
+            {contacts.length === 0 && <option value="">No person on this opportunity</option>}
             {contacts.map((c) => (
               <option key={c.contactId} value={c.contactId}>
                 {personName(c)}
@@ -361,7 +361,7 @@ interface Review {
 }
 const CATEGORY_LABEL: Record<string, string> = {
   company_name_mismatch: 'Company name',
-  contact_name_mismatch: 'Contact name',
+  contact_name_mismatch: 'Person name',
   amount_mismatch: 'Amount',
   pricing_inconsistency: 'Pricing',
   product_reference: 'Product reference',
@@ -372,7 +372,7 @@ const CATEGORY_LABEL: Record<string, string> = {
   required_section_empty: 'Required section',
   validity_date_past: 'Validity date',
   ai_content_pending: 'AI suggestion pending',
-  pricing_deal_amount_mismatch: 'Deal amount',
+  pricing_deal_amount_mismatch: 'Opportunity amount',
   discount_limit_exceeded: 'Discount limit',
 };
 
@@ -683,7 +683,7 @@ export function AiActivityPage() {
       <Query q={q}>
         {(rows) =>
           rows.length === 0 ? (
-            <EmptyState title="No AI requests yet" hint="Try “Draft with AI” on a proposal or “Summarise this deal with AI” on a deal." />
+            <EmptyState title="No AI requests yet" hint="Try “Draft with AI” on a proposal or “Summarise this opportunity with AI” on a deal." />
           ) : (
             <UsageTable rows={rows} />
           )

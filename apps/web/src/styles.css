@@ -1,26 +1,116 @@
 @import "tailwindcss";
 
-/* Design tokens — one palette, used everywhere through Tailwind utilities (bg-brand, text-ink, …). */
+/*
+ * Design tokens — one palette, used everywhere through Tailwind utilities (bg-brand, text-ink, …).
+ * Brand: Kensium (kensium.com design variables) on a quiet, dense Twenty-style workspace layout.
+ *   Kensium green #4d9078 (--allcolor--green-bg-logo) · dark green #3e7360 · gold #df9f20 (--allcolor--gold-tab)
+ *   hero navy #101921 (--herobg) · navy #1b2937 (--allcolor--normal-blue) · text #1b1f22 · false-white #f4f5f7
+ * Accessibility: white on #4d9078 is only 3.8:1, so actions/links use Kensium's darker green #3e7360 (5.4:1, AA);
+ * #4d9078 is kept for non-text accents. Nav text #aab4bb on navy is 8.3:1. Token NAMES are stable across the app.
+ */
 @theme {
-  --color-brand: #1f4e79;
-  --color-brand-dark: #173b5c;
-  --color-brand-soft: #e8f0f7;
-  --color-ink: #1c2430;
-  --color-muted: #5b6675;
-  --color-line: #d8dee6;
-  --color-surface: #f5f7fa;
-  --color-ok: #1e7b4b;
-  --color-warn: #a15c00;
-  --color-danger: #b3261e;
-  --font-sans: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  /* brand (Kensium) */
+  --color-brand: #3e7360; /* actions, links, focus */
+  --color-brand-dark: #2f5a4b; /* hover */
+  --color-brand-soft: #e9f3ef; /* tints */
+  --color-accent: #4d9078; /* Kensium logo green — accents only */
+  --color-gold: #df9f20; /* Kensium gold — highlights */
+
+  /* navigation rail (Kensium hero navy) */
+  --color-nav: #101921;
+  --color-nav-raised: #1b2937;
+  --color-nav-text: #aab4bb;
+
+  /* text */
+  --color-ink: #1b1f22;
+  --color-muted: #5f6368;
+  --color-faint: #9aa1a8;
+
+  /* surfaces & lines */
+  --color-canvas: #ffffff; /* main working area */
+  --color-sidebar: #f4f5f7; /* Kensium false-white (light panels) */
+  --color-surface: #f4f5f7; /* hover, table header, subtle fills */
+  --color-line: #e4e7eb; /* hairline borders */
+  --color-line-strong: #c6cdd2; /* kensium.com outline-button border */
+  --color-info-soft: #dde6ee; /* Kensium light blue */
+  --color-info-ink: #1b2937;
+
+  /* status */
+  --color-ok: #2f7a4e;
+  --color-warn: #a86a00;
+  --color-danger: #c62828;
+
+  /* type — Inter (self-hosted via @fontsource-variable/inter), Twenty-style scale. Nothing renders below 12px. */
+  --font-sans: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --text-xs: 0.75rem; /* 12px — small meta: counts, dates, badges */
+  --text-xs--line-height: 1.5;
+  --text-sm: 0.875rem; /* 14px — body, table cells, record names, buttons, column headers */
+  --text-sm--line-height: 1.5;
+  --text-base: 0.9375rem; /* 15px — card titles and card amounts */
+  --text-base--line-height: 1.5;
+  --text-lg: 1.125rem; /* 18px — page headings */
+  --text-lg--line-height: 1.25;
+  --tracking-label: 0.01em; /* 12–13px labels */
+  --tracking-heading: -0.01em; /* 16px and up */
+
+  /* depth */
+  --shadow-xs: 0 1px 2px 0 rgb(15 23 42 / 0.04);
+  --shadow-pop: 0 8px 24px -6px rgb(15 23 42 / 0.12), 0 2px 6px -2px rgb(15 23 42 / 0.06);
 }
+
+html,
 body {
-  @apply bg-surface text-ink antialiased;
+  @apply bg-canvas text-ink antialiased;
 }
+/* Body copy is 14px. Set on body only: html must stay at the 16px default so rem-based sizes (text-sm = 14px) are exact. */
+body {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #333333;
+  font-feature-settings: "cv11", "ss01", "ss03";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+h1,
+h2,
+h3 {
+  line-height: 1.25;
+}
+
 :focus-visible {
   outline: 2px solid var(--color-brand);
   outline-offset: 2px;
 }
+
 dialog::backdrop {
-  background: rgb(15 23 42 / 0.45);
+  background: rgb(15 23 42 / 0.32);
+  backdrop-filter: blur(1px);
+}
+dialog[open] {
+  animation: pop-in 140ms ease-out;
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Thin, quiet scrollbars for dense panes */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  dialog[open] {
+    animation: none !important;
+    transition: none !important;
+  }
 }

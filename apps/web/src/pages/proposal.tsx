@@ -23,6 +23,7 @@ import {
   useToast,
 } from '../lib/ui.tsx';
 import { AiLabel, type AiMeta, AiProvenance, FigureWarning, FollowUpDialog, ReviewPanel, RewriteControl, useAiFeature } from './ai.tsx';
+import { ProposalAnalytics } from './documents.tsx';
 
 interface Finding {
   code: string;
@@ -192,7 +193,10 @@ function ProposalView({ p, setSentLinks }: { p: any; setSentLinks: (links: SentL
   });
   const newVersion = useAction(() => post(`/proposals/${id}/versions`), { success: 'New draft version created', onDone: () => void refresh() });
   const voidIt = useAction(() => post(`/proposals/${id}/void`, { reason: 'Withdrawn by sales' }), { success: 'Proposal voided', onDone: () => void refresh() });
-  const syncAmount = useAction(() => post(`/proposals/${id}/deal-amount`), { success: 'Deal amount updated from proposal', onDone: () => void refresh() });
+  const syncAmount = useAction(() => post(`/proposals/${id}/deal-amount`), {
+    success: 'Opportunity amount updated from proposal',
+    onDone: () => void refresh(),
+  });
   const showPreview = useAction(() => get<{ html: string }>(`/proposals/${id}/preview`), {
     onDone: (r) => {
       setPreviewHtml(r.html);
@@ -301,7 +305,7 @@ function ProposalView({ p, setSentLinks }: { p: any; setSentLinks: (links: SentL
               </Button>
             )}
             <Button variant="secondary" disabled={dirty} title={dirty ? 'Save the draft first' : undefined} onClick={() => setDialog('copy')}>
-              Copy to another deal…
+              Copy to another opportunity…
             </Button>
             {canManage && !['signed', 'void'].includes(p.status) && (
               <ConfirmButton
@@ -316,8 +320,8 @@ function ProposalView({ p, setSentLinks }: { p: any; setSentLinks: (links: SentL
       {p.currencyReviewFrom && (
         <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-md bg-amber-50 p-3 text-sm text-warn">
           <span>
-            Currency changed — review prices. The prices were copied unchanged from a {p.currencyReviewFrom} proposal; this deal uses {p.currency}. Sending is
-            blocked until you confirm them.
+            Currency changed — review prices. The prices were copied unchanged from a {p.currencyReviewFrom} proposal; this opportunity uses {p.currency}.
+            Sending is blocked until you confirm them.
           </span>
           {isDraft && canManage && (
             <ConfirmButton
@@ -568,9 +572,9 @@ function ProposalView({ p, setSentLinks }: { p: any; setSentLinks: (links: SentL
             )}
             {canManage && p.deal.amount !== null && totals.ok && Number(p.deal.amount) !== Number(v.totals.tcvExclTax) && !dirty && (
               <div className="mt-3 rounded-md bg-amber-50 p-2 text-sm text-warn">
-                Deal amount is {money(p.deal.amount, p.currency)}.
+                Opportunity amount is {money(p.deal.amount, p.currency)}.
                 <Button variant="ghost" onClick={() => syncAmount.run(undefined)}>
-                  Update deal to {money(v.totals.tcvExclTax, p.currency)}
+                  Update opportunity to {money(v.totals.tcvExclTax, p.currency)}
                 </Button>
               </div>
             )}
@@ -595,6 +599,7 @@ function ProposalView({ p, setSentLinks }: { p: any; setSentLinks: (links: SentL
             </Card>
           )}
           {isDraft && <ReviewPanel proposalId={id} dirty={dirty} canManage={canManage} />}
+          <ProposalAnalytics links={links.data ?? []} sections={doc.sections} />
           <Card title="Sharing and engagement">
             <Query q={links} rows={2}>
               {(ls) =>
@@ -728,8 +733,8 @@ function SendDialog({
   return (
     <Dialog open onClose={onClose} title="Send proposal">
       <fieldset className="space-y-2">
-        <legend className="mb-1 text-sm font-medium">Recipients (contacts on this deal)</legend>
-        {eligible.length === 0 && <p className="text-sm text-danger">Add a contact with an email address to the deal first.</p>}
+        <legend className="mb-1 text-sm font-medium">Recipients (people on this opportunity)</legend>
+        {eligible.length === 0 && <p className="text-sm text-danger">Add a person with an email address to the opportunity first.</p>}
         {eligible.map((c) => (
           <label key={c.contactId} className="flex items-center gap-2 text-sm">
             <input
@@ -976,26 +981,29 @@ function CopyDialog({ proposal, onClose }: { proposal: any; onClose: () => void 
     },
   );
   return (
-    <Dialog open onClose={onClose} title="Copy to another deal">
+    <Dialog open onClose={onClose} title="Copy to another opportunity">
       <p className="mb-3 text-sm text-muted">
-        Creates a new draft proposal on the deal you choose, with this proposal's current text and prices. Customer details are filled in from that deal. Links,
-        views, signatures and AI suggestions are not copied.
+        Creates a new draft proposal on the opportunity you choose, with this proposal's current text and prices. Customer details are filled in from that deal.
+        Links, views, signatures and AI suggestions are not copied.
       </p>
       <div className="space-y-3">
-        <Field label="Find a deal" hint="Open deals you can add proposals to.">
-          <Input type="search" value={search} placeholder="Type part of the deal name" onChange={(e) => setSearch(e.target.value)} />
+        <Field label="Find an opportunity" hint="Open opportunities you can add proposals to.">
+          <Input type="search" value={search} placeholder="Type part of the opportunity name" onChange={(e) => setSearch(e.target.value)} />
         </Field>
         <Query q={targets} rows={2}>
           {(ts) =>
             ts.length === 0 ? (
-              <EmptyState title={search.trim() ? 'No matching deals' : 'No deals to copy to'} hint="Only open deals you are allowed to change are listed." />
+              <EmptyState
+                title={search.trim() ? 'No matching opportunities' : 'No opportunities to copy to'}
+                hint="Only open opportunities you are allowed to change are listed."
+              />
             ) : (
-              <Field label="Target deal">
+              <Field label="Target opportunity">
                 <Select value={target ? targetId : ''} onChange={(e) => setTargetId(e.target.value)}>
-                  <option value="">Choose a deal…</option>
+                  <option value="">Choose an opportunity…</option>
                   {ts.map((t) => (
                     <option key={t.id} value={t.id}>
-                      {t.name} — {t.companyName} ({t.currency}){t.id === proposal.dealId ? ' · this deal' : ''}
+                      {t.name} — {t.companyName} ({t.currency}){t.id === proposal.dealId ? ' · this opportunity' : ''}
                     </option>
                   ))}
                 </Select>
@@ -1043,7 +1051,7 @@ function SignDialog({ proposalId, contacts, onClose }: { proposalId: string; con
   });
   return (
     <Dialog open onClose={onClose} title="Request signatures">
-      <p className="mb-2 text-sm text-muted">Signers must be contacts on the deal. Tick them in the order they should sign.</p>
+      <p className="mb-2 text-sm text-muted">Signers must be people on the deal. Tick them in the order they should sign.</p>
       {eligible.map((c) => (
         <label key={c.contactId} className="flex items-center gap-2 py-1 text-sm">
           <input

@@ -102,9 +102,9 @@ export function DashboardPage() {
                 </Card>
               </div>
               <div className="grid gap-4 lg:grid-cols-2">
-                <Card title="Deals needing attention">
+                <Card title="Opportunities needing attention">
                   {d.attention.length === 0 ? (
-                    <EmptyState title="Nothing needs attention" hint="Stalled, overdue and unviewed-proposal deals appear here." />
+                    <EmptyState title="Nothing needs attention" hint="Stalled, overdue and unviewed-proposal opportunities appear here." />
                   ) : (
                     <ul className="divide-y divide-line text-sm">
                       {d.attention.map((a) => (

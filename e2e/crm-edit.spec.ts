@@ -97,15 +97,15 @@ test('salesperson edits their company, contact and deal; duplicates and stale ed
 
   // ── Contact: list row → contact page → edit ──
   await page.goto('/contacts');
-  await page.getByLabel('Filter contacts').fill(lastName);
+  await page.getByLabel('Filter people').fill(lastName);
   await page.getByRole('link', { name: `Casey ${lastName}` }).click();
   await expect(page).toHaveURL(new RegExp(`/contacts/${ids.contact}$`));
   await expect(page.getByRole('heading', { name: `Casey ${lastName}` })).toBeVisible();
   await expect(card(page, 'Details').getByRole('link', { name: renamedCompany })).toBeVisible();
-  await expect(card(page, 'Deals').getByRole('link', { name: dealName })).toBeVisible();
+  await expect(card(page, 'Opportunities').getByRole('link', { name: dealName })).toBeVisible();
   await expect(timeline(page).getByText(`Contact Casey ${lastName} created`)).toBeVisible();
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
-  const contactEdit = dialog(page, 'Edit contact');
+  const contactEdit = dialog(page, 'Edit person');
   await expect(contactEdit.getByLabel('Email')).toHaveValue(`casey@e2e-edit-${stamp}.example`);
   await contactEdit.getByLabel('First name').fill('Cameron');
   await contactEdit.getByLabel('Job title').fill('Head of Procurement');
@@ -123,10 +123,10 @@ test('salesperson edits their company, contact and deal; duplicates and stale ed
   await page.goto(`/deals/${ids.deal}`);
   await expect(page.getByRole('heading', { name: dealName })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Change owner' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Edit deal' }).click();
-  let dealEdit = dialog(page, 'Edit deal');
+  await page.getByRole('button', { name: 'Edit opportunity' }).click();
+  let dealEdit = dialog(page, 'Edit opportunity');
   await expect(dealEdit.getByLabel(/Amount/)).toHaveValue('12000.00');
-  await dealEdit.getByLabel('Deal name').fill(renamedDeal);
+  await dealEdit.getByLabel('Opportunity name').fill(renamedDeal);
   await dealEdit.getByLabel(/Amount/).fill('not a number');
   await dealEdit.getByRole('button', { name: 'Save changes' }).click();
   await expect(dealEdit.getByRole('alert')).toContainText('must be an amount'); // server validation shown on the field
@@ -144,12 +144,12 @@ test('salesperson edits their company, contact and deal; duplicates and stale ed
   expect(afterEdit).toMatchObject({ name: renamedDeal, amount: '34500.00', closeDate: '2027-06-30' });
 
   // ── Deal: an edit started before someone else's change is refused (optimistic concurrency) ──
-  await page.getByRole('button', { name: 'Edit deal' }).click();
-  dealEdit = dialog(page, 'Edit deal');
-  await expect(dealEdit.getByLabel('Deal name')).toHaveValue(renamedDeal);
+  await page.getByRole('button', { name: 'Edit opportunity' }).click();
+  dealEdit = dialog(page, 'Edit opportunity');
+  await expect(dealEdit.getByLabel('Opportunity name')).toHaveValue(renamedDeal);
   const other = await apiCall(page, 'PATCH', `/deals/${ids.deal}`, { amount: '40000', rowVersion: afterEdit.rowVersion });
   expect(other.status).toBe(200);
-  await dealEdit.getByLabel('Deal name').fill(`${renamedDeal} stale`);
+  await dealEdit.getByLabel('Opportunity name').fill(`${renamedDeal} stale`);
   await dealEdit.getByRole('button', { name: 'Save changes' }).click();
   await expect(dealEdit.getByRole('alert')).toContainText('Someone else changed this record');
   await dealEdit.getByRole('button', { name: 'Cancel' }).click();
@@ -173,7 +173,8 @@ test('another salesperson cannot open or change the records', async ({ page }) =
   expect([403, 404]).toContain(contact.status);
   const deal = await apiCall(page, 'PATCH', `/deals/${ids.deal}`, { name: 'E2E Hijacked', rowVersion: 1 });
   expect([403, 404]).toContain(deal.status);
-  expect((await apiCall(page, 'POST', `/deals/${ids.deal}/owner`, { ownerId: ids.company })).status).toBe(403);
+  // A deal this salesperson cannot see answers 404 (no existence leak, IDOR-safe); a visible-but-forbidden one answers 403.
+  expect([403, 404]).toContain((await apiCall(page, 'POST', `/deals/${ids.deal}/owner`, { ownerId: ids.company })).status);
 
   for (const path of [`/companies/${ids.company}`, `/contacts/${ids.contact}`, `/deals/${ids.deal}`]) {
     await page.goto(path);
@@ -208,8 +209,8 @@ test('list views sort by column, and a company without open deals can be archive
   const second = await apiCall(page, 'POST', '/contacts', { firstName: 'Aaron', lastName, email: `aaron@e2e-edit-${stamp}.example` });
   expect(second.status).toBe(201);
   await page.goto('/contacts');
-  await page.getByLabel('Filter contacts').fill(lastName);
-  const contacts = page.getByRole('table', { name: 'Contacts' });
+  await page.getByLabel('Filter people').fill(lastName);
+  const contacts = page.getByRole('table', { name: 'People' });
   const contactNames = contacts.locator('tbody tr td:first-child');
   await expect(contactNames).toHaveText([`Aaron ${lastName}`, `Cameron ${lastName}`]);
   await contacts.getByRole('button', { name: 'Email', exact: true }).click();
@@ -220,7 +221,7 @@ test('list views sort by column, and a company without open deals can be archive
   // ── Deals (list layout): sort by amount ──
   await page.goto('/deals');
   await page.getByRole('button', { name: 'list' }).click();
-  const deals = page.getByRole('table', { name: 'Deals' });
+  const deals = page.getByRole('table', { name: 'Opportunities' });
   await expect(deals.getByRole('link', { name: renamedDeal })).toBeVisible();
   const order = async () => {
     const names = await deals.locator('tbody tr td:first-child a').allTextContents();

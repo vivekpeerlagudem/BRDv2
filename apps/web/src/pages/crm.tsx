@@ -1,8 +1,29 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
+import {
+  ArrowDown,
+  ArrowRightLeft,
+  ArrowUp,
+  CalendarDays,
+  Check,
+  ChevronsUpDown,
+  Circle,
+  Eye,
+  FileText,
+  type LucideIcon,
+  Pencil,
+  PenLine,
+  Phone,
+  Plus,
+  StickyNote,
+  Trophy,
+  UserCog,
+  Zap,
+} from 'lucide-react';
 import { type FormEvent, type ReactNode, useMemo, useState } from 'react';
 import { ApiError, dateTime, get, money, patch, personName, post } from '../lib/api.ts';
 import {
+  Avatar,
   Badge,
   Button,
   Card,
@@ -10,13 +31,16 @@ import {
   Dialog,
   EmptyState,
   Field,
+  FieldList,
   formValues,
   Input,
   PageHeader,
+  PersonChip,
   Query,
+  recordLink,
+  SearchInput,
   Select,
   statusTone,
-  Table,
   useAction,
 } from '../lib/ui.tsx';
 
@@ -149,15 +173,16 @@ export function SortableTable<T>({
     <>
       <div className="overflow-x-auto rounded-lg border border-line bg-white">
         <table className="w-full text-left text-sm" aria-label={label}>
-          <thead className="border-b border-line bg-surface text-xs uppercase tracking-wide text-muted">
+          <thead className="border-b border-line bg-surface text-sm text-muted">
             <tr>
               {columns.map((c) => {
                 const active = sort?.key === c.key;
+                const Icon = !active ? ChevronsUpDown : sort?.dir === 'desc' ? ArrowDown : ArrowUp;
                 return (
                   <th
                     key={c.key}
                     scope="col"
-                    className="px-3 py-2 font-medium"
+                    className="h-9 whitespace-nowrap px-3 font-semibold"
                     aria-sort={!c.sortValue ? undefined : active ? (sort?.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
                   >
                     {c.sortValue ? (
@@ -165,12 +190,10 @@ export function SortableTable<T>({
                         type="button"
                         onClick={() => toggle(c.key)}
                         title={`Sort by ${c.label}`}
-                        className={`inline-flex items-center gap-1 uppercase tracking-wide hover:text-ink ${active ? 'text-ink' : ''}`}
+                        className={`group inline-flex cursor-pointer items-center gap-1 rounded font-semibold transition-colors hover:text-ink ${active ? 'text-ink' : ''}`}
                       >
                         {c.label}
-                        <span aria-hidden="true" className={active ? '' : 'opacity-30'}>
-                          {active && sort?.dir === 'desc' ? '▼' : '▲'}
-                        </span>
+                        <Icon aria-hidden className={`size-3.5 ${active ? '' : 'opacity-0 group-hover:opacity-60'}`} />
                       </button>
                     ) : (
                       c.label
@@ -180,7 +203,7 @@ export function SortableTable<T>({
               })}
             </tr>
           </thead>
-          <tbody className="divide-y divide-line [&_td]:px-3 [&_td]:py-2 [&_tr:hover]:bg-surface/60">
+          <tbody className="divide-y divide-line [&_td]:h-9 [&_td]:px-3 [&_td]:py-1 [&_tr]:transition-colors [&_tr:hover]:bg-brand-soft/60">
             {sorted.map((row) => (
               <tr key={rowKey(row)}>
                 {columns.map((c) => (
@@ -213,7 +236,7 @@ export function ActionError({ error, onNavigate }: { error: unknown; onNavigate?
       : e?.code === 'DUPLICATE_SUSPECTED'
         ? 'Possible duplicate: another company already uses this domain. Nothing was saved.'
         : e?.code === 'CONTACT_EMAIL_TAKEN'
-          ? 'Another contact already uses this email address. Nothing was saved.'
+          ? 'Another person already uses this email address. Nothing was saved.'
           : error instanceof Error
             ? error.message
             : 'Something went wrong.';
@@ -301,18 +324,8 @@ export function OwnerDialog({
   );
 }
 
-function Details({ rows }: { rows: [string, ReactNode][] }) {
-  return (
-    <dl className="space-y-1.5 text-sm">
-      {rows.map(([k, v]) => (
-        <div key={k} className="flex justify-between gap-4">
-          <dt className="text-muted">{k}</dt>
-          <dd className="text-right font-medium">{v || '—'}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
+/** Related-record count shown in a card header (kept out of the heading so the card title stays stable). */
+const CountPill = ({ n }: { n: number }) => <span className="rounded bg-surface px-1.5 text-xs font-medium tabular-nums text-muted ring-1 ring-line">{n}</span>;
 
 // ───────────── companies ─────────────
 const companyColumns: Column<CompanyRow>[] = [
@@ -321,14 +334,15 @@ const companyColumns: Column<CompanyRow>[] = [
     label: 'Name',
     sortValue: (c) => c.name,
     render: (c) => (
-      <Link to="/companies/$id" params={{ id: c.id }} className="font-medium text-brand hover:underline">
-        {c.name}
+      <Link to="/companies/$id" params={{ id: c.id }} className={recordLink}>
+        <Avatar name={c.name} shape="square" />
+        <span className="truncate">{c.name}</span>
       </Link>
     ),
   },
-  { key: 'domain', label: 'Domain', sortValue: (c) => c.domain, render: (c) => c.domain ?? '—' },
-  { key: 'industry', label: 'Industry', sortValue: (c) => c.industry, render: (c) => c.industry ?? '—' },
-  { key: 'owner', label: 'Owner', sortValue: (c) => c.ownerName, render: (c) => c.ownerName },
+  { key: 'domain', label: 'Domain', sortValue: (c) => c.domain, render: (c) => (c.domain ? <span className="text-muted">{c.domain}</span> : '—') },
+  { key: 'industry', label: 'Industry', sortValue: (c) => c.industry, render: (c) => (c.industry ? <Badge>{c.industry}</Badge> : '—') },
+  { key: 'owner', label: 'Owner', sortValue: (c) => c.ownerName, render: (c) => <PersonChip name={c.ownerName} /> },
 ];
 
 export function CompaniesPage() {
@@ -349,7 +363,13 @@ export function CompaniesPage() {
         subtitle={query.data ? `${query.data.total} companies you can see` : undefined}
         actions={<Button onClick={() => setOpen(true)}>New company</Button>}
       />
-      <Input className="mb-3 max-w-sm" placeholder="Filter by name or domain" aria-label="Filter companies" value={q} onChange={(e) => setQ(e.target.value)} />
+      <SearchInput
+        className="mb-3 max-w-sm"
+        placeholder="Filter by name or domain"
+        aria-label="Filter companies"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+      />
       <Query q={query}>
         {(d) =>
           d.items.length === 0 ? (
@@ -462,6 +482,7 @@ export function CompanyPage() {
       {(c) => (
         <>
           <PageHeader
+            icon={<Avatar name={c.name} shape="square" size="lg" />}
             title={c.name}
             subtitle={[c.domain, c.industry].filter(Boolean).join(' · ') || 'Company'}
             actions={
@@ -490,57 +511,77 @@ export function CompanyPage() {
             }
           />
           <ActionError error={archive.error} />
-          <div className="mt-2 grid gap-4 lg:grid-cols-3">
-            <Card title="Details">
-              <Details
+          {/* Record layout: fields panel on the left, related records + activity on the right. */}
+          <div className="mt-2 grid items-start gap-4 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
+            <Card title="Details" className="lg:sticky lg:top-5">
+              <FieldList
                 rows={[
                   ['Domain', c.domain],
                   ['Industry', c.industry],
                   ['Phone', c.phone],
-                  ['Website', c.website],
-                  ['Owner', c.owner?.fullName],
+                  [
+                    'Website',
+                    c.website ? (
+                      <a
+                        key="website"
+                        href={/^https?:\/\//.test(c.website) ? c.website : `https://${c.website}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-brand hover:underline"
+                      >
+                        {c.website}
+                      </a>
+                    ) : null,
+                  ],
+                  ['Owner', c.owner?.fullName ? <PersonChip key="owner" name={c.owner.fullName} /> : null],
                 ]}
               />
             </Card>
-            <Card title="Deals">
-              {c.deals.length === 0 ? (
-                <p className="text-sm text-muted">No deals yet.</p>
-              ) : (
-                <ul className="divide-y divide-line text-sm">
-                  {c.deals.map((d) => (
-                    <li key={d.id} className="flex items-center justify-between py-2">
-                      <Link to="/deals/$id" params={{ id: d.id }} className="text-brand hover:underline">
-                        {d.name}
-                      </Link>
-                      <span className="flex items-center gap-2">
-                        <span className="tabular-nums">{money(d.amount, d.currency)}</span>
-                        <Badge tone={statusTone(d.status)}>{d.status}</Badge>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-            <Card title="Contacts">
-              {c.contacts.length === 0 ? (
-                <p className="text-sm text-muted">No contacts yet.</p>
-              ) : (
-                <ul className="divide-y divide-line text-sm">
-                  {c.contacts.map((p) => (
-                    <li key={p.id} className="py-2">
-                      <Link to="/contacts/$id" params={{ id: p.id }} className="font-medium text-brand hover:underline">
-                        {personName(p)}
-                      </Link>{' '}
-                      <span className="text-muted">{p.jobTitle ?? ''}</span>
-                      <span className="block text-xs text-muted">{p.email}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-            <Card title="Timeline" className="lg:col-span-3">
-              <Timeline type="company" id={id} />
-            </Card>
+            <div className="min-w-0 space-y-4">
+              <div className="grid gap-4 xl:grid-cols-2">
+                <Card title="Opportunities" actions={<CountPill n={c.deals.length} />}>
+                  {c.deals.length === 0 ? (
+                    <p className="text-[13px] text-muted">No opportunities yet.</p>
+                  ) : (
+                    <ul className="-my-2 divide-y divide-line text-sm">
+                      {c.deals.map((d) => (
+                        <li key={d.id} className="flex items-center justify-between gap-3 py-2">
+                          <Link to="/deals/$id" params={{ id: d.id }} className={recordLink}>
+                            <span className="truncate">{d.name}</span>
+                          </Link>
+                          <span className="flex shrink-0 items-center gap-2">
+                            <span className="tabular-nums text-muted">{money(d.amount, d.currency)}</span>
+                            <Badge tone={statusTone(d.status)}>{d.status}</Badge>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </Card>
+                <Card title="People" actions={<CountPill n={c.contacts.length} />}>
+                  {c.contacts.length === 0 ? (
+                    <p className="text-[13px] text-muted">No people yet.</p>
+                  ) : (
+                    <ul className="-my-2 divide-y divide-line text-sm">
+                      {c.contacts.map((p) => (
+                        <li key={p.id} className="flex items-center gap-2.5 py-2">
+                          <Avatar name={personName(p)} size="md" />
+                          <div className="min-w-0">
+                            <Link to="/contacts/$id" params={{ id: p.id }} className={recordLink}>
+                              <span className="truncate">{personName(p)}</span>
+                            </Link>
+                            <p className="truncate text-xs text-muted">{[p.jobTitle, p.email].filter(Boolean).join(' · ')}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </Card>
+              </div>
+              <Card title="Timeline">
+                <Timeline type="company" id={id} />
+              </Card>
+            </div>
           </div>
           {dialog === 'edit' && <CompanyEditDialog company={c} onClose={() => setDialog(null)} onDone={refresh} />}
           {dialog === 'owner' && (
@@ -566,12 +607,13 @@ const contactColumns: Column<ContactRow>[] = [
     label: 'Name',
     sortValue: (c) => [c.lastName, c.firstName].filter(Boolean).join(' ') || c.email,
     render: (c) => (
-      <Link to="/contacts/$id" params={{ id: c.id }} className="font-medium text-brand hover:underline">
-        {personName(c)}
+      <Link to="/contacts/$id" params={{ id: c.id }} className={recordLink}>
+        <Avatar name={personName(c)} />
+        <span className="truncate">{personName(c)}</span>
       </Link>
     ),
   },
-  { key: 'email', label: 'Email', sortValue: (c) => c.email, render: (c) => c.email ?? '—' },
+  { key: 'email', label: 'Email', sortValue: (c) => c.email, render: (c) => (c.email ? <span className="text-muted">{c.email}</span> : '—') },
   { key: 'title', label: 'Title', sortValue: (c) => c.jobTitle, render: (c) => c.jobTitle ?? '—' },
   {
     key: 'company',
@@ -579,43 +621,160 @@ const contactColumns: Column<ContactRow>[] = [
     sortValue: (c) => c.companyName,
     render: (c) =>
       c.companyId ? (
-        <Link to="/companies/$id" params={{ id: c.companyId }} className="text-brand hover:underline">
-          {c.companyName}
+        <Link to="/companies/$id" params={{ id: c.companyId }} className={recordLink}>
+          <Avatar name={c.companyName ?? '?'} shape="square" />
+          <span className="truncate">{c.companyName}</span>
         </Link>
       ) : (
         '—'
       ),
   },
-  { key: 'owner', label: 'Owner', sortValue: (c) => c.ownerName, render: (c) => c.ownerName },
+  { key: 'owner', label: 'Owner', sortValue: (c) => c.ownerName, render: (c) => <PersonChip name={c.ownerName} /> },
 ];
+
+type CompanyChoice = { linked: CompanyRow | null; name: string; domain: string; industry: string };
+const NO_COMPANY: CompanyChoice = { linked: null, name: '', domain: '', industry: '' };
+const norm = (s: string | null | undefined) =>
+  (s ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/^www\./, '')
+    .replace(/\/.*$/, '');
+
+/**
+ * Company for a new person: type to find and link an existing company, or enter a new one's name, domain and
+ * industry — it is created together with the person, so the company is never entered twice.
+ */
+function CompanyField({ companies, value, onChange }: { companies: CompanyRow[]; value: CompanyChoice; onChange: (v: CompanyChoice) => void }) {
+  const typed = value.name.trim().toLowerCase();
+  const exact = typed ? companies.find((c) => c.name.trim().toLowerCase() === typed) : undefined;
+  const matches = typed && !value.linked ? companies.filter((c) => c.name.toLowerCase().includes(typed) && c !== exact).slice(0, 5) : [];
+  const domainOwner = !value.linked && norm(value.domain) ? companies.find((c) => norm(c.domain) === norm(value.domain)) : undefined;
+
+  if (value.linked)
+    return (
+      <Field label="Company">
+        <div className="flex h-8 items-center justify-between gap-2 rounded border border-line bg-surface px-2.5 text-sm">
+          <span className="flex min-w-0 items-center gap-2">
+            <Avatar name={value.linked.name} shape="square" />
+            <span className="truncate font-medium">{value.linked.name}</span>
+            <span className="truncate text-xs text-muted">{[value.linked.domain, value.linked.industry].filter(Boolean).join(' · ')}</span>
+          </span>
+          <button type="button" className="shrink-0 cursor-pointer text-[13px] font-medium text-brand hover:underline" onClick={() => onChange(NO_COMPANY)}>
+            Change
+          </button>
+        </div>
+        <span className="mt-1 block text-xs text-muted">Linked to an existing company.</span>
+      </Field>
+    );
+
+  return (
+    <div className="space-y-3">
+      <Field label="Company" hint={typed ? undefined : 'Type to find an existing company, or enter a new one.'}>
+        <Input
+          aria-label="Company"
+          autoComplete="off"
+          placeholder="Company name"
+          value={value.name}
+          onChange={(e) => onChange({ ...value, name: e.target.value })}
+        />
+      </Field>
+      {(exact || matches.length > 0) && (
+        <ul aria-label="Matching companies" className="-mt-1.5 overflow-hidden rounded-md border border-line">
+          {[...(exact ? [exact] : []), ...matches].map((c) => (
+            <li key={c.id}>
+              <button
+                type="button"
+                onClick={() => onChange({ ...NO_COMPANY, linked: c, name: c.name })}
+                className="flex w-full cursor-pointer items-center gap-2 border-b border-line px-2.5 py-1.5 text-left text-sm last:border-0 hover:bg-brand-soft/60"
+              >
+                <Avatar name={c.name} shape="square" />
+                <span className="font-medium">{c.name}</span>
+                <span className="truncate text-xs text-muted">{c.domain ?? ''}</span>
+                <span className="ml-auto text-xs font-medium text-brand">{c === exact ? 'Use existing' : 'Link'}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {typed && !exact && (
+        <div className="space-y-3 rounded-md border border-dashed border-line-strong p-3">
+          <p className="text-xs font-medium text-muted">New company — created and linked to this person</p>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Company domain">
+              <Input placeholder="example.com" value={value.domain} onChange={(e) => onChange({ ...value, domain: e.target.value })} />
+            </Field>
+            <Field label="Industry">
+              <Input value={value.industry} onChange={(e) => onChange({ ...value, industry: e.target.value })} />
+            </Field>
+          </div>
+          {domainOwner && (
+            <p role="alert" className="flex items-center justify-between gap-3 text-[13px] text-amber-900">
+              <span>
+                <strong className="font-semibold">{domainOwner.name}</strong> already uses {norm(value.domain)}.
+              </span>
+              <Button variant="secondary" onClick={() => onChange({ ...NO_COMPANY, linked: domainOwner, name: domainOwner.name })}>
+                Link {domainOwner.name}
+              </Button>
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function ContactsPage() {
   const qc = useQueryClient();
   const { q, setQ, query } = useList<ContactRow>('contacts', '/contacts');
   const companies = useQuery({ queryKey: ['companies', ''], queryFn: () => get<Page<CompanyRow>>(`/companies?limit=${LIST_LIMIT}`) });
   const [open, setOpen] = useState(false);
-  const create = useAction((v: Record<string, string | undefined>) => post('/contacts', v), {
-    success: 'Contact created',
-    onDone: () => {
-      setOpen(false);
-      void qc.invalidateQueries({ queryKey: ['contacts'] });
+  const [co, setCo] = useState<CompanyChoice>(NO_COMPANY);
+  const close = () => {
+    setOpen(false);
+    setCo(NO_COMPANY);
+  };
+  const create = useAction(
+    (v: Record<string, string | undefined>) =>
+      post('/contacts', {
+        ...v,
+        // Link the chosen company, or create the typed one together with the person (one request, one transaction).
+        ...(co.linked ? { companyId: co.linked.id } : co.name.trim() ? { newCompany: { name: co.name, domain: co.domain, industry: co.industry } } : {}),
+      }),
+    {
+      success: co.linked || !co.name.trim() ? 'Person created' : 'Person and company created',
+      onDone: () => {
+        close();
+        void qc.invalidateQueries({ queryKey: ['contacts'] });
+        void qc.invalidateQueries({ queryKey: ['companies'] });
+      },
     },
-  });
+  );
+  // The server refuses a new company whose domain is already taken; offer that company instead.
+  const dupId = create.error instanceof ApiError && create.error.code === 'DUPLICATE_SUSPECTED' ? String(create.error.meta.existingId ?? '') : '';
+  const dup = dupId ? companies.data?.items.find((c) => c.id === dupId) : undefined;
   return (
     <>
       <PageHeader
-        title="Contacts"
-        subtitle={query.data ? `${query.data.total} contacts you can see` : undefined}
-        actions={<Button onClick={() => setOpen(true)}>New contact</Button>}
+        title="People"
+        subtitle={query.data ? `${query.data.total} people you can see` : undefined}
+        actions={<Button onClick={() => setOpen(true)}>New person</Button>}
       />
-      <Input className="mb-3 max-w-sm" placeholder="Filter by name or email" aria-label="Filter contacts" value={q} onChange={(e) => setQ(e.target.value)} />
+      <SearchInput
+        className="mb-3 max-w-sm"
+        placeholder="Filter by name or email"
+        aria-label="Filter people"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+      />
       <Query q={query}>
         {(d) =>
           d.items.length === 0 ? (
-            <EmptyState title={q ? 'No contacts match your filter' : 'No contacts yet'} action={<Button onClick={() => setOpen(true)}>New contact</Button>} />
+            <EmptyState title={q ? 'No people match your filter' : 'No people yet'} action={<Button onClick={() => setOpen(true)}>New person</Button>} />
           ) : (
             <SortableTable
-              label="Contacts"
+              label="People"
               columns={contactColumns}
               rows={d.items}
               rowKey={(c) => c.id}
@@ -625,7 +784,7 @@ export function ContactsPage() {
           )
         }
       </Query>
-      <Dialog open={open} onClose={() => setOpen(false)} title="New contact">
+      <Dialog open={open} onClose={close} title="New person">
         <form className="space-y-3" onSubmit={(e) => create.run(formValues(e))}>
           <div className="grid grid-cols-2 gap-3">
             <Field label="First name" error={create.fieldError('firstName')}>
@@ -641,23 +800,28 @@ export function ContactsPage() {
           <Field label="Job title">
             <Input name="jobTitle" />
           </Field>
-          <Field label="Company">
-            <Select name="companyId" defaultValue="">
-              <option value="">No company</option>
-              {companies.data?.items.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <ActionError error={create.error} />
+          <CompanyField companies={companies.data?.items ?? []} value={co} onChange={setCo} />
+          {dup ? (
+            <div
+              role="alert"
+              className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-900"
+            >
+              <span>
+                <strong className="font-semibold">{dup.name}</strong> already uses this domain.
+              </span>
+              <Button variant="secondary" onClick={() => setCo({ ...NO_COMPANY, linked: dup, name: dup.name })}>
+                Link {dup.name}
+              </Button>
+            </div>
+          ) : (
+            <ActionError error={create.error} />
+          )}
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setOpen(false)}>
+            <Button variant="secondary" onClick={close}>
               Cancel
             </Button>
             <Button type="submit" disabled={create.busy}>
-              Create contact
+              Create person
             </Button>
           </div>
         </form>
@@ -681,7 +845,7 @@ function ContactEditDialog({ contact, onClose, onDone }: { contact: ContactDetai
       });
     },
     {
-      success: 'Contact updated',
+      success: 'Person updated',
       onDone: () => {
         onDone();
         onClose();
@@ -691,7 +855,7 @@ function ContactEditDialog({ contact, onClose, onDone }: { contact: ContactDetai
   const options = companies.data?.items ?? [];
   const currentListed = !contact.company || options.some((c) => c.id === contact.company?.id);
   return (
-    <Dialog open onClose={onClose} title="Edit contact">
+    <Dialog open onClose={onClose} title="Edit person">
       <form
         className="space-y-3"
         onSubmit={(e) => {
@@ -763,8 +927,9 @@ export function ContactPage() {
       {(c) => (
         <>
           <PageHeader
+            icon={<Avatar name={personName(c)} size="lg" />}
             title={personName(c)}
-            subtitle={[c.jobTitle, c.company?.name].filter(Boolean).join(' · ') || 'Contact'}
+            subtitle={[c.jobTitle, c.company?.name].filter(Boolean).join(' · ') || 'Person'}
             actions={
               <>
                 {c.archivedAt && <Badge tone="warn">Archived</Badge>}
@@ -777,9 +942,9 @@ export function ContactPage() {
               </>
             }
           />
-          <div className="grid gap-4 lg:grid-cols-3">
-            <Card title="Details">
-              <Details
+          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
+            <Card title="Details" className="lg:sticky lg:top-5">
+              <FieldList
                 rows={[
                   [
                     'Email',
@@ -795,45 +960,48 @@ export function ContactPage() {
                     'Company',
                     c.company &&
                       (c.company.canOpen ? (
-                        <Link to="/companies/$id" params={{ id: c.company.id }} className="text-brand hover:underline">
-                          {c.company.name}
+                        <Link to="/companies/$id" params={{ id: c.company.id }} className={recordLink}>
+                          <Avatar name={c.company.name} shape="square" />
+                          <span className="truncate">{c.company.name}</span>
                         </Link>
                       ) : (
                         c.company.name
                       )),
                   ],
-                  ['Owner', c.owner?.fullName],
+                  ['Owner', c.owner?.fullName ? <PersonChip key="owner" name={c.owner.fullName} /> : null],
                 ]}
               />
             </Card>
-            <Card title="Deals" className="lg:col-span-2">
-              {c.deals.length === 0 ? (
-                <p className="text-sm text-muted">This contact is not on any deal you can see.</p>
-              ) : (
-                <ul className="divide-y divide-line text-sm">
-                  {c.deals.map((d) => (
-                    <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                      <span className="flex flex-wrap items-center gap-1.5">
-                        <Link to="/deals/$id" params={{ id: d.id }} className="text-brand hover:underline">
-                          {d.name}
-                        </Link>
-                        {d.isPrimary && <Badge tone="info">Primary</Badge>}
-                        {d.roles.map((r) => (
-                          <Badge key={r}>{r}</Badge>
-                        ))}
-                      </span>
-                      <span className="flex items-center gap-2">
-                        <span className="tabular-nums">{money(d.amount, d.currency)}</span>
-                        <Badge tone={statusTone(d.status)}>{d.stageName}</Badge>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-            <Card title="Timeline" className="lg:col-span-3">
-              <Timeline type="contact" id={id} />
-            </Card>
+            <div className="min-w-0 space-y-4">
+              <Card title="Opportunities" actions={<CountPill n={c.deals.length} />}>
+                {c.deals.length === 0 ? (
+                  <p className="text-[13px] text-muted">This person is not on any opportunity you can see.</p>
+                ) : (
+                  <ul className="-my-2 divide-y divide-line text-sm">
+                    {c.deals.map((d) => (
+                      <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <Link to="/deals/$id" params={{ id: d.id }} className={recordLink}>
+                            {d.name}
+                          </Link>
+                          {d.isPrimary && <Badge tone="info">Primary</Badge>}
+                          {d.roles.map((r) => (
+                            <Badge key={r}>{r}</Badge>
+                          ))}
+                        </span>
+                        <span className="flex items-center gap-2">
+                          <span className="tabular-nums text-muted">{money(d.amount, d.currency)}</span>
+                          <Badge tone={statusTone(d.status)}>{d.stageName}</Badge>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+              <Card title="Timeline">
+                <Timeline type="contact" id={id} />
+              </Card>
+            </div>
           </div>
           {editing && <ContactEditDialog contact={c} onClose={() => setEditing(false)} onDone={refresh} />}
         </>
@@ -856,6 +1024,25 @@ const TIMELINE_FILTERS: [string, string][] = [
   ['signature_completed', 'Signatures'],
   ['automation_applied', 'Automated actions'],
 ];
+/** Icon + tint for a timeline event, by event type (Twenty-style activity rail). */
+function eventStyle(type: string, automated: boolean): { icon: LucideIcon; tint: string } {
+  if (automated) return { icon: Zap, tint: 'bg-amber-50 text-amber-700' };
+  const t = type ?? '';
+  if (t === 'note') return { icon: StickyNote, tint: 'bg-yellow-50 text-yellow-700' };
+  if (t === 'call_log') return { icon: Phone, tint: 'bg-sky-50 text-sky-700' };
+  if (t === 'meeting_log') return { icon: CalendarDays, tint: 'bg-violet-50 text-violet-700' };
+  if (t === 'stage_changed') return { icon: ArrowRightLeft, tint: 'bg-info-soft text-info-ink' };
+  if (t.includes('won')) return { icon: Trophy, tint: 'bg-green-50 text-green-700' };
+  if (t === 'owner_changed') return { icon: UserCog, tint: 'bg-slate-100 text-slate-600' };
+  if (t.startsWith('signature')) return { icon: PenLine, tint: 'bg-brand-soft text-brand' };
+  if (t === 'proposal_viewed') return { icon: Eye, tint: 'bg-brand-soft text-brand' };
+  if (t.startsWith('proposal')) return { icon: FileText, tint: 'bg-brand-soft text-brand' };
+  if (t.endsWith('_created')) return { icon: Plus, tint: 'bg-green-50 text-green-700' };
+  if (t.endsWith('_updated') || t.endsWith('_archived')) return { icon: Pencil, tint: 'bg-slate-100 text-slate-600' };
+  if (t.includes('task')) return { icon: Check, tint: 'bg-green-50 text-green-700' };
+  return { icon: Circle, tint: 'bg-slate-100 text-slate-500' };
+}
+
 /** BR-TIM-001..004: one chronological history with a type filter; every event shows who did it and when. */
 export function Timeline({ type, id }: { type: 'deal' | 'company' | 'contact'; id: string }) {
   const qc = useQueryClient();
@@ -894,25 +1081,34 @@ export function Timeline({ type, id }: { type: 'deal' | 'company' | 'contact'; i
           events.length === 0 ? (
             <p className="text-sm text-muted">No activity yet.</p>
           ) : (
-            <ol className="space-y-3" aria-label="Timeline">
-              {events.map((e) => (
-                <li key={e.id} className="border-l-2 border-line pl-3 text-sm">
-                  <p className="whitespace-pre-wrap text-ink">{e.summary}</p>
-                  <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted">
-                    <Badge tone={ACTOR_TONE[e.actorType as keyof typeof ACTOR_TONE]}>{e.actorType === 'user' ? e.actorName : e.actorType}</Badge>
-                    {e.isAutomated && <Badge tone="warn">Automated</Badge>}
-                    <time dateTime={e.occurredAt}>{dateTime(e.occurredAt)}</time>
-                    {e.isAutomated && e.automationExecutionId && (
-                      <ConfirmButton
-                        variant="secondary"
-                        label="Reverse"
-                        confirm="Reverse this automated change? The record returns to its previous values."
-                        onConfirm={() => reverse.run(e.automationExecutionId)}
-                      />
-                    )}
-                  </p>
-                </li>
-              ))}
+            <ol className="relative" aria-label="Timeline">
+              {events.map((e, i) => {
+                const { icon: Icon, tint } = eventStyle(e.eventType, e.isAutomated);
+                return (
+                  <li key={e.id} className="relative flex gap-3 pb-4 text-sm last:pb-0">
+                    {i < events.length - 1 && <span aria-hidden className="absolute bottom-0 left-[13px] top-7 w-px bg-line" />}
+                    <span aria-hidden className={`relative z-10 flex size-7 shrink-0 items-center justify-center rounded-full ring-4 ring-white ${tint}`}>
+                      <Icon className="size-3.5" />
+                    </span>
+                    <div className="min-w-0 flex-1 pt-0.5">
+                      <p className="whitespace-pre-wrap text-ink">{e.summary}</p>
+                      <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
+                        <Badge tone={ACTOR_TONE[e.actorType as keyof typeof ACTOR_TONE]}>{e.actorType === 'user' ? e.actorName : e.actorType}</Badge>
+                        {e.isAutomated && <Badge tone="warn">Automated</Badge>}
+                        <time dateTime={e.occurredAt}>{dateTime(e.occurredAt)}</time>
+                        {e.isAutomated && e.automationExecutionId && (
+                          <ConfirmButton
+                            variant="secondary"
+                            label="Reverse"
+                            confirm="Reverse this automated change? The record returns to its previous values."
+                            onConfirm={() => reverse.run(e.automationExecutionId)}
+                          />
+                        )}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
             </ol>
           )
         }
@@ -930,39 +1126,49 @@ export function TasksPage() {
   });
   return (
     <>
-      <PageHeader title="My tasks" subtitle="Open tasks assigned to you, soonest first" />
+      <PageHeader title="Tasks" subtitle="Open tasks assigned to you, soonest first" />
       <Query q={q}>
         {(tasks) =>
           tasks.length === 0 ? (
             <EmptyState title="You are all caught up" hint="Tasks you create, and follow-ups the system creates for you, appear here." />
           ) : (
-            <Table head={['Task', 'Due', 'Source', '']}>
+            <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-white" aria-label="My open tasks">
               {tasks.map((t) => {
                 const overdue = new Date(t.dueAt) < new Date();
                 return (
-                  <tr key={t.id}>
-                    <td>
-                      {t.relatedType === 'deal' ? (
-                        <Link to="/deals/$id" params={{ id: t.relatedId }} className="text-brand hover:underline">
-                          {t.title}
-                        </Link>
-                      ) : (
-                        t.title
-                      )}
-                    </td>
-                    <td>
-                      {dateTime(t.dueAt)} {overdue && <Badge tone="danger">Overdue</Badge>}
-                    </td>
-                    <td>{t.source === 'automation' ? <Badge tone="warn">Automated</Badge> : 'Manual'}</td>
-                    <td className="text-right">
-                      <Button variant="secondary" disabled={done.busy} onClick={() => done.run(t.id)}>
-                        Complete
-                      </Button>
-                    </td>
-                  </tr>
+                  <li key={t.id} className="group flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-surface/70">
+                    <button
+                      type="button"
+                      aria-label={`Complete ${t.title}`}
+                      title="Mark complete"
+                      disabled={done.busy}
+                      onClick={() => done.run(t.id)}
+                      className="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full border border-line-strong text-transparent transition-colors hover:border-brand hover:bg-brand-soft hover:text-brand disabled:opacity-50"
+                    >
+                      <Check className="size-3" aria-hidden />
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm text-ink">
+                        {t.relatedType === 'deal' ? (
+                          <Link to="/deals/$id" params={{ id: t.relatedId }} className={recordLink}>
+                            {t.title}
+                          </Link>
+                        ) : (
+                          t.title
+                        )}
+                      </p>
+                      {t.description && <p className="truncate text-xs text-muted">{t.description}</p>}
+                    </div>
+                    {t.source === 'automation' && <Badge tone="warn">Automated</Badge>}
+                    <span className={`flex shrink-0 items-center gap-1 text-xs tabular-nums ${overdue ? 'font-medium text-danger' : 'text-muted'}`}>
+                      <CalendarDays className="size-3.5" aria-hidden />
+                      {dateTime(t.dueAt)}
+                    </span>
+                    {overdue && <Badge tone="danger">Overdue</Badge>}
+                  </li>
                 );
               })}
-            </Table>
+            </ul>
           )
         }
       </Query>

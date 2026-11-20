@@ -7,6 +7,7 @@ import type {
   activityInput,
   closeLostInput,
   companyInput,
+  contactCreateInput,
   contactInput,
   dealContactInput,
   dealInput,
@@ -218,40 +219,43 @@ export async function getCompany(ctx: AppContext, actor: UserActor, id: string) 
 
 export async function createCompany(ctx: AppContext, actor: UserActor, input: z.infer<typeof companyInput>) {
   requirePerm(actor, 'record.create');
-  return unitOfWork(ctx, actor, async (u) => {
-    const settings = await u.tx.select({ free: organizationSettings.freeMailDomains }).from(organizationSettings);
-    let normalizedDomain = normalizeDomain(input.domain ?? input.website);
-    if (normalizedDomain && settings[0]?.free.includes(normalizedDomain)) normalizedDomain = null; // R3: never match on free-mail domains
-    if (normalizedDomain) {
-      const [dup] = await u.tx
-        .select({ id: company.id })
-        .from(company)
-        .where(and(eq(company.normalizedDomain, normalizedDomain), isNull(company.archivedAt)));
-      if (dup) throw conflict('DUPLICATE_SUSPECTED', 'A company with this domain already exists', { existingId: dup.id });
-    }
-    const [row] = await u.tx
-      .insert(company)
-      .values({
-        name: input.name,
-        domain: blank(input.domain),
-        industry: blank(input.industry),
-        phone: blank(input.phone),
-        website: blank(input.website),
-        normalizedName: normalizeName(input.name),
-        normalizedDomain,
-        ownerId: actor.userId,
-        createdBy: actor.userId,
-      })
-      .returning();
-    await u.audit('company.created', { type: 'company', id: row!.id });
-    await u.timeline({
-      eventType: 'company_created',
-      source: { type: 'company', id: row!.id },
-      summary: `Company ${row!.name} created`,
-      anchors: [{ type: 'company', id: row!.id }],
-    });
-    return row!;
+  return unitOfWork(ctx, actor, (u) => insertCompany(u, actor, input));
+}
+
+/** Inserts a company inside the caller's transaction (duplicate-domain check, audit, timeline). */
+async function insertCompany(u: Uow, actor: UserActor, input: z.infer<typeof companyInput>) {
+  const settings = await u.tx.select({ free: organizationSettings.freeMailDomains }).from(organizationSettings);
+  let normalizedDomain = normalizeDomain(input.domain ?? input.website);
+  if (normalizedDomain && settings[0]?.free.includes(normalizedDomain)) normalizedDomain = null; // R3: never match on free-mail domains
+  if (normalizedDomain) {
+    const [dup] = await u.tx
+      .select({ id: company.id })
+      .from(company)
+      .where(and(eq(company.normalizedDomain, normalizedDomain), isNull(company.archivedAt)));
+    if (dup) throw conflict('DUPLICATE_SUSPECTED', 'A company with this domain already exists', { existingId: dup.id });
+  }
+  const [row] = await u.tx
+    .insert(company)
+    .values({
+      name: input.name,
+      domain: blank(input.domain),
+      industry: blank(input.industry),
+      phone: blank(input.phone),
+      website: blank(input.website),
+      normalizedName: normalizeName(input.name),
+      normalizedDomain,
+      ownerId: actor.userId,
+      createdBy: actor.userId,
+    })
+    .returning();
+  await u.audit('company.created', { type: 'company', id: row!.id });
+  await u.timeline({
+    eventType: 'company_created',
+    source: { type: 'company', id: row!.id },
+    summary: `Company ${row!.name} created`,
+    anchors: [{ type: 'company', id: row!.id }],
   });
+  return row!;
 }
 
 /**
@@ -463,11 +467,15 @@ async function assertEmailFree(tx: Tx, email: string | undefined, exceptId?: str
   return normalized;
 }
 
-export async function createContact(ctx: AppContext, actor: UserActor, input: z.infer<typeof contactInput>) {
+export async function createContact(ctx: AppContext, actor: UserActor, input: z.infer<typeof contactCreateInput>) {
   requirePerm(actor, 'record.create');
   return unitOfWork(ctx, actor, async (u) => {
     const normalizedEmail = await assertEmailFree(u.tx, input.email);
-    if (input.companyId) {
+    // New company entered in the person form: created in the same transaction, so a failed person leaves no orphan.
+    // A duplicate domain is refused with DUPLICATE_SUSPECTED + existingId, so the form can offer to link that company.
+    let companyId = input.companyId;
+    if (input.newCompany) companyId = (await insertCompany(u, actor, input.newCompany)).id;
+    else if (input.companyId) {
       const [c] = await u.tx
         .select({ id: company.id })
         .from(company)
@@ -482,7 +490,7 @@ export async function createContact(ctx: AppContext, actor: UserActor, input: z.
         email: input.email,
         phone: blank(input.phone),
         jobTitle: blank(input.jobTitle),
-        companyId: input.companyId,
+        companyId,
         normalizedEmail,
         ownerId: actor.userId,
         createdBy: actor.userId,
@@ -1383,12 +1391,18 @@ export async function updateLead(ctx: AppContext, actor: UserActor, id: string, 
       source: input.source === undefined ? before.source : input.source.trim() || 'manual',
       notes: input.notes === undefined ? before.notes : blank(input.notes),
       status: input.status ?? before.status,
+      // Reopening a disqualified lead (back to new/working) clears the old reason.
+      disqualifyReason: input.status && before.status === 'unqualified' ? null : before.disqualifyReason,
       updatedBy: actor.userId,
       updatedAt: ctx.now(),
       rowVersion: before.rowVersion + 1,
     };
     await u.tx.update(lead).set(next).where(eq(lead.id, id));
-    await u.audit('lead.updated', { type: 'lead', id });
+    await u.audit(
+      'lead.updated',
+      { type: 'lead', id },
+      input.status && input.status !== before.status ? { status: { from: before.status, to: input.status } } : undefined,
+    );
     return { ...before, ...next };
   });
 }
@@ -1452,14 +1466,23 @@ export async function convertLead(ctx: AppContext, actor: UserActor, id: string,
     if (l.status === 'converted') throw rule('LEAD_ALREADY_CONVERTED', 'This lead has already been converted');
     if (l.status === 'unqualified') throw rule('LEAD_UNQUALIFIED', 'Requalify this lead before converting it');
 
-    // Company: an explicit visible company, else create one from the lead's company name.
+    // Company: an explicit visible company; else an existing visible company with the same name (no duplicate);
+    // else create one from the lead's company name.
     let companyId = input.companyId ?? null;
     if (companyId) {
       await companyVisibleCheck(ctx, u.tx, actor, companyId);
     } else if (l.companyName) {
+      const [same] = await u.tx
+        .select({ id: company.id })
+        .from(company)
+        .where(and(eq(company.normalizedName, normalizeName(l.companyName)), isNull(company.archivedAt), companyVisible(actor, ctx.db)))
+        .limit(1);
+      companyId = same?.id ?? null;
+    }
+    if (!companyId && l.companyName) {
       const [co] = await u.tx
         .insert(company)
-        .values({ name: l.companyName, normalizedName: l.companyName.toLowerCase(), ownerId: l.ownerId, createdBy: actor.userId })
+        .values({ name: l.companyName, normalizedName: normalizeName(l.companyName), ownerId: l.ownerId, createdBy: actor.userId })
         .returning();
       companyId = co!.id;
       await u.audit('company.created', { type: 'company', id: companyId });

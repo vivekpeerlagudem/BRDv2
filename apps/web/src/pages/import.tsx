@@ -100,8 +100,8 @@ interface UndoPreview {
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const ENTITY: Record<Entity, { label: string; one: string; many: string }> = {
   companies: { label: 'Companies', one: 'company', many: 'companies' },
-  contacts: { label: 'Contacts', one: 'contact', many: 'contacts' },
-  deals: { label: 'Deals', one: 'deal', many: 'deals' },
+  contacts: { label: 'People', one: 'person', many: 'people' },
+  deals: { label: 'Opportunities', one: 'opportunity', many: 'opportunities' },
 };
 const STATUS: Record<BatchStatus, { label: string; tone: 'neutral' | 'info' | 'ok' | 'warn' | 'danger' }> = {
   uploaded: { label: 'Uploaded — not imported', tone: 'neutral' },
@@ -120,7 +120,7 @@ export function ImportPage() {
     <>
       <PageHeader
         title="Import data"
-        subtitle="Bring companies, contacts or deals in from a CSV file. Nothing is saved until you have reviewed the check results and confirmed. An import can be undone."
+        subtitle="Bring companies, people or opportunities in from a CSV file. Nothing is saved until you have reviewed the check results and confirmed. An import can be undone."
         actions={
           openId ? (
             <Button variant="secondary" onClick={() => setOpenId(null)}>
@@ -195,8 +195,8 @@ function UploadCard({ onUploaded }: { onUploaded: (id: string) => void }) {
         <Field label="What does the file contain?">
           <Select name="entityType" defaultValue="companies">
             <option value="companies">Companies</option>
-            <option value="contacts">Contacts</option>
-            <option value="deals">Deals</option>
+            <option value="contacts">People</option>
+            <option value="deals">Opportunities</option>
           </Select>
         </Field>
         <Field label="CSV file" error={problem ?? serverProblem} hint="CSV only (UTF-8), first row is the header. Up to 2 MB and 2,000 rows per file.">
@@ -204,8 +204,8 @@ function UploadCard({ onUploaded }: { onUploaded: (id: string) => void }) {
         </Field>
         <div className="sm:col-span-2">
           <p className="mb-3 text-xs text-muted">
-            Import companies first: contacts and deals refer to a company by its name or domain, and the company must already exist. Excel files and direct
-            imports from other CRMs are not supported yet.
+            Import companies first: people and opportunities refer to a company by its name or domain, and the company must already exist. Excel files and
+            direct imports from other CRMs are not supported yet.
           </p>
           <Button type="submit" disabled={upload.busy}>
             {upload.busy ? 'Uploading…' : 'Upload and continue'}
@@ -642,7 +642,7 @@ function UndoButton({ batch }: { batch: BatchSummary }) {
             </p>
             <p className="mb-3 mt-1 text-xs text-muted">
               Only records created by this import are touched. A record is kept when it was edited after the import or when something was added to it since (for
-              example a deal, contact, task or note). Removal cannot be reversed.
+              example an opportunity, person, task or note). Removal cannot be reversed.
             </p>
             {preview.data.items.length > 0 && <UndoItems items={preview.data.items} future />}
             <div className="mt-4 flex justify-end gap-2">

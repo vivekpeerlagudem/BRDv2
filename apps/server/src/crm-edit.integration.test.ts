@@ -415,4 +415,40 @@ describe.skipIf(!testUrl)('CRM record edit workflows (PostgreSQL integration)', 
       expect((await call('admin', 'POST', `/companies/${b.json.id}/archive`)).status).toBe(200);
     });
   });
+  describe('create a person with their company in one step', () => {
+    it('creates the new company, links the person, and makes the salesperson the owner of both', async () => {
+      const r = await call('rep1', 'POST', '/contacts', {
+        firstName: 'Peter',
+        lastName: 'Gibbons',
+        email: 'peter@penetrode.example',
+        newCompany: { name: 'Penetrode', domain: 'penetrode.example', industry: 'Manufacturing' },
+      });
+      expect(r.status).toBe(201);
+      expect(r.json.companyId).toBeTruthy();
+      const co = (await call('rep1', 'GET', `/companies/${r.json.companyId}`)).json;
+      expect(co).toMatchObject({ name: 'Penetrode', domain: 'penetrode.example', industry: 'Manufacturing' });
+      expect(co.owner?.id ?? co.ownerId).toBe(ids.rep1);
+      const person = (await call('rep1', 'GET', `/contacts/${r.json.id}`)).json;
+      expect(person.company?.name).toBe('Penetrode');
+    });
+
+    it('refuses a new company whose domain already exists, names it, and creates nothing', async () => {
+      const r = await call('rep1', 'POST', '/contacts', {
+        firstName: 'Milton',
+        email: 'milton@initech.example',
+        newCompany: { name: 'Initech Copy', domain: 'https://www.initech.example/about' },
+      });
+      expect(r.status).toBe(409);
+      expect(r.json.code).toBe('DUPLICATE_SUSPECTED');
+      expect(r.json.meta.existingId).toBe(ids.company);
+      // Same transaction: the person was not created either, so the email is still free.
+      const again = await call('rep1', 'POST', '/contacts', { firstName: 'Milton', email: 'milton@initech.example', companyId: ids.company });
+      expect(again.status).toBe(201);
+    });
+
+    it('rejects choosing an existing company and a new one at the same time', async () => {
+      const r = await call('rep1', 'POST', '/contacts', { firstName: 'Joanna', companyId: ids.company, newCompany: { name: 'Chotchkies' } });
+      expect(r.status).toBe(400);
+    });
+  });
 });

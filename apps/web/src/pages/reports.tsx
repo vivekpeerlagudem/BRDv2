@@ -288,7 +288,7 @@ export function ReportsPage() {
             </Field>
           )}
         </form>
-        {options.data?.scope === 'own' && <p className="mt-3 text-xs text-muted">You see your own deals, proposals and activity.</p>}
+        {options.data?.scope === 'own' && <p className="mt-3 text-xs text-muted">You see your own opportunities, proposals and activity.</p>}
       </Card>
 
       {invalid ? (
@@ -298,20 +298,20 @@ export function ReportsPage() {
           {(d) => (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <Kpi label="Open pipeline" value={cash(d.pipelineTotals.value)} hint={`${d.pipelineTotals.count} open deals (now)`} />
+                <Kpi label="Open pipeline" value={cash(d.pipelineTotals.value)} hint={`${d.pipelineTotals.count} open opportunities (now)`} />
                 <Kpi label="Weighted pipeline" value={cash(d.pipelineTotals.weighted)} hint="Value × stage probability" />
                 <Kpi label="Won revenue" value={cash(d.wonLost.wonValue)} hint={`${d.wonLost.won} won · ${d.wonLost.lost} lost in period`} />
                 <Kpi label="Win rate" value={pct(d.wonLost.winRateCount)} hint={`By value: ${pct(d.wonLost.winRateValue)}`} />
               </div>
               {d.pipelineTotals.notConverted + d.wonLost.notConverted > 0 && (
                 <p role="status" className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-warn">
-                  {d.pipelineTotals.notConverted + d.wonLost.notConverted} deal(s) are in another currency with no exchange rate and are left out of value
+                  {d.pipelineTotals.notConverted + d.wonLost.notConverted} opportunities are in another currency with no exchange rate and are left out of value
                   totals.
                 </p>
               )}
 
               <Card title="Pipeline by stage" actions={exportButton('pipeline-by-stage', 'pipeline by stage')}>
-                <Table head={['Pipeline', 'Stage', 'Probability', 'Open deals', 'Value', 'Weighted value', 'No amount', 'Created in period']}>
+                <Table head={['Pipeline', 'Stage', 'Probability', 'Open opportunities', 'Value', 'Weighted value', 'No amount', 'Created in period']}>
                   {d.pipelineByStage.map((r) => (
                     <tr key={r.stageId}>
                       <td>{r.pipeline}</td>
@@ -325,14 +325,16 @@ export function ReportsPage() {
                     </tr>
                   ))}
                 </Table>
-                <p className="mt-2 text-xs text-muted">Open deals as they are now. “Created in period” counts those created inside the selected dates.</p>
+                <p className="mt-2 text-xs text-muted">
+                  Open opportunities as they are now. “Created in period” counts those created inside the selected dates.
+                </p>
               </Card>
 
               <Card title="Pipeline by owner" actions={exportButton('pipeline-by-owner', 'pipeline by owner')}>
                 {d.pipelineByOwner.length === 0 ? (
-                  <EmptyState title="No open deals" hint="Open deals in your scope appear here." />
+                  <EmptyState title="No open opportunities" hint="Open opportunities in your scope appear here." />
                 ) : (
-                  <Table head={['Owner', 'Open deals', 'Value', 'Weighted value', 'No amount']}>
+                  <Table head={['Owner', 'Open opportunities', 'Value', 'Weighted value', 'No amount']}>
                     {d.pipelineByOwner.map((r) => (
                       <tr key={r.ownerId}>
                         <td>{r.owner}</td>
@@ -348,7 +350,7 @@ export function ReportsPage() {
 
               <div className="grid gap-4 lg:grid-cols-2">
                 <Card title="Won and lost" actions={exportButton('won-lost', 'won and lost')}>
-                  <Table head={['Outcome', 'Deals', 'Value']}>
+                  <Table head={['Outcome', 'Opportunities', 'Value']}>
                     <tr>
                       <td>Won</td>
                       <Num>{d.wonLost.won}</Num>
@@ -368,9 +370,9 @@ export function ReportsPage() {
                 </Card>
                 <Card title="Lost reasons" actions={exportButton('lost-reasons', 'lost reasons')}>
                   {d.lostReasons.length === 0 ? (
-                    <EmptyState title="No lost deals in this period" />
+                    <EmptyState title="No lost opportunities in this period" />
                   ) : (
-                    <Table head={['Reason', 'Deals', 'Value', 'Share']}>
+                    <Table head={['Reason', 'Opportunities', 'Value', 'Share']}>
                       {d.lostReasons.map((r) => (
                         <tr key={r.reason}>
                           <td>{r.reason}</td>
@@ -386,9 +388,12 @@ export function ReportsPage() {
 
               <Card title="Rep performance" actions={exportButton('rep-performance', 'rep performance')}>
                 {d.reps.length === 0 ? (
-                  <EmptyState title="No deals for this selection" hint="Reps with open deals, or deals closed in the period, appear here." />
+                  <EmptyState
+                    title="No opportunities for this selection"
+                    hint="Reps with open opportunities, or opportunities closed in the period, appear here."
+                  />
                 ) : (
-                  <Table head={['Rep', 'Open deals', 'Open value', 'Won', 'Lost', 'Won revenue', 'Win rate', 'Avg. deal size', 'Avg. cycle']}>
+                  <Table head={['Rep', 'Open opportunities', 'Open value', 'Won', 'Lost', 'Won revenue', 'Win rate', 'Avg. opportunity size', 'Avg. cycle']}>
                     {d.reps.map((r) => (
                       <tr key={r.userId}>
                         <td>{r.name}</td>
@@ -416,9 +421,9 @@ export function ReportsPage() {
                       ['Time to sign', unit(d.proposals.medianDaysToSign, 'days'), `Median · average ${unit(d.proposals.avgDaysToSign, 'days')}`],
                       ['Proposal win rate', pct(d.proposals.winRate), `${d.proposals.won} of ${d.proposals.sent} signed or accepted`],
                       [
-                        'Deal creation to first proposal',
+                        'Opportunity creation to first proposal',
                         unit(d.proposals.medianDaysDealToFirstProposal, 'days'),
-                        `Median · average ${unit(d.proposals.avgDaysDealToFirstProposal, 'days')} · ${d.proposals.dealsWithFirstProposal} deal(s)`,
+                        `Median · average ${unit(d.proposals.avgDaysDealToFirstProposal, 'days')} · ${d.proposals.dealsWithFirstProposal} opportunities`,
                       ],
                     ] as const
                   ).map(([k, v, detail]) => (
@@ -435,7 +440,7 @@ export function ReportsPage() {
                 {d.proposals.list.length === 0 ? (
                   <EmptyState title="No proposals were first sent in this period" />
                 ) : (
-                  <Table head={['Proposal', 'Deal', 'Owner', 'Status', 'First sent', 'First viewed', 'To first view', 'To sign']}>
+                  <Table head={['Proposal', 'Opportunity', 'Owner', 'Status', 'First sent', 'First viewed', 'To first view', 'To sign']}>
                     {d.proposals.list.map((p) => (
                       <tr key={p.proposalId}>
                         <td>
@@ -480,11 +485,14 @@ export function ReportsPage() {
                 )}
               </Card>
 
-              <Card title="Deals needing attention" actions={exportButton('attention', 'deals needing attention')}>
+              <Card title="Opportunities needing attention" actions={exportButton('attention', 'opportunities needing attention')}>
                 {d.attention.length === 0 ? (
-                  <EmptyState title="Nothing needs attention" hint="Stalled deals, deals past their expected close date and unviewed proposals appear here." />
+                  <EmptyState
+                    title="Nothing needs attention"
+                    hint="Stalled opportunities, opportunities past their expected close date and unviewed proposals appear here."
+                  />
                 ) : (
-                  <Table head={['Deal', 'Owner', 'Stage', 'Amount', 'Why', 'Days since activity', 'Last proposal']}>
+                  <Table head={['Opportunity', 'Owner', 'Stage', 'Amount', 'Why', 'Days since activity', 'Last proposal']}>
                     {d.attention.map((a) => (
                       <tr key={a.dealId}>
                         <td>
@@ -514,16 +522,18 @@ export function ReportsPage() {
                     ))}
                   </Table>
                 )}
-                <p className="mt-2 text-xs text-muted">A current list of open deals — it does not depend on the selected dates.</p>
+                <p className="mt-2 text-xs text-muted">A current list of open opportunities — it does not depend on the selected dates.</p>
               </Card>
 
               <details className="rounded-lg border border-line bg-white p-4 text-sm">
                 <summary className="cursor-pointer font-semibold text-ink">How metrics are calculated</summary>
                 <ul className="mt-3 list-disc space-y-1 pl-5 text-muted">
                   <li>Periods are whole days in the organization time zone ({d.timeZone}), start and end dates included.</li>
-                  <li>Won and lost deals are counted by the date they were closed. Win rate = won ÷ (won + lost), by count and by value.</li>
-                  <li>Open pipeline is the current open deals; weighted value = amount × stage probability. Deals without an amount add nothing.</li>
-                  <li>Average deal size = won value ÷ won deals. Average cycle = days from deal creation to close, won deals only.</li>
+                  <li>Won and lost opportunities are counted by the date they were closed. Win rate = won ÷ (won + lost), by count and by value.</li>
+                  <li>
+                    Open pipeline is the current open opportunities; weighted value = amount × stage probability. Opportunities without an amount add nothing.
+                  </li>
+                  <li>Average opportunity size = won value ÷ won deals. Average cycle = days from opportunity creation to close, won opportunities only.</li>
                   <li>Proposal figures cover proposals whose first version was sent in the period. A view counts once a buyer actually reads the proposal.</li>
                   <li>Time to sign runs from sending the signed version to the completed signature. Proposal win rate = signed or accepted ÷ sent.</li>
                   <li>Activity counts logged calls and meetings, notes written and tasks completed, by their own date.</li>

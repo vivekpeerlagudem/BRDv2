@@ -25,16 +25,26 @@ export const companyInput = z.object({
   phone: optionalText(32),
   website: optionalText(2048),
 });
-export const contactInput = z
-  .object({
-    firstName: optionalText(120),
-    lastName: optionalText(120),
-    email: email.optional(),
-    phone: optionalText(32),
-    jobTitle: optionalText(120),
-    companyId: uuid.nullable().optional(),
+const contactFields = z.object({
+  firstName: optionalText(120),
+  lastName: optionalText(120),
+  email: email.optional(),
+  phone: optionalText(32),
+  jobTitle: optionalText(120),
+  companyId: uuid.nullable().optional(),
+});
+const contactHasIdentity = (c: { firstName?: string; lastName?: string; email?: string }) => Boolean(c.firstName || c.lastName || c.email);
+export const contactInput = contactFields.refine(contactHasIdentity, { message: 'Provide a name or an email', path: ['firstName'] });
+/**
+ * Creating a person: link an existing company (`companyId`) OR create one in the same step (`newCompany`),
+ * so the company details are entered once and the person is always linked to it.
+ */
+export const contactCreateInput = contactFields
+  .extend({
+    newCompany: z.object({ name, domain: optionalText(253), industry: optionalText(120) }).optional(),
   })
-  .refine((c) => Boolean(c.firstName || c.lastName || c.email), { message: 'Provide a name or an email', path: ['firstName'] });
+  .refine(contactHasIdentity, { message: 'Provide a name or an email', path: ['firstName'] })
+  .refine((c) => !(c.companyId && c.newCompany), { message: 'Choose an existing company or enter a new one, not both', path: ['newCompany'] });
 export const dealInput = z.object({
   name,
   companyId: uuid,
@@ -180,7 +190,12 @@ export const leadSubmissionInput = z.object({
 });
 
 export const inviteUserInput = z.object({ email, fullName: name, role: roleSchema, password: z.string().min(12).max(128), teamId: uuid.optional() });
-export const userPatchInput = z.object({ role: roleSchema.optional(), canManageContent: z.boolean().optional(), teamId: uuid.nullable().optional() });
+export const userPatchInput = z.object({
+  fullName: z.string().trim().min(1).max(120).optional(),
+  role: roleSchema.optional(),
+  canManageContent: z.boolean().optional(),
+  teamId: uuid.nullable().optional(),
+});
 export const deactivateInput = z.object({ reassignToUserId: uuid });
 // ───────────────────────── AI assistance (BR-AIA-001..008) ─────────────────────────
 export const AI_FEATURES = ['draft_section', 'presend_review', 'deal_summary', 'rewrite_text', 'follow_up_email'] as const;

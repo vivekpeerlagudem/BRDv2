@@ -9,6 +9,9 @@ import pg from 'pg';
  * Uses the MIGRATOR role (the table owner) because the application role is deliberately
  * barred from deleting the append-only audit/timeline history (tamper-proof audit, ADR-030).
  *
+ * `--demo` additionally clears the product catalogue and proposal templates (e.g. left over from e2e runs),
+ * so a demo dataset such as e2e/marvel-seed.spec.ts can start from a completely clean slate.
+ *
  * SAFETY: refuses to run unless the target database name ends in `_dev` (override with --force),
  * and refuses when NODE_ENV=production. It TRUNCATEs — it does not touch the schema.
  */
@@ -67,13 +70,18 @@ const BUSINESS_TABLES = [
   'viewer_identity',
 ];
 
+// Content kept by default; cleared only with --demo.
+const CONTENT_TABLES = ['product', 'proposal_template', 'template_version'];
+const demo = process.argv.includes('--demo');
+const tables = demo ? [...BUSINESS_TABLES, ...CONTENT_TABLES] : BUSINESS_TABLES;
+
 const client = new pg.Client({ connectionString: url });
 await client.connect();
 try {
-  await client.query(`TRUNCATE ${BUSINESS_TABLES.map((t) => `"${t}"`).join(', ')} RESTART IDENTITY CASCADE`);
+  await client.query(`TRUNCATE ${tables.map((t) => `"${t}"`).join(', ')} RESTART IDENTITY CASCADE`);
   const count = async (t: string) => (await client.query(`select count(*)::int as n from "${t}"`)).rows[0].n as number;
   console.log(
-    `db:reset:dev — "${dbName}" cleared.\n` +
+    `db:reset:dev — "${dbName}" cleared${demo ? ' (demo: catalogue and templates too)' : ''}.\n` +
       `  business now: deals=${await count('deal')} companies=${await count('company')} contacts=${await count('contact')} proposals=${await count('proposal')} audit=${await count('audit_log')}\n` +
       `  kept: users=${await count('auth_user')} stages=${await count('pipeline_stage')} lost_reasons=${await count('lost_reason')} teams=${await count('team')} templates=${await count('proposal_template')}`,
   );
