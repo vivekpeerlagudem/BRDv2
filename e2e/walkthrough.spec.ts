@@ -69,7 +69,11 @@ test('salesperson walkthrough: a proposal with the AI panel', async ({ page }) =
   await page.goto('/deals');
   await page.getByRole('button', { name: 'list' }).click();
   // Open a deal that has a proposal.
-  const row = page.getByRole('table').getByRole('row').filter({ hasText: /Northwind|Globex|Acme|Contoso|Fabrikam|Adatum|Tailspin/ }).first();
+  const row = page
+    .getByRole('table')
+    .getByRole('row')
+    .filter({ hasText: /Northwind|Globex|Acme|Contoso|Fabrikam|Adatum|Tailspin/ })
+    .first();
   await row.getByRole('link').first().click();
   await expect(page.getByRole('heading', { name: 'Activity timeline' })).toBeVisible();
   await stop(page, 'sp-deal', 2.5);

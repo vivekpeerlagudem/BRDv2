@@ -110,6 +110,11 @@ export function createApp(ctx: AppContext, auth: identity.Auth): Hono<Env> {
       const origin = c.req.header('origin');
       if (origin !== undefined && origin !== ctx.config.APP_ORIGIN) throw new DomainError('CSRF_ORIGIN_MISMATCH', 403, 'Request origin not allowed');
     }
+    // Per-user, session-scoped responses (role, permissions, records) must never be stored by the browser or a
+    // proxy: otherwise a refresh — or signing in as another user on the same machine — can serve a stale /me and
+    // show the wrong role. (ADR-016 companion; the browser always re-fetches the authenticated user's state.)
+    c.header('Cache-Control', 'no-store, no-cache, must-revalidate');
+    c.header('Pragma', 'no-cache');
     const session = await auth.api.getSession({ headers: c.req.raw.headers });
     const actor = session ? await buildUserActor(ctx.db, session.user.id) : null;
     if (!actor) throw new DomainError(ERROR_CODES.UNAUTHENTICATED, 401, 'Sign in to continue'); // also covers deactivated users
@@ -213,7 +218,21 @@ export function createApp(ctx: AppContext, auth: identity.Auth): Hono<Env> {
   api.post('/tasks/:id/complete', async (c) => c.json(await crm.completeTask(ctx, A(c), id(c))));
   api.post('/notes', async (c) => c.json(await crm.createNote(ctx, A(c), await body(c, C.noteInput)), 201));
   api.post('/activities', async (c) => c.json(await crm.logActivity(ctx, A(c), await body(c, C.activityInput)), 201));
-  api.get('/leads', async (c) => c.json(await crm.listLeads(ctx, A(c))));
+  // Managed leads (BR-LED). /leads/inbox is registered before /leads/:id so it is not captured as an id.
+  api.get('/leads', async (c) => {
+    const q = c.req.query();
+    const status = ['new', 'working', 'qualified', 'unqualified', 'converted'].includes(q.status ?? '') ? (q.status as 'new') : undefined;
+    return c.json(await crm.listLeads(ctx, A(c), { ...parse(C.pageQuerySchema, q), status }));
+  });
+  api.get('/leads/inbox', async (c) => c.json(await crm.listLeadInbox(ctx, A(c))));
+  api.post('/leads', async (c) => c.json(await crm.createLead(ctx, A(c), await body(c, C.leadInput)), 201));
+  api.get('/leads/:id', async (c) => c.json(await crm.getLead(ctx, A(c), id(c))));
+  api.patch('/leads/:id', async (c) => c.json(await crm.updateLead(ctx, A(c), id(c), await body(c, C.leadPatch))));
+  api.delete('/leads/:id', async (c) => c.json(await crm.deleteLead(ctx, A(c), id(c))));
+  api.post('/leads/:id/assign', async (c) => c.json(await crm.assignLead(ctx, A(c), id(c), (await body(c, C.leadAssignInput)).ownerId)));
+  api.post('/leads/:id/qualify', async (c) => c.json(await crm.qualifyLead(ctx, A(c), id(c))));
+  api.post('/leads/:id/disqualify', async (c) => c.json(await crm.disqualifyLead(ctx, A(c), id(c), await body(c, C.leadDisqualifyInput))));
+  api.post('/leads/:id/convert', async (c) => c.json(await crm.convertLead(ctx, A(c), id(c), await body(c, C.leadConvertInput))));
 
   api.get('/templates', async (c) => c.json(await proposals.listTemplates(ctx, A(c))));
   api.post('/templates', async (c) => c.json(await proposals.createTemplate(ctx, A(c), await body(c, C.templateInput)), 201));

@@ -26,7 +26,8 @@ export const PERMISSIONS = {
   'automation.reverse': { admin: 'all', sales_manager: 'team', salesperson: 'own' }, // PERM-129
   'report.view': { admin: 'all', sales_manager: 'team', salesperson: 'own' }, // PERM-145 (BR-RPT-008)
   'ai.use': { admin: 'all', sales_manager: 'all', salesperson: 'all' }, // PERM-134..139
-  'lead.view': { admin: 'all', sales_manager: 'none', salesperson: 'none' }, // PERM-093
+  'lead.view': { admin: 'all', sales_manager: 'team', salesperson: 'own' }, // PERM-093 (managed leads, owner-scoped)
+  'lead.manage': { admin: 'all', sales_manager: 'team', salesperson: 'own' }, // create/edit/assign/qualify/convert managed leads
 } as const satisfies Record<string, Record<Role, Scope>>;
 
 export type PermKey = keyof typeof PERMISSIONS;

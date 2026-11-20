@@ -146,7 +146,7 @@ describe.skipIf(!testUrl)('sales lifecycle (PostgreSQL integration)', () => {
     expect((await call('manager', 'POST', `/api/v1/deals/${ids.deal}/owner`, { ownerId: ids.rep2 })).json.code).toBe('REASSIGN_TARGET_OUT_OF_SCOPE');
     expect((await call('rep1', 'GET', '/api/v1/users')).status).toBe(200);
     expect((await call('rep1', 'POST', '/api/v1/users', { email: 'n@test.example', fullName: 'N', role: 'admin', password: PASSWORD })).status).toBe(403);
-    expect((await call('manager', 'GET', '/api/v1/leads')).status).toBe(403);
+    expect((await call('manager', 'GET', '/api/v1/leads')).status).toBe(200); // managed leads are owner-scoped; a manager sees their team's
   });
 
   it('view-only cross-visibility lets a salesperson read but not edit (OD-31)', async () => {
@@ -515,7 +515,7 @@ describe.skipIf(!testUrl)('sales lifecycle (PostgreSQL integration)', () => {
     ).toBe(202);
     expect((await call(null, 'POST', `/public/v1/forms/${key}/submissions`, { firstName: 'Free', email: 'someone@gmail.com' })).status).toBe(202);
     await jobs();
-    const leads = (await call('admin', 'GET', '/api/v1/leads')).json;
+    const leads = (await call('admin', 'GET', '/api/v1/leads/inbox')).json; // inbound submissions moved to /leads/inbox
     expect(leads.filter((l: any) => l.spamVerdict === 'clean')).toHaveLength(3);
     expect(leads.find((l: any) => l.payload.firstName === 'Bot').processingStatus).toBe('rejected');
     expect(leads.find((l: any) => l.payload.firstName === 'Free').dealId).toBeNull(); // free-mail domain → no company → no deal (R3)

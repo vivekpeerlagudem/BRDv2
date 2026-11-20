@@ -19,6 +19,7 @@
     "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
     "db:migrate": "pnpm --filter @crm/server db:migrate",
     "db:seed": "pnpm --filter @crm/server db:seed",
+    "db:reset:dev": "pnpm --filter @crm/server db:reset:dev",
     "dev:worker": "pnpm --filter @crm/server worker",
     "test:e2e": "playwright test",
     "pretest": "pnpm --filter @crm/server db:migrate --test"

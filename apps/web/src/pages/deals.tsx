@@ -137,6 +137,18 @@ export function DealsPage() {
     queryKey: ['deals', layout],
     queryFn: () => get<{ items: DealRow[]; total: number }>(`/deals?limit=100${layout === 'board' ? '&status=open' : ''}`),
   });
+  // Closed outcomes for the board's read-only Won/Lost columns (kept separate from the active pipeline).
+  const closed = useQuery({
+    queryKey: ['deals', 'closed'],
+    enabled: layout === 'board',
+    queryFn: async () => {
+      const [won, lost] = await Promise.all([
+        get<{ items: DealRow[] }>('/deals?limit=50&status=won'),
+        get<{ items: DealRow[] }>('/deals?limit=50&status=lost'),
+      ]);
+      return { won: won.items, lost: lost.items };
+    },
+  });
   const companies = useQuery({ queryKey: ['companies', ''], queryFn: () => get<{ items: { id: string; name: string }[] }>('/companies?limit=100') });
   const create = useAction((v: Record<string, string | undefined>) => post<{ id: string }>('/deals', v), {
     success: 'Deal created',
@@ -248,6 +260,43 @@ export function DealsPage() {
                   </section>
                 );
               })}
+              {/* Closed outcomes — read-only, visually separated from the active pipeline (not drag targets). */}
+              <div aria-hidden className="w-px shrink-0 self-stretch bg-line" />
+              {(
+                [
+                  { key: 'won', label: 'Closed Won', head: 'border-green-200 bg-green-50', deals: closed.data?.won ?? [] },
+                  { key: 'lost', label: 'Closed Lost', head: 'border-red-200 bg-red-50', deals: closed.data?.lost ?? [] },
+                ] as const
+              ).map((col) => (
+                <section key={col.key} aria-label={col.label} className="w-72 shrink-0 rounded-lg border border-line bg-white">
+                  <header className={`flex items-center justify-between rounded-t-lg border-b px-3 py-2 ${col.head}`}>
+                    <h2 className="text-sm font-semibold">{col.label}</h2>
+                    <span className="text-xs tabular-nums text-muted">
+                      {col.deals.length} · {money(col.deals.reduce((t, c) => t + Number(c.amount ?? 0), 0))}
+                    </span>
+                  </header>
+                  <ul className="min-h-24 space-y-2 p-2">
+                    {col.deals.length === 0 ? (
+                      <li className="px-1 py-6 text-center text-xs text-muted">No {col.key} deals yet</li>
+                    ) : (
+                      col.deals.map((c) => (
+                        <li key={c.id} className="rounded-md border border-line bg-surface p-2.5 text-sm">
+                          <Link to="/deals/$id" params={{ id: c.id }} className="font-medium text-brand hover:underline">
+                            {c.name}
+                          </Link>
+                          <p className="text-xs text-muted">
+                            {c.companyName} · {c.ownerName}
+                          </p>
+                          <p className="mt-1 flex items-center justify-between">
+                            <span className="tabular-nums">{money(c.amount, c.currency)}</span>
+                            <Badge tone={statusTone(c.status)}>{c.status === 'won' ? 'Won' : 'Lost'}</Badge>
+                          </p>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                </section>
+              ))}
             </div>
           )
         }

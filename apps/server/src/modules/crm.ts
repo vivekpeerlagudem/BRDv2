@@ -11,6 +11,10 @@ import type {
   dealContactInput,
   dealInput,
   dealPatch,
+  leadConvertInput,
+  leadDisqualifyInput,
+  leadInput,
+  leadPatch,
   leadSubmissionInput,
   noteInput,
   pageQuerySchema,
@@ -56,6 +60,7 @@ const {
   timelineEventAnchor,
   appUserProfile,
   dealFlag,
+  lead,
   leadSubmission,
   organizationSettings,
   notification,
@@ -1240,7 +1245,303 @@ export async function submitLead(ctx: AppContext, formKey: string, input: z.infe
   });
 }
 
-export async function listLeads(ctx: AppContext, actor: UserActor) {
+/** Raw inbound web-form submissions (BR-LED-001..006), owner-scoped to the actor's assigned submissions. */
+export async function listLeadInbox(ctx: AppContext, actor: UserActor) {
   requirePerm(actor, 'lead.view');
-  return ctx.db.select().from(leadSubmission).orderBy(desc(leadSubmission.receivedAt)).limit(100);
+  return ctx.db
+    .select()
+    .from(leadSubmission)
+    .where(ownerScope(actor, leadSubmission.assignedUserId, 'deals', 'lead.view'))
+    .orderBy(desc(leadSubmission.receivedAt))
+    .limit(100);
+}
+
+// ───────────── managed leads (BR-LED: capture → qualify → convert) ─────────────
+const leadVisible = (actor: UserActor) => ownerScope(actor, lead.ownerId, 'deals', 'lead.view');
+const leadColumns = {
+  id: lead.id,
+  name: lead.name,
+  companyName: lead.companyName,
+  email: lead.email,
+  phone: lead.phone,
+  jobTitle: lead.jobTitle,
+  source: lead.source,
+  status: lead.status,
+  ownerId: lead.ownerId,
+  ownerName: appUserProfile.fullName,
+  notes: lead.notes,
+  disqualifyReason: lead.disqualifyReason,
+  convertedCompanyId: lead.convertedCompanyId,
+  convertedContactId: lead.convertedContactId,
+  convertedDealId: lead.convertedDealId,
+  createdAt: lead.createdAt,
+  rowVersion: lead.rowVersion,
+};
+
+/** Loads and row-locks a lead the actor may change, or throws 404 (not visible) / 403 (visible, not editable). */
+async function loadLeadForWrite(tx: Tx, actor: UserActor, id: string) {
+  const [row] = await tx
+    .select()
+    .from(lead)
+    .where(and(eq(lead.id, id), leadVisible(actor)))
+    .for('update');
+  if (!row) throw notFound('Lead');
+  if (!canAccessOwner(actor, row.ownerId, 'write', 'deals', 'lead.manage')) throw forbidden('VIEW_ONLY', 'You can view this lead but not change it');
+  return row;
+}
+
+type LeadStatus = 'new' | 'working' | 'qualified' | 'unqualified' | 'converted';
+export async function listLeads(ctx: AppContext, actor: UserActor, page: Page & { status?: LeadStatus }) {
+  requirePerm(actor, 'lead.view');
+  const where = and(
+    isNull(lead.archivedAt),
+    leadVisible(actor),
+    page.q ? or(ilike(lead.name, like(page.q)), ilike(lead.email, like(page.q)), ilike(lead.companyName, like(page.q))) : undefined,
+    page.status ? eq(lead.status, page.status) : undefined,
+    page.ownerId ? eq(lead.ownerId, page.ownerId) : undefined,
+  );
+  const items = await ctx.db
+    .select(leadColumns)
+    .from(lead)
+    .innerJoin(appUserProfile, eq(appUserProfile.userId, lead.ownerId))
+    .where(where)
+    .orderBy(desc(lead.createdAt))
+    .limit(page.limit)
+    .offset(page.offset);
+  const [count] = await ctx.db.select({ n: sql<number>`count(*)::int` }).from(lead).where(where);
+  return { items, total: count?.n ?? 0 };
+}
+
+export async function getLead(ctx: AppContext, actor: UserActor, id: string) {
+  requirePerm(actor, 'lead.view');
+  const [row] = await ctx.db
+    .select(leadColumns)
+    .from(lead)
+    .innerJoin(appUserProfile, eq(appUserProfile.userId, lead.ownerId))
+    .where(and(eq(lead.id, id), leadVisible(actor)));
+  if (!row) throw notFound('Lead');
+  return row;
+}
+
+/** Resolve the owner for a new/assigned lead: the requested user if the actor may reassign to them, else self. */
+function resolveLeadOwner(actor: UserActor, requested: string | undefined): string {
+  if (requested && requested !== actor.userId && canAccessOwner(actor, requested, 'write', 'deals', 'record.reassign')) return requested;
+  return actor.userId;
+}
+
+export async function createLead(ctx: AppContext, actor: UserActor, input: z.infer<typeof leadInput>) {
+  requirePerm(actor, 'lead.manage');
+  return unitOfWork(ctx, actor, async (u) => {
+    const email = input.email ? normalizeEmail(input.email) : null;
+    if (email) {
+      const [dupLead] = await u.tx
+        .select({ id: lead.id })
+        .from(lead)
+        .where(and(eq(lead.normalizedEmail, email), isNull(lead.archivedAt), ne(lead.status, 'converted')));
+      const [dupContact] = await u.tx
+        .select({ id: contact.id })
+        .from(contact)
+        .where(and(eq(contact.normalizedEmail, email), isNull(contact.archivedAt)));
+      if (dupLead || dupContact)
+        requireConfirmations([{ code: 'DUPLICATE_SUSPECTED', message: 'A lead or contact with this email already exists' }], input.confirm);
+    }
+    const [row] = await u.tx
+      .insert(lead)
+      .values({
+        name: input.name,
+        companyName: blank(input.companyName),
+        email: blank(input.email),
+        normalizedEmail: email,
+        phone: blank(input.phone),
+        jobTitle: blank(input.jobTitle),
+        source: input.source?.trim() || 'manual',
+        ownerId: resolveLeadOwner(actor, input.ownerId),
+        notes: blank(input.notes),
+        createdBy: actor.userId,
+      })
+      .returning();
+    await u.audit('lead.created', { type: 'lead', id: row!.id });
+    return row!;
+  });
+}
+
+export async function updateLead(ctx: AppContext, actor: UserActor, id: string, input: z.infer<typeof leadPatch>) {
+  requirePerm(actor, 'lead.manage');
+  return unitOfWork(ctx, actor, async (u) => {
+    const before = await loadLeadForWrite(u.tx, actor, id);
+    if (before.status === 'converted') throw rule('LEAD_CONVERTED', 'A converted lead can no longer be edited');
+    if (input.rowVersion !== undefined && input.rowVersion !== before.rowVersion)
+      throw conflict('CONCURRENT_MODIFICATION', 'This lead changed since you opened it');
+    const email = input.email === undefined ? before.email : blank(input.email);
+    const next = {
+      name: input.name ?? before.name,
+      companyName: input.companyName === undefined ? before.companyName : blank(input.companyName),
+      email,
+      normalizedEmail: email ? normalizeEmail(email) : null,
+      phone: input.phone === undefined ? before.phone : blank(input.phone),
+      jobTitle: input.jobTitle === undefined ? before.jobTitle : blank(input.jobTitle),
+      source: input.source === undefined ? before.source : input.source.trim() || 'manual',
+      notes: input.notes === undefined ? before.notes : blank(input.notes),
+      status: input.status ?? before.status,
+      updatedBy: actor.userId,
+      updatedAt: ctx.now(),
+      rowVersion: before.rowVersion + 1,
+    };
+    await u.tx.update(lead).set(next).where(eq(lead.id, id));
+    await u.audit('lead.updated', { type: 'lead', id });
+    return { ...before, ...next };
+  });
+}
+
+export async function assignLead(ctx: AppContext, actor: UserActor, id: string, ownerId: string) {
+  requirePerm(actor, 'lead.manage');
+  return unitOfWork(ctx, actor, async (u) => {
+    const before = await loadLeadForWrite(u.tx, actor, id);
+    if (!canAccessOwner(actor, ownerId, 'write', 'deals', 'record.reassign')) throw forbidden('FORBIDDEN_REASSIGN', 'You cannot assign this lead to that user');
+    const [t] = await u.tx.select({ status: appUserProfile.status }).from(appUserProfile).where(eq(appUserProfile.userId, ownerId));
+    if (t?.status !== 'active') throw rule('REASSIGNMENT_TARGET_INACTIVE', 'The new owner must be an active user');
+    await u.tx
+      .update(lead)
+      .set({ ownerId, updatedBy: actor.userId, updatedAt: ctx.now(), rowVersion: before.rowVersion + 1 })
+      .where(eq(lead.id, id));
+    await u.audit('lead.assigned', { type: 'lead', id }, { ownerId: { from: before.ownerId, to: ownerId } });
+  });
+}
+
+export async function qualifyLead(ctx: AppContext, actor: UserActor, id: string) {
+  requirePerm(actor, 'lead.manage');
+  return unitOfWork(ctx, actor, async (u) => {
+    const before = await loadLeadForWrite(u.tx, actor, id);
+    if (before.status === 'converted') throw rule('LEAD_CONVERTED', 'This lead is already converted');
+    await u.tx
+      .update(lead)
+      .set({ status: 'qualified', disqualifyReason: null, updatedBy: actor.userId, updatedAt: ctx.now(), rowVersion: before.rowVersion + 1 })
+      .where(eq(lead.id, id));
+    await u.audit('lead.qualified', { type: 'lead', id });
+  });
+}
+
+export async function disqualifyLead(ctx: AppContext, actor: UserActor, id: string, input: z.infer<typeof leadDisqualifyInput>) {
+  requirePerm(actor, 'lead.manage');
+  return unitOfWork(ctx, actor, async (u) => {
+    const before = await loadLeadForWrite(u.tx, actor, id);
+    if (before.status === 'converted') throw rule('LEAD_CONVERTED', 'A converted lead cannot be disqualified');
+    await u.tx
+      .update(lead)
+      .set({ status: 'unqualified', disqualifyReason: input.reason.trim(), updatedBy: actor.userId, updatedAt: ctx.now(), rowVersion: before.rowVersion + 1 })
+      .where(eq(lead.id, id));
+    await u.audit('lead.disqualified', { type: 'lead', id }, { reason: input.reason.trim() });
+  });
+}
+
+export async function deleteLead(ctx: AppContext, actor: UserActor, id: string) {
+  requirePerm(actor, 'lead.manage');
+  return unitOfWork(ctx, actor, async (u) => {
+    const before = await loadLeadForWrite(u.tx, actor, id);
+    if (before.status === 'converted') throw rule('LEAD_CONVERTED', 'A converted lead cannot be deleted — it is now a company, contact and deal');
+    await u.tx.delete(lead).where(eq(lead.id, id));
+    await u.audit('lead.deleted', { type: 'lead', id }, { name: before.name });
+  });
+}
+
+/** Convert a qualified lead into a company (optional), contact and deal (BR-LED-005). Idempotent guards prevent double-convert. */
+export async function convertLead(ctx: AppContext, actor: UserActor, id: string, input: z.infer<typeof leadConvertInput>) {
+  requirePerm(actor, 'lead.manage');
+  return unitOfWork(ctx, actor, async (u) => {
+    const l = await loadLeadForWrite(u.tx, actor, id);
+    if (l.status === 'converted') throw rule('LEAD_ALREADY_CONVERTED', 'This lead has already been converted');
+    if (l.status === 'unqualified') throw rule('LEAD_UNQUALIFIED', 'Requalify this lead before converting it');
+
+    // Company: an explicit visible company, else create one from the lead's company name.
+    let companyId = input.companyId ?? null;
+    if (companyId) {
+      await companyVisibleCheck(ctx, u.tx, actor, companyId);
+    } else if (l.companyName) {
+      const [co] = await u.tx
+        .insert(company)
+        .values({ name: l.companyName, normalizedName: l.companyName.toLowerCase(), ownerId: l.ownerId, createdBy: actor.userId })
+        .returning();
+      companyId = co!.id;
+      await u.audit('company.created', { type: 'company', id: companyId });
+      await u.timeline({
+        eventType: 'company_created',
+        source: { type: 'company', id: companyId },
+        summary: `Company ${l.companyName} created from lead`,
+        anchors: [{ type: 'company', id: companyId }],
+      });
+    }
+
+    // Contact: reuse an existing contact with the same email, else create one (name split into first/last).
+    const email = l.normalizedEmail;
+    let contactId: string | null = null;
+    if (email) {
+      const [existing] = await u.tx
+        .select({ id: contact.id })
+        .from(contact)
+        .where(and(eq(contact.normalizedEmail, email), isNull(contact.archivedAt)));
+      contactId = existing?.id ?? null;
+    }
+    if (!contactId) {
+      const parts = l.name.trim().split(/\s+/);
+      const [c] = await u.tx
+        .insert(contact)
+        .values({
+          firstName: parts[0] ?? l.name,
+          lastName: parts.slice(1).join(' ') || null,
+          email: l.email,
+          normalizedEmail: email,
+          phone: l.phone,
+          jobTitle: l.jobTitle,
+          companyId,
+          ownerId: l.ownerId,
+          source: 'lead',
+          createdBy: actor.userId,
+        })
+        .returning();
+      contactId = c!.id;
+      await u.audit('contact.created', { type: 'contact', id: contactId });
+      await u.timeline({
+        eventType: 'contact_created',
+        source: { type: 'contact', id: contactId },
+        summary: `Contact ${l.name} created from lead`,
+        anchors: companyId
+          ? [
+              { type: 'contact', id: contactId },
+              { type: 'company', id: companyId },
+            ]
+          : [{ type: 'contact', id: contactId }],
+      });
+    }
+
+    // Deal (optional, needs a company — OD-33).
+    let dealId: string | null = null;
+    if (input.createDeal ?? true) {
+      if (!companyId) throw rule('LEAD_NEEDS_COMPANY', 'A company is required to create a deal — add a company name or choose a company');
+      const d = await insertDeal(ctx, u, {
+        name: input.dealName?.trim() || l.name,
+        companyId,
+        contactIds: contactId ? [contactId] : [],
+        amount: input.amount,
+        ownerId: l.ownerId,
+        source: 'lead',
+      });
+      dealId = d.id;
+    }
+
+    await u.tx
+      .update(lead)
+      .set({
+        status: 'converted',
+        convertedCompanyId: companyId,
+        convertedContactId: contactId,
+        convertedDealId: dealId,
+        convertedAt: ctx.now(),
+        updatedBy: actor.userId,
+        updatedAt: ctx.now(),
+        rowVersion: l.rowVersion + 1,
+      })
+      .where(eq(lead.id, id));
+    await u.audit('lead.converted', { type: 'lead', id }, { companyId, contactId, dealId });
+    return { leadId: id, companyId, contactId, dealId };
+  });
 }

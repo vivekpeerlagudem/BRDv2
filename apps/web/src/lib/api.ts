@@ -19,6 +19,9 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
   const res = await fetch(path, {
     method,
     credentials: 'same-origin',
+    // Never read from or write to the browser's HTTP cache: the authenticated user's role/permissions must
+    // always come fresh from the server, so a refresh or an account switch can never show a stale role.
+    cache: 'no-store',
     headers: body === undefined ? {} : { 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -33,6 +36,7 @@ export const get = <T>(path: string) => api<T>('GET', `/api/v1${path}`);
 export const post = <T>(path: string, body: unknown = {}) => api<T>('POST', `/api/v1${path}`, body);
 export const put = <T>(path: string, body: unknown) => api<T>('PUT', `/api/v1${path}`, body);
 export const patch = <T>(path: string, body: unknown) => api<T>('PATCH', `/api/v1${path}`, body);
+export const del = <T>(path: string) => api<T>('DELETE', `/api/v1${path}`);
 
 export const money = (amount: string | number | null | undefined, currency = 'USD') =>
   amount === null || amount === undefined

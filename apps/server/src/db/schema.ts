@@ -309,6 +309,36 @@ export const leadSubmission = pgTable('lead_form_submission', {
   assignedUserId: uuid('assigned_user_id'),
 });
 
+// Managed leads (BR-LED): manually captured prospects with a qualification lifecycle, converted into
+// company + contact + deal once qualified. Distinct from lead_form_submission (raw inbound intake).
+export const lead = pgTable(
+  'lead',
+  {
+    id: id(),
+    name: text('name').notNull(),
+    companyName: text('company_name'),
+    email: text('email'),
+    normalizedEmail: text('normalized_email'),
+    phone: text('phone'),
+    jobTitle: text('job_title'),
+    source: text('source').notNull().default('manual'),
+    status: text('status').$type<'new' | 'working' | 'qualified' | 'unqualified' | 'converted'>().notNull().default('new'),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => appUserProfile.userId),
+    notes: text('notes'),
+    disqualifyReason: text('disqualify_reason'),
+    convertedCompanyId: uuid('converted_company_id').references(() => company.id),
+    convertedContactId: uuid('converted_contact_id').references(() => contact.id),
+    convertedDealId: uuid('converted_deal_id').references(() => deal.id),
+    convertedAt: ts('converted_at'),
+    customFields: jsonb('custom_fields').$type<Record<string, unknown>>().notNull().default({}),
+    archivedAt: ts('archived_at'),
+    ...audit,
+  },
+  (t) => [index('lead_owner_idx').on(t.ownerId), index('lead_status_idx').on(t.status)],
+);
+
 // ───────────────────────── catalog & templates ─────────────────────────
 export const product = pgTable('product', {
   id: id(),

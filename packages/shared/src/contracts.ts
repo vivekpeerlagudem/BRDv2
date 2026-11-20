@@ -54,6 +54,40 @@ export const closeLostInput = z.object({ lostReasonId: uuid, note: optionalText(
 export const closeWonInput = z.object({ amount: moneyString.optional() });
 export const reopenInput = z.object({ reason: z.string().trim().min(1).max(2000), stageId: uuid });
 export const ownerInput = z.object({ ownerId: uuid });
+
+// ── Managed leads (BR-LED) ──
+export const leadStatus = z.enum(['new', 'working', 'qualified', 'unqualified', 'converted']);
+export const leadInput = z.object({
+  name,
+  companyName: optionalText(200),
+  email: email.optional(),
+  phone: optionalText(32),
+  jobTitle: optionalText(120),
+  source: optionalText(80),
+  notes: optionalText(5000),
+  ownerId: uuid.optional(),
+  confirm: z.array(z.string()).optional(),
+});
+export const leadPatch = z.object({
+  name: name.optional(),
+  companyName: optionalText(200),
+  email: email.optional(),
+  phone: optionalText(32),
+  jobTitle: optionalText(120),
+  source: optionalText(80),
+  notes: optionalText(5000),
+  status: z.enum(['new', 'working']).optional(), // only non-terminal transitions here; use qualify/disqualify/convert for the rest
+  rowVersion: z.number().int().optional(),
+});
+export const leadAssignInput = z.object({ ownerId: uuid });
+export const leadDisqualifyInput = z.object({ reason: z.string().trim().min(1).max(500) });
+export const leadConvertInput = z.object({
+  companyId: uuid.optional(),
+  createDeal: z.boolean().optional(),
+  dealName: optionalText(255),
+  amount: moneyString.optional(),
+  confirm: z.array(z.string()).optional(),
+});
 export const dealContactInput = z.object({ contactId: uuid, roles: z.array(z.string().max(40)).max(5).default([]), isPrimary: z.boolean().default(false) });
 
 export const taskInput = z.object({

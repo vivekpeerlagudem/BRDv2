@@ -33,7 +33,9 @@ test('seed a small book of deals (open across stages + closed won + one lost)', 
   async function makeDeal(company: string, amount: string) {
     seq += 1;
     const companyId = (await j(await api.post('/companies', { name: `Demo ${company} ${stamp}`, domain: `demo-${seq}-${stamp}.example` }))).id;
-    const contactId = (await j(await api.post('/contacts', { firstName: 'Alex', lastName: `Buyer${seq}`, email: `alex${seq}@demo-${seq}-${stamp}.example`, companyId }))).id;
+    const contactId = (
+      await j(await api.post('/contacts', { firstName: 'Alex', lastName: `Buyer${seq}`, email: `alex${seq}@demo-${seq}-${stamp}.example`, companyId }))
+    ).id;
     const deal = await j(await api.post('/deals', { name: `Demo ${company} deal ${stamp}`, companyId, amount, contactIds: [contactId] }));
     return deal as { id: string; rowVersion: number };
   }
@@ -50,7 +52,7 @@ test('seed a small book of deals (open across stages + closed won + one lost)', 
   }
 
   async function markLost(dealId: string) {
-    let r = await j(await api.post(`/deals/${dealId}/lost`, { lostReasonId }));
+    const r = await j(await api.post(`/deals/${dealId}/lost`, { lostReasonId }));
     if (r.code === 'CONFIRMATION_REQUIRED') {
       await api.post(`/deals/${dealId}/lost`, { lostReasonId, confirm: r.meta.confirmations.map((c: { code: string }) => c.code) });
     }
@@ -69,8 +71,7 @@ test('seed a small book of deals (open across stages + closed won + one lost)', 
   const d4 = await makeDeal('Delta Services', '12500');
   await moveTo(d4.id, 'Qualification');
 
-  const d5 = await makeDeal('Everpeak Software', '26000');
-  // left at the first stage as-is
+  await makeDeal('Everpeak Software', '26000'); // left at the first stage as-is
 
   // ── Closed Won (feed Won revenue) ──
   const w1 = await makeDeal('Foxtrot Health', '41000');
