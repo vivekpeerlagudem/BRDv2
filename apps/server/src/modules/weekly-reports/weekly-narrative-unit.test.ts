@@ -150,6 +150,31 @@ describe('weekly report checks', () => {
     for (const text of ['Two rows are unmatched.', 'There is a status mismatch.', 'Our tracking shows progress.', 'One item was flagged.'])
       expect(codes(narrative({ risks: [st(text, ['period'])] }))).toEqual(['INTERNAL_TERM']);
   });
+  it('INTERNAL_TERM: not flagged when the word is the client wording from a scope or task title', () => {
+    const withTitle = buildWeeklyFacts(
+      {
+        ...snapshot,
+        estimates: {
+          ...snapshot.estimates,
+          items: [{ ...snapshot.estimates.items[2]!, title: 'Order tracking page' }, ...snapshot.estimates.items.slice(0, 2)],
+        },
+        tasks: [...snapshot.tasks, { id: 't5', title: 'Flag the open invoices', status: 'open', dueAt: '2026-11-24T00:00:00.000Z', completedAt: null }],
+      },
+      {
+        ...doc,
+        items: doc.items.map((i) => (i.rowId === ROW(3) ? { ...i, title: 'Order tracking page' } : i)),
+        upcomingTasks: [{ id: 't5', title: 'Flag the open invoices', dueDate: '2026-11-24' }],
+      },
+      'Kensium',
+    ).facts;
+    const check = (text: string) => checkNarrative(narrative({ nextWeek: [st(text, ['period'])] }), withTitle).map((f) => f.code);
+    expect(check('We plan to start the Order tracking page.')).toEqual([]);
+    expect(check('We will flag the open invoices with your team.')).toEqual([]);
+    expect(check('Two rows are unmatched.')).toEqual(['INTERNAL_TERM']); // still internal: not in any fact
+    expect(check('The Order tracking page shows a mismatch.')).toEqual(['INTERNAL_TERM']);
+    // Without that title in the facts, the same word is internal wording.
+    expect(codes(narrative({ nextWeek: [st('We plan to start the Order tracking page.', ['period'])] }))).toEqual(['INTERNAL_TERM']);
+  });
   it('BANNED_WORD: guarantees, promises and blame', () => {
     for (const text of ['We guarantee delivery.', 'Delivery is guaranteed.', 'We promise to finish.', 'The delay is your fault.', 'We do not blame anyone.'])
       expect(codes(narrative({ risks: [st(text, ['period'])] }))).toEqual(['BANNED_WORD']);

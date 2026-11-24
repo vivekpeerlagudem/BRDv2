@@ -419,4 +419,48 @@ describe.skipIf(!testUrl)('weekly report agents (PostgreSQL integration)', () =>
       .set({ status: 'active' })
       .where(eq(schema.appUserProfile.userId, ids.rep2 as string));
   });
+
+  it('weekly report text cannot be decided through the generic AI decision endpoint', async () => {
+    ai.reset();
+    expect((await call('rep1', 'POST', `/api/v1/companies/${ids.companyA}/weekly-reports`)).status).toBe(201);
+    await runDueJobs(ctx);
+    const run = (await runsOf(ids.companyA as string)).at(-1)!;
+    expect(run.status).toBe('ready');
+    ids.runA2 = run.id;
+    const decided = await call('rep1', 'POST', `/api/v1/ai/generations/${run.aiGenerationId}/decision`, { decision: 'accept' });
+    expect(decided.status).toBe(422);
+    expect(decided.json.code).toBe('WEEKLY_REPORT_DECIDED_BY_APPROVAL');
+    const [generation] = await ctx.db
+      .select()
+      .from(aiGeneration)
+      .where(eq(aiGeneration.id, run.aiGenerationId as string));
+    expect(generation?.status).toBe('pending');
+    expect((await call('rep2', 'POST', `/api/v1/ai/generations/${run.aiGenerationId}/decision`, { decision: 'accept' })).status).toBe(404);
+  });
+
+  it('saving AI settings without the weekly_report switch keeps its stored value', async () => {
+    const five = { draft_section: true, presend_review: true, deal_summary: true, rewrite_text: true, follow_up_email: true };
+    const base = { enabled: true, perUserDailyCalls: 50, monthlyBudgetUsd: 50 };
+    const off = await call('admin', 'PUT', '/api/v1/ai/settings', { ...base, features: { ...five, weekly_report: false } });
+    expect(off.status).toBe(200);
+    expect(off.json.settings.features.weekly_report).toBe(false);
+    // A client that only knows the original five switches saves the settings.
+    const old = await call('admin', 'PUT', '/api/v1/ai/settings', { ...base, perUserDailyCalls: 60, features: { ...five, rewrite_text: false } });
+    expect(old.status).toBe(200);
+    expect(old.json.settings).toMatchObject({ perUserDailyCalls: 60, features: { rewrite_text: false, weekly_report: false } });
+    const [row] = await ctx.db.select({ ai: schema.organizationSettings.aiSettings }).from(schema.organizationSettings);
+    expect(row?.ai.features?.weekly_report).toBe(false);
+    // With the switch off the narrative falls back to placeholders (AI_DISABLED), and the run still completes.
+    ai.reset();
+    expect((await call('rep1', 'POST', `/api/v1/companies/${ids.companyA}/weekly-reports`)).status).toBe(201);
+    await runDueJobs(ctx);
+    const run = (await runsOf(ids.companyA as string)).at(-1)!;
+    expect(run).toMatchObject({ status: 'needs_attention', aiFallback: true });
+    expect(run.checkFlags[0]?.message).toContain('AI_DISABLED');
+    expect(ai.calls).toHaveLength(0);
+    ids.runFallbackA = run.id;
+    expect(
+      (await call('admin', 'PUT', '/api/v1/ai/settings', { ...base, features: { ...five, weekly_report: true } })).json.settings.features.weekly_report,
+    ).toBe(true);
+  });
 });

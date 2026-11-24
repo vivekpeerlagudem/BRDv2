@@ -21,7 +21,7 @@ export const FALLBACK_TEXT = '[To be written before sending]';
 export const NOTICE_CODES = ['STATUS_MISMATCH'];
 export const isBlocking = (flag: WeeklyFlag) => !NOTICE_CODES.includes(flag.code);
 
-const INTERNAL_TERM = /\b(unmatched|mismatch(?:es|ed)?|tracking|flag(?:s|ged)?)\b/i;
+const INTERNAL_TERM_ALL = /\b(unmatched|mismatch(?:es|ed)?|tracking|flag(?:s|ged)?)\b/gi;
 const BANNED_WORD = /\b(guarantees?|guaranteed|promises?|promised|blame[sd]?|fault)\b/i;
 
 /** Facts without their `id` fields, so digits inside record ids never count as "known numbers". */
@@ -41,6 +41,7 @@ export function checkNarrative(narrative: WeeklyNarrative, facts: unknown): Week
   const allowed = allowedSourceIds(facts);
   const values = withoutIds(facts);
   const known = numbersIn(values);
+  const factText = JSON.stringify(values).toLowerCase();
   if (narrative.summary.length === 0) flags.push({ code: 'EMPTY_SECTION', statementId: null, message: 'The summary is empty' });
   for (const section of SECTIONS) {
     const statements = narrative[section];
@@ -56,7 +57,8 @@ export function checkNarrative(narrative: WeeklyNarrative, facts: unknown): Week
       const money = unverifiedFigures(s.text, values);
       if (strange.length || money.length) flag('UNVERIFIED_NUMBER', `A number is not in the report data: ${[...new Set([...strange, ...money])].join(', ')}`);
       if (s.text.length > MAX_STATEMENT_CHARS) flag('TOO_LONG', `The statement is longer than ${MAX_STATEMENT_CHARS} characters`);
-      const internal = INTERNAL_TERM.exec(s.text);
+      // Words such as "tracking" are internal only when they are not the client's own wording (a scope or task title).
+      const internal = [...s.text.matchAll(INTERNAL_TERM_ALL)].find((m) => !factText.includes(m[0].toLowerCase()));
       if (internal) flag('INTERNAL_TERM', `Internal wording must not reach the client: "${internal[0]}"`);
       const banned = BANNED_WORD.exec(s.text);
       if (banned) flag('BANNED_WORD', `Avoid this word in client text: "${banned[0]}"`);
