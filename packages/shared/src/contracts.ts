@@ -258,4 +258,24 @@ export const estimatesUploadInput = z.object({
 });
 export const WEEKLY_REPORT_STATUSES = ['queued', 'running', 'ready', 'needs_attention', 'approved', 'failed'] as const;
 export const weeklyReportListQuery = z.object({ companyId: uuid.optional(), status: z.enum(WEEKLY_REPORT_STATUSES).optional() });
-export const weeklyReportApproveInput = z.object({ rowVersion: z.number().int().min(1) });
+export const weeklyReportApproveInput = z.object({
+  rowVersion: z.number().int().min(1),
+  /** Required (true) when the report has warnings, for example a figure a person typed that is not in the report data. */
+  acknowledgeWarnings: z.boolean().optional(),
+});
+export const WEEKLY_REPORT_SECTIONS = ['summary', 'completed', 'nextWeek', 'risks'] as const;
+const weeklyStatementText = z.string().trim().min(1).max(600);
+export const weeklyNarrativeUpdateInput = z
+  .object({
+    statements: z
+      .array(z.object({ id: z.string().max(20), text: weeklyStatementText }))
+      .max(40)
+      .optional(),
+    added: z
+      .array(z.object({ section: z.enum(WEEKLY_REPORT_SECTIONS), text: weeklyStatementText, sources: z.array(z.string().max(80)).max(10).default([]) }))
+      .max(20)
+      .optional(),
+    removed: z.array(z.string().max(20)).max(40).optional(),
+    rowVersion: z.number().int().min(1),
+  })
+  .refine((v) => Boolean(v.statements?.length || v.added?.length || v.removed?.length), { message: 'Nothing to change', path: ['statements'] });

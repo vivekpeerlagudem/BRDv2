@@ -487,6 +487,8 @@ async function handle(ctx: AppContext, queue: string, payload: Record<string, un
       return esign.fetchSigned(ctx, payload.signatureRequestId as string);
     case 'weekly_report.run':
       return weeklyReports.runJob(ctx, payload.runId as string);
+    case 'weekly_report.redraft':
+      return weeklyReports.redraftJob(ctx, payload.runId as string);
     case 'esign.void':
       return ctx.esign.voidEnvelope(payload.envelopeId as string, payload.reason as string);
     case 'notify.email': {

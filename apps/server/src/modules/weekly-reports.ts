@@ -9,7 +9,7 @@
  * job). This file must NOT import workflow.ts — it only needs `unitOfWork().enqueue`, which lives in platform/core.
  */
 import { canonicalJson } from '@crm/proposal';
-import { scopeFor, type weeklyReportApproveInput, type weeklyReportListQuery } from '@crm/shared';
+import { scopeFor, type weeklyNarrativeUpdateInput, type weeklyReportApproveInput, type weeklyReportListQuery } from '@crm/shared';
 import { and, desc, eq, exists, inArray, isNull, lt, max, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 import { estimateImport, type WeeklyFlag, type WeeklyMetricsDoc, type WeeklyNarrative, weeklyReportRun } from '../db/schema-weekly-reports.ts';
@@ -27,15 +27,17 @@ import {
   SYSTEM,
   schema,
   sha256Hex,
+  type Uow,
   type UserActor,
   unitOfWork,
 } from '../platform/core.ts';
 import { DomainError } from '../platform/errors/domain-error.ts';
-import { FALLBACK_TEXT, isBlocking, SECTION_LABELS, SECTIONS } from './weekly-reports/checks.ts';
+import { sanitizeText } from './ai/context.ts';
+import { checkNarrative, FALLBACK_TEXT, isBlocking, isWarning, SECTION_LABELS, SECTIONS } from './weekly-reports/checks.ts';
 import { collect, type WeeklySnapshot } from './weekly-reports/collect.ts';
 import { buildDeckModel, deckFileName, PPTX_CONTENT_TYPE, renderWeeklyPptx } from './weekly-reports/deck.ts';
 import { latestEstimates, loadCompanyFor } from './weekly-reports/estimates.ts';
-import { buildWeeklyFacts } from './weekly-reports/facts.ts';
+import { allowedSourceIds, buildWeeklyFacts } from './weekly-reports/facts.ts';
 import { matchItems } from './weekly-reports/match.ts';
 import { computeMetrics } from './weekly-reports/metrics.ts';
 import { storeWeeklyGeneration, writeNarrative } from './weekly-reports/narrative.ts';
@@ -187,7 +189,8 @@ async function storeSnapshot(ctx: AppContext, runId: string, snapshot: WeeklySna
  * safely. Expected problems end the run as `failed` with a reason; unexpected errors are rethrown so the job
  * outbox retries with backoff.
  */
-export async function runJob(ctx: AppContext, runId: string): Promise<void> {
+export async function runJob(ctx: AppContext, runId: string, hooks: RunHooks = {}): Promise<void> {
+  const extraFlags: WeeklyFlag[] = [];
   const [run] = await ctx.db.select().from(weeklyReportRun).where(eq(weeklyReportRun.id, runId));
   if (!run || (run.status !== 'queued' && run.status !== 'running')) return;
   await ctx.db.update(weeklyReportRun).set({ status: 'running', updatedAt: ctx.now() }).where(eq(weeklyReportRun.id, run.id));
@@ -213,68 +216,142 @@ export async function runJob(ctx: AppContext, runId: string): Promise<void> {
     endInstant: new Date(snapshot.period.endInstant),
     previous: await previousMetrics(ctx, run),
   });
-  const snapshotSha256 = sha256Hex(stored.bytes);
+  await draftAndStore(ctx, run, owner, snapshot, metrics, { stored, extraFlags, hooks });
+}
 
-  // Narrative (AI, on behalf of the owner) → Checks. AI problems end in placeholders, never in a failed run.
-  const [org] = await ctx.db.select({ name: organizationSettings.organizationName, branding: organizationSettings.branding }).from(organizationSettings);
-  const facts = buildWeeklyFacts(snapshot, metrics, org?.name ?? '');
-  const written = await writeNarrative(ctx, owner, run, facts);
-  const aiGenerationId = written.meta
-    ? await storeWeeklyGeneration(ctx, owner, { runId: run.id, companyId: run.companyId, narrative: written.narrative, meta: written.meta, facts })
-    : null;
+/**
+ * Job `weekly_report.redraft` ("Regenerate"): redoes Narrative → Checks → draft deck from the STORED snapshot and
+ * metrics — nothing is collected again, so the figures stay exactly as they were. All current text is replaced.
+ */
+export async function redraftJob(ctx: AppContext, runId: string, hooks: RunHooks = {}): Promise<void> {
+  const [run] = await ctx.db.select().from(weeklyReportRun).where(eq(weeklyReportRun.id, runId));
+  if (!run || (run.status !== 'queued' && run.status !== 'running')) return;
+  await ctx.db.update(weeklyReportRun).set({ status: 'running', updatedAt: ctx.now() }).where(eq(weeklyReportRun.id, run.id));
+  const owner = await buildUserActor(ctx.db, run.runAsUserId);
+  if (!owner) return failRun(ctx, run, 'RUN_AS_USER_INACTIVE');
+  const snapshot = await readSnapshot(ctx, run);
+  if (!snapshot || !run.metrics) return failRun(ctx, run, 'NO_SNAPSHOT');
+  await draftAndStore(ctx, run, owner, snapshot, run.metrics, {
+    stored: null,
+    extraFlags: run.checkFlags.filter((f) => KEPT_ON_REDRAFT.includes(f.code)),
+    hooks,
+  });
+}
+
+/** Called inside the final transaction of a run, so follow-up work (a notification) commits or rolls back with it. */
+export interface RunHooks {
+  onDraftReady?: (u: Uow, info: { run: Run; clientName: string; status: 'ready' | 'needs_attention' }) => Promise<void>;
+}
+/** Flags that describe the data, not the text: they survive a redraft and an edit. */
+const KEPT_ON_REDRAFT = ['ESTIMATES_SYNC_FAILED'];
+
+/** Check flags for a narrative: text checks, a placeholder marker, and the internal data notices. */
+function composeFlags(
+  narrative: WeeklyNarrative,
+  facts: unknown,
+  metrics: WeeklyMetricsDoc,
+  extra: WeeklyFlag[],
+  fallbackFlags: WeeklyFlag[] = [],
+): WeeklyFlag[] {
   const mismatches = metrics.items.filter((i) => i.mismatch).length;
-  const flags = [
-    ...written.flags,
+  const checks = checkNarrative(narrative, facts);
+  const placeholder = hasPlaceholder(narrative) && !fallbackFlags.some((f) => f.code === 'AI_FALLBACK');
+  return [
+    ...fallbackFlags,
+    ...checks,
+    ...(placeholder ? [{ code: 'PLACEHOLDER_TEXT', statementId: null, message: 'Some text is still a placeholder: write it before sending' }] : []),
+    ...extra,
     // Internal notice for the reviewer only: the sheet and the CRM disagree on some rows (the CRM was used).
     ...(mismatches
       ? [{ code: 'STATUS_MISMATCH', statementId: null, message: `${mismatches} scope row(s) differ between the sheet and the CRM; the CRM status was used` }]
       : []),
   ];
+}
 
-  // PPT builder: the draft deck. Written to storage BEFORE the transaction that records it (a draft may be replaced).
-  const draft = await renderWeeklyPptx(
+const orgOf = async (ctx: AppContext) => {
+  const [org] = await ctx.db.select({ name: organizationSettings.organizationName, branding: organizationSettings.branding }).from(organizationSettings);
+  return { name: org?.name ?? '', branding: org?.branding ?? { primaryColor: '', footerText: '' } };
+};
+const draftDeck = (
+  run: Run,
+  snapshot: WeeklySnapshot,
+  org: Awaited<ReturnType<typeof orgOf>>,
+  metrics: WeeklyMetricsDoc,
+  narrative: WeeklyNarrative,
+  draft = true,
+) =>
+  renderWeeklyPptx(
     buildDeckModel({
-      draft: true,
+      draft,
       attempt: run.attempt,
       periodStart: run.periodStart,
       periodEnd: run.periodEnd,
       clientName: snapshot.company.name,
-      orgName: org?.name ?? '',
-      branding: org?.branding ?? { primaryColor: '', footerText: '' },
+      orgName: org.name,
+      branding: org.branding,
       metrics,
-      narrative: written.narrative,
+      narrative,
     }),
   );
+
+/** Narrative (AI) → Checks → draft deck → one transaction that records everything. Shared by a run and a redraft. */
+async function draftAndStore(
+  ctx: AppContext,
+  run: Run,
+  owner: UserActor,
+  snapshot: WeeklySnapshot,
+  metrics: WeeklyMetricsDoc,
+  opts: { stored: { key: string; bytes: Uint8Array } | null; extraFlags: WeeklyFlag[]; hooks: RunHooks },
+): Promise<void> {
+  // Narrative (AI, on behalf of the owner) → Checks. AI problems end in placeholders, never in a failed run.
+  const org = await orgOf(ctx);
+  const facts = buildWeeklyFacts(snapshot, metrics, org.name);
+  const written = await writeNarrative(ctx, owner, run, facts);
+  const aiGenerationId = written.meta
+    ? await storeWeeklyGeneration(ctx, owner, { runId: run.id, companyId: run.companyId, narrative: written.narrative, meta: written.meta, facts })
+    : null;
+  const flags = composeFlags(written.narrative, facts.facts, metrics, opts.extraFlags, written.flags);
+
+  // PPT builder: the draft deck. Written to storage BEFORE the transaction that records it (a draft may be replaced).
+  const draft = await draftDeck(run, snapshot, org, metrics, written.narrative);
   const draftKey = storageKeys.weeklyReportDraftPptx(run.id);
   await ctx.storage.put(draftKey, draft, { contentType: PPTX_CONTENT_TYPE });
   const draftSha256 = sha256Hex(draft);
   const status = flags.some(isBlocking) ? 'needs_attention' : 'ready';
 
   await unitOfWork(ctx, SYSTEM, async (u) => {
-    const [snapshotFile] = await u.tx
-      .insert(fileObject)
-      .values({
-        storageKey: stored.key,
-        contentType: 'application/json',
-        sizeBytes: stored.bytes.length,
-        sha256: snapshotSha256,
-        purpose: 'weekly_report_snapshot',
-        immutable: true,
-      })
-      .onConflictDoUpdate({ target: fileObject.storageKey, set: { purpose: 'weekly_report_snapshot' } })
-      .returning({ id: fileObject.id });
+    const snapshotFields: Partial<typeof weeklyReportRun.$inferInsert> = {};
+    if (opts.stored) {
+      const snapshotSha256 = sha256Hex(opts.stored.bytes);
+      const [snapshotFile] = await u.tx
+        .insert(fileObject)
+        .values({
+          storageKey: opts.stored.key,
+          contentType: 'application/json',
+          sizeBytes: opts.stored.bytes.length,
+          sha256: snapshotSha256,
+          purpose: 'weekly_report_snapshot',
+          immutable: true,
+        })
+        .onConflictDoUpdate({ target: fileObject.storageKey, set: { purpose: 'weekly_report_snapshot' } })
+        .returning({ id: fileObject.id });
+      Object.assign(snapshotFields, { estimateImportId: snapshot.estimates.importId, snapshotFileId: snapshotFile!.id, snapshotSha256, metrics });
+    }
     const [draftFile] = await u.tx
       .insert(fileObject)
       .values({ storageKey: draftKey, contentType: PPTX_CONTENT_TYPE, sizeBytes: draft.length, sha256: draftSha256, purpose: 'weekly_report_draft_pptx' })
       .onConflictDoUpdate({ target: fileObject.storageKey, set: { sizeBytes: draft.length, sha256: draftSha256 } })
       .returning({ id: fileObject.id });
+    // A redraft replaces the earlier AI text: its undecided generation is no longer the one in use.
+    if (run.aiGenerationId)
+      await u.tx
+        .update(schema.aiGeneration)
+        .set({ status: 'discarded', decidedAt: ctx.now() })
+        .where(and(eq(schema.aiGeneration.id, run.aiGenerationId), eq(schema.aiGeneration.status, 'pending')));
     await u.tx
       .update(weeklyReportRun)
       .set({
-        estimateImportId: snapshot.estimates.importId,
-        snapshotFileId: snapshotFile!.id,
-        snapshotSha256,
-        metrics,
+        ...snapshotFields,
         narrative: written.narrative,
         checkFlags: flags,
         aiGenerationId,
@@ -292,6 +369,7 @@ export async function runJob(ctx: AppContext, runId: string): Promise<void> {
       anchors: [{ type: 'company', id: run.companyId }],
       isAutomated: true,
     });
+    await opts.hooks.onDraftReady?.(u, { run, clientName: snapshot.company.name, status });
   });
 }
 
@@ -316,7 +394,7 @@ const hasPlaceholder = (n: WeeklyNarrative | null) => !n || SECTIONS.some((s) =>
 /** Why a report cannot be approved yet (empty when it can). Internal notices such as STATUS_MISMATCH do not block. */
 function approvalBlockers(run: Run): WeeklyFlag[] {
   const blockers = run.checkFlags.filter(isBlocking);
-  if (hasPlaceholder(run.narrative) && !blockers.some((f) => f.code === 'AI_FALLBACK'))
+  if (hasPlaceholder(run.narrative) && !blockers.some((f) => f.code === 'AI_FALLBACK' || f.code === 'PLACEHOLDER_TEXT'))
     blockers.push({ code: 'PLACEHOLDER_TEXT', statementId: null, message: 'Some text is still a placeholder' });
   return blockers;
 }
@@ -334,7 +412,8 @@ const summaryOf = (run: Run, companyName: string) => ({
   health: run.metrics?.health ?? null,
   aiFallback: run.aiFallback,
   flagCount: run.checkFlags.filter(isBlocking).length,
-  noticeCount: run.checkFlags.filter((f) => !isBlocking(f)).length,
+  warningCount: run.checkFlags.filter(isWarning).length,
+  noticeCount: run.checkFlags.filter((f) => !isBlocking(f) && !isWarning(f)).length,
   hasDraft: run.draftPptxFileId !== null,
   hasFinal: run.status === 'approved',
   approvable: APPROVABLE.includes(run.status) && approvalBlockers(run).length === 0,
@@ -425,6 +504,14 @@ export async function getWeeklyReport(ctx: AppContext, actor: UserActor, id: str
       : [],
     flags: run.checkFlags,
     blockers,
+    warnings: run.checkFlags.filter(isWarning),
+    /** Text can be edited or regenerated while the report is not approved and no run is in progress. */
+    editable: canManage && APPROVABLE.includes(run.status),
+    /** What an added sentence may cite: the facts the AI was given, with readable labels. */
+    allowedSources:
+      snapshot && run.metrics && canManage
+        ? [...allowedSourceIds(buildWeeklyFacts(snapshot, run.metrics, '').facts)].map((sid) => ({ id: sid, label: index.get(sid)?.label ?? sid }))
+        : [],
     ai: generation ?? null,
     permissions: { canManage, canApprove: canManage && APPROVABLE.includes(run.status) && blockers.length === 0 },
   };
@@ -440,23 +527,18 @@ export async function approveWeeklyReport(ctx: AppContext, actor: UserActor, id:
   if (input.rowVersion !== run.rowVersion) throw conflict('CONCURRENT_MODIFICATION', 'This report changed since you opened it');
   const blockers = approvalBlockers(run);
   if (blockers.length) throw rule('WEEKLY_REPORT_NOT_APPROVABLE', 'Fix the open points before approving this report', { flags: blockers });
+  // Warnings (for example a figure a person typed that is not in the report data) need an explicit acknowledgement.
+  const warnings = run.checkFlags.filter(isWarning);
+  if (warnings.length && input.acknowledgeWarnings !== true)
+    throw rule('WEEKLY_REPORT_NOT_APPROVABLE', 'Confirm that you checked the flagged figures before approving', {
+      flags: warnings,
+      needsAcknowledgement: true,
+    });
   const snapshot = await readSnapshot(ctx, run);
   if (!snapshot || !run.metrics || !run.narrative) throw rule('WEEKLY_REPORT_NOT_APPROVABLE', 'This report has no content to approve', { flags: [] });
-  const [org] = await ctx.db.select({ name: organizationSettings.organizationName, branding: organizationSettings.branding }).from(organizationSettings);
+  const edited = SECTIONS.some((s) => run.narrative?.[s].some((st) => st.origin === 'user'));
 
-  const rendered = await renderWeeklyPptx(
-    buildDeckModel({
-      draft: false,
-      attempt: run.attempt,
-      periodStart: run.periodStart,
-      periodEnd: run.periodEnd,
-      clientName: snapshot.company.name,
-      orgName: org?.name ?? '',
-      branding: org?.branding ?? { primaryColor: '', footerText: '' },
-      metrics: run.metrics,
-      narrative: run.narrative,
-    }),
-  );
+  const rendered = await draftDeck(run, snapshot, await orgOf(ctx), run.metrics, run.narrative, false);
   const key = storageKeys.weeklyReportFinalPptx(run.id);
   let final = rendered;
   try {
@@ -497,16 +579,16 @@ export async function approveWeeklyReport(ctx: AppContext, actor: UserActor, id:
         rowVersion: locked.rowVersion + 1,
       })
       .where(eq(weeklyReportRun.id, run.id));
-    // The human decision on the AI text (BR-AIA-007): accepted as approved, by this person.
+    // The human decision on the AI text (BR-AIA-007): accepted as written, or accepted after a person edited it.
     if (locked.aiGenerationId)
       await u.tx
         .update(schema.aiGeneration)
-        .set({ status: 'accepted', acceptedOutput: locked.narrative, decidedBy: actor.userId, decidedAt: now })
+        .set({ status: edited ? 'edited_accepted' : 'accepted', acceptedOutput: locked.narrative, decidedBy: actor.userId, decidedAt: now })
         .where(and(eq(schema.aiGeneration.id, locked.aiGenerationId), eq(schema.aiGeneration.status, 'pending')));
     await u.audit(
       'weekly_report.approved',
       { type: 'weekly_report_run', id: run.id },
-      { companyId: run.companyId, periodStart: run.periodStart, finalPptxSha256: finalSha256 },
+      { companyId: run.companyId, periodStart: run.periodStart, finalPptxSha256: finalSha256, edited, acknowledgedWarnings: warnings.map((w) => w.code) },
     );
     await u.timeline({
       eventType: 'weekly_report_approved',
@@ -515,6 +597,105 @@ export async function approveWeeklyReport(ctx: AppContext, actor: UserActor, id:
       anchors: [{ type: 'company', id: run.companyId }],
     });
     return { id: run.id, status: 'approved' as const, finalPptxSha256: finalSha256, rowVersion: locked.rowVersion + 1 };
+  });
+}
+
+const NOT_EDITABLE = (status: Run['status']) =>
+  status === 'queued' || status === 'running'
+    ? conflict('WEEKLY_REPORT_IN_PROGRESS', 'This report is being generated')
+    : rule('WEEKLY_REPORT_NOT_EDITABLE', status === 'approved' ? 'An approved report can no longer be changed' : 'This report cannot be changed');
+
+/**
+ * A person edits the report text: change sentences, add sentences (citing facts of this report) or remove them.
+ * Placeholders may be replaced, which is how a report that fell back from AI becomes approvable. The checks run
+ * again and the draft deck is re-rendered (before the transaction) with the new text.
+ */
+export async function updateNarrative(ctx: AppContext, actor: UserActor, id: string, input: z.infer<typeof weeklyNarrativeUpdateInput>) {
+  const { run } = await loadRunFor(ctx, actor, id, 'write');
+  if (!APPROVABLE.includes(run.status)) throw NOT_EDITABLE(run.status);
+  if (input.rowVersion !== run.rowVersion) throw conflict('CONCURRENT_MODIFICATION', 'This report changed since you opened it');
+  const snapshot = await readSnapshot(ctx, run);
+  if (!snapshot || !run.metrics || !run.narrative) throw rule('WEEKLY_REPORT_NOT_EDITABLE', 'This report has no text to edit');
+  const org = await orgOf(ctx);
+  const facts = buildWeeklyFacts(snapshot, run.metrics, org.name).facts;
+  const allowed = allowedSourceIds(facts);
+
+  const narrative = Object.fromEntries(SECTIONS.map((s) => [s, run.narrative![s].map((st) => ({ ...st }))])) as WeeklyNarrative;
+  const all = () => SECTIONS.flatMap((s) => narrative[s]);
+  const removed = new Set(input.removed ?? []);
+  for (const rid of removed) if (!all().some((st) => st.id === rid)) throw rule('STATEMENT_NOT_FOUND', 'A sentence to remove is no longer in this report');
+  let edited = 0;
+  for (const change of input.statements ?? []) {
+    const target = all().find((st) => st.id === change.id);
+    if (!target) throw rule('STATEMENT_NOT_FOUND', 'A sentence to change is no longer in this report');
+    const text = sanitizeText(change.text, 600);
+    if (!text) throw rule('STATEMENT_EMPTY', 'A sentence cannot be empty');
+    if (text === target.text) continue;
+    target.text = text;
+    target.origin = 'user';
+    edited++;
+  }
+  for (const s of SECTIONS) narrative[s] = narrative[s].filter((st) => !removed.has(st.id));
+  let next = Math.max(0, ...SECTIONS.flatMap((s) => run.narrative![s]).map((st) => Number(st.id.replace(/\D/g, '')) || 0));
+  for (const add of input.added ?? []) {
+    const text = sanitizeText(add.text, 600);
+    if (!text) throw rule('STATEMENT_EMPTY', 'A sentence cannot be empty');
+    const sources = [...new Set(add.sources)];
+    if (sources.some((sid) => !allowed.has(sid))) throw rule('UNKNOWN_SOURCE', 'A chosen source is not part of this report');
+    narrative[add.section].push({ id: `s${++next}`, text, sources, origin: 'user' });
+  }
+
+  const flags = composeFlags(
+    narrative,
+    facts,
+    run.metrics,
+    run.checkFlags.filter((f) => KEPT_ON_REDRAFT.includes(f.code)),
+  );
+  const status = flags.some(isBlocking) ? 'needs_attention' : 'ready';
+  const draft = await draftDeck(run, snapshot, org, run.metrics, narrative);
+  const draftKey = storageKeys.weeklyReportDraftPptx(run.id);
+  await ctx.storage.put(draftKey, draft, { contentType: PPTX_CONTENT_TYPE });
+  const draftSha256 = sha256Hex(draft);
+
+  return unitOfWork(ctx, actor, async (u) => {
+    const [locked] = await u.tx.select().from(weeklyReportRun).where(eq(weeklyReportRun.id, run.id)).for('update');
+    if (!locked || !APPROVABLE.includes(locked.status)) throw NOT_EDITABLE(locked?.status ?? 'failed');
+    if (locked.rowVersion !== input.rowVersion) throw conflict('CONCURRENT_MODIFICATION', 'This report changed since you opened it');
+    await u.tx
+      .insert(fileObject)
+      .values({ storageKey: draftKey, contentType: PPTX_CONTENT_TYPE, sizeBytes: draft.length, sha256: draftSha256, purpose: 'weekly_report_draft_pptx' })
+      .onConflictDoUpdate({ target: fileObject.storageKey, set: { sizeBytes: draft.length, sha256: draftSha256 } });
+    await u.tx
+      .update(weeklyReportRun)
+      .set({ narrative, checkFlags: flags, status, updatedAt: ctx.now(), updatedBy: actor.userId, rowVersion: locked.rowVersion + 1 })
+      .where(eq(weeklyReportRun.id, run.id));
+    await u.audit(
+      'weekly_report.edited',
+      { type: 'weekly_report_run', id: run.id },
+      { edited, added: input.added?.length ?? 0, removed: removed.size, status }, // counts only — never the text
+    );
+    return { id: run.id, status, rowVersion: locked.rowVersion + 1, flagCount: flags.filter(isBlocking).length, warningCount: flags.filter(isWarning).length };
+  });
+}
+
+/**
+ * "Regenerate": queue a redraft of the text from the stored snapshot. Everything currently written — including
+ * a person's edits — is replaced. Only for a report that is not approved and not already being generated.
+ */
+export async function regenerateNarrative(ctx: AppContext, actor: UserActor, id: string) {
+  const { run } = await loadRunFor(ctx, actor, id, 'write');
+  return unitOfWork(ctx, actor, async (u) => {
+    const [locked] = await u.tx.select().from(weeklyReportRun).where(eq(weeklyReportRun.id, run.id)).for('update');
+    if (!locked || !APPROVABLE.includes(locked.status)) throw NOT_EDITABLE(locked?.status ?? 'failed');
+    if (!locked.snapshotFileId) throw rule('WEEKLY_REPORT_NOT_EDITABLE', 'This report has no stored data to regenerate from');
+    const now = ctx.now();
+    await u.tx
+      .update(weeklyReportRun)
+      .set({ status: 'queued', updatedAt: now, updatedBy: actor.userId, rowVersion: locked.rowVersion + 1 })
+      .where(eq(weeklyReportRun.id, run.id));
+    await u.audit('weekly_report.regenerate_requested', { type: 'weekly_report_run', id: run.id });
+    await u.enqueue('weekly_report.redraft', { runId: run.id });
+    return { id: run.id, status: 'queued' as const, rowVersion: locked.rowVersion + 1 };
   });
 }
 

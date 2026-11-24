@@ -1,4 +1,4 @@
-import { estimatesUploadInput, weeklyReportApproveInput, weeklyReportListQuery } from '@crm/shared';
+import { estimatesUploadInput, weeklyNarrativeUpdateInput, weeklyReportApproveInput, weeklyReportListQuery } from '@crm/shared';
 import type { Context } from 'hono';
 import { getEstimates, importEstimatesCsv } from '../../modules/weekly-reports/estimates.ts';
 import * as weeklyReports from '../../modules/weekly-reports.ts';
@@ -34,6 +34,11 @@ export function register(api: Api, kit: RouteKit): void {
     const actor = as(c, 'weekly_report.manage');
     return c.json(await weeklyReports.approveWeeklyReport(ctx, actor, kit.id(c), await kit.body(c, weeklyReportApproveInput)));
   });
+  api.patch('/weekly-reports/:id/narrative', async (c) => {
+    const actor = as(c, 'weekly_report.manage');
+    return c.json(await weeklyReports.updateNarrative(ctx, actor, kit.id(c), await kit.body(c, weeklyNarrativeUpdateInput)));
+  });
+  api.post('/weekly-reports/:id/regenerate', async (c) => c.json(await weeklyReports.regenerateNarrative(ctx, as(c, 'weekly_report.manage'), kit.id(c))));
   api.get('/weekly-reports/:id/pptx/:kind', async (c) => {
     const actor = as(c, 'weekly_report.view');
     const kind = c.req.param('kind');

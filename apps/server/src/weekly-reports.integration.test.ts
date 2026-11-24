@@ -463,4 +463,171 @@ describe.skipIf(!testUrl)('weekly report agents (PostgreSQL integration)', () =>
       (await call('admin', 'PUT', '/api/v1/ai/settings', { ...base, features: { ...five, weekly_report: true } })).json.settings.features.weekly_report,
     ).toBe(true);
   });
+
+  // ───────────── Part 2: edit, warnings, approve with edits, repair a fallback report, regenerate ─────────────
+  const detailOf = async (who: string, id: string) => (await call(who, 'GET', `/api/v1/weekly-reports/${id}`)).json;
+  const section = (detail: any, name: string) => detail.narrative.find((s: any) => s.section === name).statements;
+
+  it('a person edits a sentence: the checks run again and the draft deck shows the new text', async () => {
+    const before = await detailOf('rep1', ids.runA2 as string);
+    expect(before.editable).toBe(true);
+    expect(before.allowedSources.map((s: any) => s.id)).toEqual(expect.arrayContaining(['metric:E-05', 'period']));
+    expect(before.allowedSources.some((s: any) => s.id.includes('E-11'))).toBe(false);
+    const first = section(before, 'summary')[0];
+    const text = 'We made steady progress with the Stark Industries team this week.';
+
+    const stale = await call('rep1', 'PATCH', `/api/v1/weekly-reports/${ids.runA2}/narrative`, { statements: [{ id: first.id, text }], rowVersion: 999 });
+    expect([stale.status, stale.json.code]).toEqual([409, 'CONCURRENT_MODIFICATION']);
+    expect((await call('rep2', 'PATCH', `/api/v1/weekly-reports/${ids.runA2}/narrative`, { statements: [{ id: first.id, text }], rowVersion: 1 })).status).toBe(
+      404,
+    );
+    expect((await call('rep1', 'PATCH', `/api/v1/weekly-reports/${ids.runA2}/narrative`, { rowVersion: before.rowVersion })).status).toBe(400);
+    const missing = await call('rep1', 'PATCH', `/api/v1/weekly-reports/${ids.runA2}/narrative`, {
+      statements: [{ id: 's999', text }],
+      rowVersion: before.rowVersion,
+    });
+    expect([missing.status, missing.json.code]).toEqual([422, 'STATEMENT_NOT_FOUND']);
+
+    const saved = await call('rep1', 'PATCH', `/api/v1/weekly-reports/${ids.runA2}/narrative`, {
+      statements: [{ id: first.id, text }],
+      rowVersion: before.rowVersion,
+    });
+    expect(saved.status).toBe(200);
+    expect(saved.json).toMatchObject({ status: 'ready', flagCount: 0, warningCount: 0, rowVersion: before.rowVersion + 1 });
+    const after = await detailOf('rep1', ids.runA2 as string);
+    expect(section(after, 'summary')[0]).toMatchObject({ id: first.id, text, origin: 'user' });
+    expect(section(after, 'summary')[1].origin).toBe('ai'); // untouched sentences stay AI text
+    const deck = await slides((await call('rep1', 'GET', `/api/v1/weekly-reports/${ids.runA2}/pptx/draft`)).bytes);
+    expect(deck.xml[1]).toContain(text);
+    expect(deck.xml[1]).not.toContain('complete by estimated hours'); // the replaced AI sentence is gone
+    const audit = await ctx.db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.action, 'weekly_report.edited'), eq(auditLog.targetId, ids.runA2 as string)));
+    expect(audit).toHaveLength(1);
+    expect(JSON.stringify(audit[0]?.changes)).not.toContain('steady progress'); // counts only, never the text
+  });
+
+  it('a figure a person typed that is not in the data is a warning: approval needs an acknowledgement', async () => {
+    const before = await detailOf('rep1', ids.runA2 as string);
+    const second = section(before, 'summary')[1];
+    const saved = await call('rep1', 'PATCH', `/api/v1/weekly-reports/${ids.runA2}/narrative`, {
+      statements: [{ id: second.id, text: 'We saved 4321 hours of manual work.' }],
+      rowVersion: before.rowVersion,
+    });
+    expect(saved.json).toMatchObject({ status: 'ready', flagCount: 0, warningCount: 1 }); // a warning does not block
+    const detail = await detailOf('rep1', ids.runA2 as string);
+    expect(detail.warnings).toEqual([expect.objectContaining({ code: 'UNVERIFIED_NUMBER', level: 'warning', statementId: second.id })]);
+    expect(detail.permissions.canApprove).toBe(true);
+
+    const refused = await call('rep1', 'POST', `/api/v1/weekly-reports/${ids.runA2}/approve`, { rowVersion: detail.rowVersion });
+    expect([refused.status, refused.json.code]).toEqual([422, 'WEEKLY_REPORT_NOT_APPROVABLE']);
+    expect(refused.json.meta).toMatchObject({ needsAcknowledgement: true });
+    const ok = await call('rep1', 'POST', `/api/v1/weekly-reports/${ids.runA2}/approve`, { rowVersion: detail.rowVersion, acknowledgeWarnings: true });
+    expect(ok.status).toBe(200);
+
+    const run = (await runsOf(ids.companyA as string)).find((r) => r.id === ids.runA2)!;
+    const [generation] = await ctx.db
+      .select()
+      .from(aiGeneration)
+      .where(eq(aiGeneration.id, run.aiGenerationId as string));
+    expect(generation).toMatchObject({ status: 'edited_accepted', decidedBy: ids.rep1 });
+    expect((generation!.acceptedOutput as any).summary.map((s: any) => s.origin)).toEqual(['user', 'user']);
+    const final = await slides((await call('rep1', 'GET', `/api/v1/weekly-reports/${ids.runA2}/pptx/final`)).bytes);
+    expect(final.xml[1]).toContain('We saved 4321 hours of manual work.');
+    expect(final.everything).not.toContain('DRAFT');
+
+    // Approved is final: no edit, no regenerate.
+    const edit = await call('rep1', 'PATCH', `/api/v1/weekly-reports/${ids.runA2}/narrative`, { removed: [second.id], rowVersion: ok.json.rowVersion });
+    expect([edit.status, edit.json.code]).toEqual([422, 'WEEKLY_REPORT_NOT_EDITABLE']);
+    const regen = await call('rep1', 'POST', `/api/v1/weekly-reports/${ids.runA2}/regenerate`);
+    expect([regen.status, regen.json.code]).toEqual([422, 'WEEKLY_REPORT_NOT_EDITABLE']);
+    expect((await detailOf('rep1', ids.runA2 as string)).editable).toBe(false);
+  });
+
+  it('a report that fell back to placeholders becomes approvable once a person writes the text', async () => {
+    const before = await detailOf('rep1', ids.runFallbackA as string);
+    expect(before).toMatchObject({ status: 'needs_attention', approvable: false, editable: true });
+    const placeholder = (name: string) => section(before, name)[0].id;
+    const badSource = await call('rep1', 'PATCH', `/api/v1/weekly-reports/${ids.runFallbackA}/narrative`, {
+      added: [{ section: 'completed', text: 'We finished the workshop.', sources: ['metric:E-11'] }],
+      rowVersion: before.rowVersion,
+    });
+    expect([badSource.status, badSource.json.code]).toEqual([422, 'UNKNOWN_SOURCE']);
+
+    // Replace two placeholders; one is still left, so the report is not approvable yet.
+    const partial = await call('rep1', 'PATCH', `/api/v1/weekly-reports/${ids.runFallbackA}/narrative`, {
+      statements: [
+        { id: placeholder('summary'), text: 'The project is progressing as planned.' },
+        { id: placeholder('completed'), text: 'We completed the requirements workshop.' },
+      ],
+      removed: [placeholder('risks')],
+      rowVersion: before.rowVersion,
+    });
+    expect(partial.json).toMatchObject({ status: 'needs_attention', flagCount: 1 });
+    const mid = await detailOf('rep1', ids.runFallbackA as string);
+    expect(mid.flags.map((f: any) => f.code)).toEqual(['PLACEHOLDER_TEXT']);
+    expect(mid.approvable).toBe(false);
+
+    const done = await call('rep1', 'PATCH', `/api/v1/weekly-reports/${ids.runFallbackA}/narrative`, {
+      removed: [placeholder('nextWeek')],
+      added: [{ section: 'nextWeek', text: 'We will continue with the solution design.', sources: ['metric:E-08'] }],
+      rowVersion: mid.rowVersion,
+    });
+    expect(done.json).toMatchObject({ status: 'ready', flagCount: 0, warningCount: 0 });
+    const after = await detailOf('rep1', ids.runFallbackA as string);
+    expect(after).toMatchObject({ status: 'ready', approvable: true, aiFallback: true, ai: null });
+    expect(section(after, 'nextWeek')).toEqual([expect.objectContaining({ text: 'We will continue with the solution design.', origin: 'user' })]);
+    expect(section(after, 'nextWeek')[0].sources[0].label).toBe('Scope items in progress: 2');
+    expect(section(after, 'risks')).toEqual([]);
+    const draft = await slides((await call('rep1', 'GET', `/api/v1/weekly-reports/${ids.runFallbackA}/pptx/draft`)).bytes);
+    expect(draft.everything).not.toContain(FALLBACK_TEXT);
+    expect(draft.xml[5]).toContain('No significant risks this week');
+
+    const ok = await call('rep1', 'POST', `/api/v1/weekly-reports/${ids.runFallbackA}/approve`, { rowVersion: after.rowVersion });
+    expect(ok.status).toBe(200);
+    expect(ok.json.status).toBe('approved');
+  });
+
+  it('"Regenerate" redrafts the text from the stored snapshot and replaces edits', async () => {
+    ai.reset();
+    expect((await call('rep2', 'POST', `/api/v1/companies/${ids.companyB}/weekly-reports`)).status).toBe(201);
+    await runDueJobs(ctx);
+    const run = (await runsOf(ids.companyB as string)).at(-1)!;
+    expect(run.status).toBe('ready');
+    const before = await detailOf('rep2', run.id);
+    const first = section(before, 'summary')[0];
+    const edited = await call('rep2', 'PATCH', `/api/v1/weekly-reports/${run.id}/narrative`, {
+      statements: [{ id: first.id, text: 'An edit that will be replaced.' }],
+      rowVersion: before.rowVersion,
+    });
+    expect(edited.status).toBe(200);
+
+    const queued = await call('rep2', 'POST', `/api/v1/weekly-reports/${run.id}/regenerate`);
+    expect(queued.status).toBe(200);
+    expect(queued.json.status).toBe('queued');
+    const again = await call('rep2', 'POST', `/api/v1/weekly-reports/${run.id}/regenerate`);
+    expect([again.status, again.json.code]).toEqual([409, 'WEEKLY_REPORT_IN_PROGRESS']);
+    const whileQueued = await call('rep2', 'PATCH', `/api/v1/weekly-reports/${run.id}/narrative`, { removed: [first.id], rowVersion: queued.json.rowVersion });
+    expect(whileQueued.status).toBe(409);
+    expect((await call('rep1', 'POST', `/api/v1/weekly-reports/${run.id}/regenerate`)).status).toBe(404);
+
+    const snapshotBefore = run.snapshotSha256;
+    await runDueJobs(ctx);
+    const after = (await runsOf(ids.companyB as string)).at(-1)!;
+    expect(after).toMatchObject({ id: run.id, status: 'ready', snapshotSha256: snapshotBefore, metrics: run.metrics }); // figures untouched
+    expect(after.narrative?.summary[0]).toMatchObject({ origin: 'ai' });
+    expect(after.narrative?.summary[0]?.text).not.toContain('An edit that will be replaced.');
+    expect(ai.calls).toHaveLength(2); // the first draft and the redraft
+    expect(after.aiGenerationId).not.toBe(run.aiGenerationId);
+    const [old] = await ctx.db
+      .select()
+      .from(aiGeneration)
+      .where(eq(aiGeneration.id, run.aiGenerationId as string));
+    const [fresh] = await ctx.db
+      .select()
+      .from(aiGeneration)
+      .where(eq(aiGeneration.id, after.aiGenerationId as string));
+    expect([old?.status, fresh?.status]).toEqual(['discarded', 'pending']);
+  });
 });

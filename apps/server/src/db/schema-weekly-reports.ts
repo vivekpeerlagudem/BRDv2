@@ -59,7 +59,8 @@ export interface WeeklyStatement {
   id: string;
   text: string;
   sources: string[];
-  origin: 'ai' | 'fallback';
+  /** ai = written by the model · fallback = placeholder · user = written or edited by a person. */
+  origin: 'ai' | 'fallback' | 'user';
 }
 export type WeeklySection = 'summary' | 'completed' | 'nextWeek' | 'risks';
 export type WeeklyNarrative = Record<WeeklySection, WeeklyStatement[]>;
@@ -67,6 +68,8 @@ export interface WeeklyFlag {
   code: string;
   statementId: string | null;
   message: string;
+  /** A warning does not block approval but must be acknowledged by the approver. Absent = blocking (or a notice). */
+  level?: 'warning';
 }
 export interface WeeklyReportSettings {
   enabled: boolean;
