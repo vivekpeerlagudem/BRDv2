@@ -241,3 +241,13 @@ export const aiSettingsInput = z.object({
   monthlyBudgetUsd: z.number().min(0).max(100000),
   features: z.object(Object.fromEntries(AI_FEATURES.map((f) => [f, z.boolean()])) as Record<AiFeatureKey, z.ZodBoolean>),
 });
+
+// ───────────────────────── Weekly Report Agents (prototype) ─────────────────────────
+/** The client's estimates (scope) sheet, uploaded as CSV text (size and row limits are enforced by the server). */
+export const estimatesUploadInput = z.object({
+  fileName: z.string().trim().min(1).max(255),
+  text: z.string().min(1).max(3_000_000),
+});
+export const WEEKLY_REPORT_STATUSES = ['queued', 'running', 'ready', 'needs_attention', 'approved', 'failed'] as const;
+export const weeklyReportListQuery = z.object({ companyId: uuid.optional(), status: z.enum(WEEKLY_REPORT_STATUSES).optional() });
+export const weeklyReportApproveInput = z.object({ rowVersion: z.number().int().min(1) });
