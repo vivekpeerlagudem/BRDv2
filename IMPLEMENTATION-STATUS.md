@@ -69,3 +69,20 @@ Mailbox and calendar integration · data import · custom fields · multiple pip
 
 ## Related records
 LOCAL-SETUP.md · REQUIREMENT-TRACEABILITY.md · ARCHITECTURE-DECISIONS.md · KNOWN-ISSUES.md
+
+## Weekly Report Agents — Part 1, prototype (2026-11-24)
+One weekly status PowerPoint per client (company), produced inside the CRM from existing CRM data plus the client's estimates (scope) sheet uploaded as CSV. A person approves, downloads the final deck and sends it. Mock AI only.
+
+| Piece | Where | Status |
+|---|---|---|
+| Estimates CSV import (all-or-nothing, header aliases, row errors) | `modules/weekly-reports/estimates.ts`, `drizzle/0007_weekly_reports.sql` | Built |
+| Orchestrator: weekly schedule (Monday 09:00, organization time zone), "Generate now", stuck-run cleanup | `modules/weekly-reports.ts`, hooked into `workflow.ts` | Built |
+| Collector (company owner's scope), Matcher (scope row to CRM task), Metrics (E-01..E-12, A-01, A-02, health, deltas) | `modules/weekly-reports/{collect,match,metrics}.ts` | Built |
+| Narrative agent (AI text with cited fact ids), Checks, regeneration (max 2), placeholder fallback | `modules/weekly-reports/{facts,narrative,checks}.ts`, prompt `weekly_report/v1` | Built — simulator only |
+| PPT builder (6 slides, draft label, final at approval) | `modules/weekly-reports/deck.ts` (pptxgenjs 4.0.1) | Built |
+| Approval, list, detail, download | `modules/weekly-reports.ts`, `http/routes/weekly-reports.ts` | Built |
+| Company page card (upload, generate, runs, approve, downloads, read-only text) | `apps/web/src/pages/weekly-reports.tsx` | Built (minimal) |
+
+Tests: 15 unit tests (period incl. a DST week, matcher, metrics), 12 unit tests (facts, checks, simulator output) and 8 integration tests (`weekly-reports.integration.test.ts`: import, schedule exactly once, exact metrics, deck contents, owner scoping, approval, regeneration, fallback).
+
+Not in Part 1: editing the report text (so a report that fell back to placeholders cannot be approved yet), a full report page, Google Sheets, email delivery, real AI provider runs, settings screen for the weekly schedule.
