@@ -1,0 +1,422 @@
+/**
+ * Weekly Report Agents — integration tests: real PostgreSQL, real HTTP routes, real authorization, the mock AI.
+ * The clock is fixed to Monday 23 Nov 2026 10:00 UTC (organization time zone UTC), so the report period is
+ * 16–22 Nov 2026 and every figure can be asserted exactly.
+ */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { and, eq } from 'drizzle-orm';
+import JSZip from 'jszip';
+import pg from 'pg';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { buildContext } from './composition.ts';
+import { parseConfig } from './config/env.ts';
+import { estimateImport, weeklyReportRun } from './db/schema-weekly-reports.ts';
+import { createApp } from './http/app.ts';
+import { bootstrap, insertUser } from './modules/identity.ts';
+import { FALLBACK_TEXT } from './modules/weekly-reports/checks.ts';
+import { runDueJobs, runScheduledScans } from './modules/workflow.ts';
+import { storageKeys } from './platform/adapters.ts';
+import { schema, sha256Hex } from './platform/core.ts';
+import { MockAiProvider } from './platform/mock-ai.ts';
+import { AiProviderError } from './platform/ports.ts';
+import { testDbMigratorUrl, testDbUrl } from './test-db.ts';
+
+try {
+  process.loadEnvFile(fileURLToPath(new URL('../../../.env.local', import.meta.url)));
+} catch {}
+const testUrl = testDbUrl();
+const PASSWORD = 'Correct-Horse-Battery-9';
+const ORIGIN = 'http://localhost:5173';
+const SAMPLE_CSV = readFileSync(fileURLToPath(new URL('../../../e2e/fixtures/estimates-sample.csv', import.meta.url)), 'utf8');
+const NOW = new Date('2026-11-23T10:00:00.000Z');
+
+describe.skipIf(!testUrl)('weekly report agents (PostgreSQL integration)', () => {
+  const config = parseConfig({
+    ...process.env,
+    NODE_ENV: 'test',
+    LOG_LEVEL: 'silent',
+    DATABASE_URL: testUrl,
+    APP_ORIGIN: ORIGIN,
+    BUYER_ORIGIN: 'http://proposals.localhost:5173',
+    STORAGE_DIR: './.data/test-storage',
+    AI_PROVIDER: 'fake',
+  });
+  const ai = new MockAiProvider();
+  const { ctx, pool, auth } = buildContext(config, { now: () => NOW, ai });
+  const app = createApp(ctx, auth);
+  const { task, aiGeneration, auditLog, timelineEvent } = schema;
+  const cookies: Record<string, string> = {};
+  const ids: Record<string, string> = {};
+
+  async function call(who: string | null, method: string, path: string, body?: unknown) {
+    const headers: Record<string, string> = { origin: ORIGIN, 'content-type': 'application/json' };
+    if (who && cookies[who]) headers.cookie = cookies[who] as string;
+    const res = await app.request(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    let json: any = null;
+    try {
+      json = JSON.parse(new TextDecoder().decode(bytes));
+    } catch {}
+    return { status: res.status, json, bytes, res };
+  }
+  /** Text of every slide (and chart) in a deck, by file name. */
+  async function slides(bytes: Uint8Array) {
+    const zip = await JSZip.loadAsync(bytes);
+    const names = Object.keys(zip.files)
+      .filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n))
+      .sort((a, b) => Number(/\d+/.exec(a)?.[0]) - Number(/\d+/.exec(b)?.[0]));
+    const xml = await Promise.all(names.map((n) => (zip.file(n) as JSZip.JSZipObject).async('string')));
+    const everything = (
+      await Promise.all(
+        Object.keys(zip.files)
+          .filter((n) => /\.(xml|rels)$/.test(n))
+          .map((n) => (zip.file(n) as JSZip.JSZipObject).async('string')),
+      )
+    ).join('\n');
+    return { xml, everything };
+  }
+  const runsOf = (companyId: string) => ctx.db.select().from(weeklyReportRun).where(eq(weeklyReportRun.companyId, companyId)).orderBy(weeklyReportRun.attempt);
+  const metric = (run: { metrics: { metrics: { id: string; value: string | null }[] } | null }, id: string) =>
+    run.metrics?.metrics.find((m) => m.id === id)?.value;
+  /** A schema-valid AI answer whose statements cite nothing: it fails the NO_SOURCE check. */
+  const unsourced = { text: JSON.stringify({ summary: [{ text: 'We made good progress this week.', sources: [] }], completed: [], nextWeek: [], risks: [] }) };
+
+  beforeAll(async () => {
+    const admin = new pg.Client({ connectionString: testDbMigratorUrl() });
+    await admin.connect();
+    const tables = await admin.query<{ tablename: string }>("select tablename from pg_tables where schemaname='public' and tablename <> 'schema_migration'");
+    await admin.query(`truncate ${tables.rows.map((t) => `"${t.tablename}"`).join(',')} restart identity cascade`);
+    await admin.end();
+    const b = await bootstrap(ctx, {
+      organizationName: 'Kensium Test',
+      currency: 'USD',
+      timeZone: 'UTC',
+      admin: { email: 'admin@test.example', fullName: 'Ada Admin', role: 'admin', password: PASSWORD },
+    });
+    ids.admin = b.adminId;
+    await ctx.db.transaction(async (tx) => {
+      ids.rep1 = await insertUser(tx, { email: 'rep1@test.example', fullName: 'Rae Rep', role: 'salesperson', password: PASSWORD }, null);
+      ids.rep2 = await insertUser(tx, { email: 'rep2@test.example', fullName: 'Sam Second', role: 'salesperson', password: PASSWORD }, null);
+    });
+    for (const k of ['admin', 'rep1', 'rep2']) {
+      const r = await call(null, 'POST', '/auth/sign-in/email', { email: `${k}@test.example`, password: PASSWORD });
+      expect(r.status).toBe(200);
+      cookies[k] = (r.res.headers.getSetCookie?.() ?? []).map((c) => c.split(';')[0]).join('; ');
+    }
+    const a = await call('rep1', 'POST', '/api/v1/companies', { name: 'Stark Industries', domain: 'stark.example' });
+    const c = await call('rep2', 'POST', '/api/v1/companies', { name: 'Wakanda Design Group', domain: 'wakanda.example' });
+    expect([a.status, c.status]).toEqual([201, 201]);
+    ids.companyA = a.json.id;
+    ids.companyB = c.json.id;
+  });
+  afterAll(async () => {
+    await pool.end();
+  });
+
+  it('imports the estimates sheet, and rejects a bad sheet with row errors and no partial import', async () => {
+    const bad = await call('rep1', 'POST', `/api/v1/companies/${ids.companyA}/estimates`, {
+      fileName: 'bad.csv',
+      text: 'Scope ID,Task,Estimate hours,Status,% Done\nS-1,Workshop,sixteen,Done,100\nS-2,,8,Started,140\nS-3,Design,12,In progress,50\n',
+    });
+    expect(bad.status).toBe(422);
+    expect(bad.json.code).toBe('ESTIMATES_INVALID');
+    expect(bad.json.meta.errorCount).toBe(4);
+    expect(bad.json.meta.errors).toEqual([
+      { row: 2, column: 'Estimate hours', message: 'Must be a number of hours, 0 or more' },
+      { row: 3, column: 'Task', message: 'Task is required' },
+      { row: 3, column: 'Status', message: 'Use Not started, In progress or Done' },
+      { row: 3, column: '% Done', message: 'Must be a number from 0 to 100' },
+    ]);
+    const noColumn = await call('rep1', 'POST', `/api/v1/companies/${ids.companyA}/estimates`, { fileName: 'x.csv', text: 'Task,Phase\nWorkshop,Discovery\n' });
+    expect(noColumn.status).toBe(422);
+    expect(noColumn.json.meta.missingColumns).toEqual(['Estimate hours']);
+    expect(await ctx.db.select().from(estimateImport)).toHaveLength(0); // nothing was imported
+
+    const ok = await call('rep1', 'POST', `/api/v1/companies/${ids.companyA}/estimates`, { fileName: 'estimates-sample.csv', text: SAMPLE_CSV });
+    expect(ok.status).toBe(201);
+    expect(ok.json).toMatchObject({ items: 8, estimateHours: '220' });
+    const got = await call('rep1', 'GET', `/api/v1/companies/${ids.companyA}/estimates`);
+    expect(got.json.import).toMatchObject({ fileName: 'estimates-sample.csv', rowCount: 8, importedByName: 'Rae Rep' });
+    expect(got.json.totals).toEqual({ items: 8, estimateHours: '220' });
+    expect(got.json.items[0]).toMatchObject({
+      rowNo: 2,
+      scopeId: 'S-001',
+      phase: 'Discovery',
+      estimateHours: '16.00',
+      sheetStatus: 'done',
+      actualHours: '16.50',
+    });
+    expect(got.json.items[6]).toMatchObject({ scopeId: 'S-007', sheetStatus: null, pctDone: null });
+    // Aliases: "Deliverable", "Effort", "Progress"; statuses "WIP" and "Completed".
+    const alias = await call('rep1', 'POST', `/api/v1/companies/${ids.companyA}/estimates`, {
+      fileName: 'alias.csv',
+      text: 'ID,Deliverable,Module,Effort,Status,Progress\nA-1,First thing,Core,"1,250.5",WIP,40%\nA-2,Second thing,Core,8,Completed,\n',
+    });
+    expect(alias.status).toBe(201);
+    expect(alias.json).toMatchObject({ items: 2, estimateHours: '1258.5' });
+    // The latest import is the one in use: put the sample sheet back.
+    expect((await call('rep1', 'POST', `/api/v1/companies/${ids.companyA}/estimates`, { fileName: 'estimates-sample.csv', text: SAMPLE_CSV })).status).toBe(
+      201,
+    );
+    const [tl] = await ctx.db.select().from(timelineEvent).where(eq(timelineEvent.eventType, 'estimates_imported')).limit(1);
+    expect(tl?.summary).toBe('Estimates sheet imported: 8 scope items, 220 h');
+
+    // Another salesperson cannot see or change this company's estimates.
+    expect((await call('rep2', 'POST', `/api/v1/companies/${ids.companyA}/estimates`, { fileName: 'x.csv', text: SAMPLE_CSV })).status).toBe(404);
+    expect((await call('rep2', 'GET', `/api/v1/companies/${ids.companyA}/estimates`)).status).toBe(404);
+    expect((await call(null, 'GET', `/api/v1/companies/${ids.companyA}/estimates`)).status).toBe(401);
+  });
+
+  it('the weekly schedule queues one run per company with estimates, exactly once', async () => {
+    // CRM work for the week: S-001 finished on Wednesday, S-002 still open, one client meeting.
+    const t1 = await call('rep1', 'POST', '/api/v1/tasks', {
+      title: '[S-001] Run the requirements workshop',
+      relatedType: 'company',
+      relatedId: ids.companyA,
+      dueAt: '2026-11-18T12:00:00Z',
+    });
+    const t2 = await call('rep1', 'POST', '/api/v1/tasks', {
+      title: '[S-002] Write the solution design',
+      relatedType: 'company',
+      relatedId: ids.companyA,
+      dueAt: '2026-11-25T12:00:00Z',
+    });
+    expect([t1.status, t2.status]).toEqual([201, 201]);
+    expect((await call('rep1', 'POST', `/api/v1/tasks/${t1.json.id}/complete`)).status).toBe(200);
+    await ctx.db
+      .update(task)
+      .set({ completedAt: new Date('2026-11-18T10:00:00Z') })
+      .where(eq(task.id, t1.json.id));
+    const meeting = await call('rep1', 'POST', '/api/v1/activities', {
+      kind: 'meeting',
+      occurredAt: '2026-11-19T15:00:00Z',
+      outcome: 'Agreed the design approach',
+      relatedType: 'company',
+      relatedId: ids.companyA,
+    });
+    expect(meeting.status).toBe(201);
+
+    const first = await runScheduledScans(ctx);
+    expect(first.weeklyReports).toBe(1); // company B has no estimates sheet yet
+    const second = await runScheduledScans(ctx);
+    expect(second.weeklyReports).toBe(0);
+    const runs = await runsOf(ids.companyA as string);
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({
+      status: 'queued',
+      trigger: 'schedule',
+      attempt: 1,
+      periodStart: '2026-11-16',
+      periodEnd: '2026-11-22',
+      timeZone: 'UTC',
+      runAsUserId: ids.rep1,
+    });
+    expect(await runsOf(ids.companyB as string)).toHaveLength(0);
+    ids.runA = runs[0]!.id;
+  });
+
+  it('the run collects, matches, computes exact metrics, writes checked text and stores a draft deck', async () => {
+    ai.reset();
+    await runDueJobs(ctx);
+    const [run] = await runsOf(ids.companyA as string);
+    expect(run).toMatchObject({ status: 'ready', aiFallback: false, checkFlags: [], failureReason: null });
+    const expected = { 'E-01': '8', 'E-02': '220', 'E-03': '1', 'E-04': '16', 'E-05': '7.3', 'E-06': '1', 'E-07': '204', 'E-08': '2' };
+    for (const [id, value] of Object.entries(expected)) expect(metric(run!, id), id).toBe(value);
+    expect(metric(run!, 'E-09')).toBe('3.1');
+    expect(metric(run!, 'E-10')).toBe('0');
+    expect(metric(run!, 'A-01')).toBe('1');
+    expect(metric(run!, 'A-02')).toBe('1');
+    expect(metric(run!, 'E-11')).toBe('6');
+    expect(run!.metrics?.health).toEqual({ level: 'green', reasons: [] });
+    expect(ai.calls).toHaveLength(1); // no regeneration needed
+    expect(ai.calls[0]?.feature).toBe('weekly_report');
+    expect(ai.calls[0]?.user).not.toMatch(/E-11|E-12|mismatch|unmatched/i); // internal figures never reach the model
+
+    // Snapshot: stored write-once, fingerprint recorded.
+    const snapshot = await ctx.storage.get(storageKeys.weeklyReportSnapshot(run!.id));
+    expect(sha256Hex(snapshot)).toBe(run!.snapshotSha256);
+    const frozen = JSON.parse(new TextDecoder().decode(snapshot));
+    expect(frozen.company).toEqual({ id: ids.companyA, name: 'Stark Industries', ownerName: 'Rae Rep' });
+    expect(frozen.tasks).toHaveLength(2);
+    expect(frozen.activities).toHaveLength(1);
+    expect(frozen.estimates.items).toHaveLength(8);
+
+    // Detail: statements with their sources resolved to labels; the AI text awaits a person.
+    const detail = await call('rep1', 'GET', `/api/v1/weekly-reports/${run!.id}`);
+    expect(detail.status).toBe(200);
+    expect(detail.json).toMatchObject({ status: 'ready', periodLabel: '16–22 Nov 2026', companyName: 'Stark Industries', flagCount: 0, approvable: true });
+    expect(detail.json.permissions).toEqual({ canManage: true, canApprove: true });
+    expect(detail.json.ai).toMatchObject({ provider: 'fake', simulated: true, promptVersion: 'weekly_report/v1', status: 'pending' });
+    const summary = detail.json.narrative.find((s: any) => s.section === 'summary');
+    expect(summary.statements[0].text).toBe(
+      'This week we completed 1 scope item for Stark Industries, and the project is now 7.3% complete by estimated hours.',
+    );
+    expect(summary.statements[0].sources.map((s: any) => s.label)).toEqual(['Scope items completed this week: 1', 'Complete by estimate: 7.3']);
+    const completed = detail.json.narrative.find((s: any) => s.section === 'completed');
+    expect(completed.statements.map((s: any) => s.text)).toEqual(['We completed Requirements workshop and sign-off.']);
+    expect(completed.statements[0].sources[0].label).toBe('S-001 · Requirements workshop and sign-off');
+
+    // Draft deck: 6 slides, the client on slide 1, marked DRAFT, no source ids or internal words anywhere.
+    const draft = await call('rep1', 'GET', `/api/v1/weekly-reports/${run!.id}/pptx/draft`);
+    expect(draft.status).toBe(200);
+    expect(draft.res.headers.get('content-type')).toContain('presentationml.presentation');
+    expect(draft.res.headers.get('content-disposition')).toContain('Stark_Industries_Weekly_Status_2026-11-22_v1_DRAFT.pptx');
+    expect(new TextDecoder().decode(draft.bytes.subarray(0, 2))).toBe('PK');
+    const deck = await slides(draft.bytes);
+    expect(deck.xml).toHaveLength(6);
+    expect(deck.xml[0]).toContain('Stark Industries');
+    expect(deck.xml[0]).toContain('16–22 Nov 2026');
+    for (const slide of deck.xml) expect(slide).toContain('DRAFT');
+    expect(deck.xml[1]).toContain('7.3%');
+    expect(deck.xml[1]).toContain('On track');
+    expect(deck.xml[3]).toContain('We completed Requirements workshop and sign-off.');
+    expect(deck.xml[5]).toContain('No significant risks this week');
+    for (const word of ['scope:', 'task:', 'metric:', 'activity:', 'mismatch', 'unmatched', 'E-11']) expect(deck.everything).not.toContain(word);
+    expect((await call('rep1', 'GET', `/api/v1/weekly-reports/${run!.id}/pptx/final`)).status).toBe(404); // not approved yet
+  });
+
+  it('scopes reports to the company owner: another salesperson gets 404, the admin sees everything', async () => {
+    expect((await call('rep1', 'GET', '/api/v1/weekly-reports')).json.items.map((r: any) => r.id)).toEqual([ids.runA]);
+    expect((await call('rep2', 'GET', '/api/v1/weekly-reports')).json.items).toEqual([]);
+    expect((await call('admin', 'GET', `/api/v1/weekly-reports?companyId=${ids.companyA}&status=ready`)).json.items).toHaveLength(1);
+    expect((await call('admin', 'GET', '/api/v1/weekly-reports?status=approved')).json.items).toEqual([]);
+    expect((await call('rep2', 'GET', `/api/v1/weekly-reports/${ids.runA}`)).status).toBe(404);
+    expect((await call('rep2', 'GET', `/api/v1/weekly-reports/${ids.runA}/pptx/draft`)).status).toBe(404);
+    expect((await call('rep2', 'POST', `/api/v1/weekly-reports/${ids.runA}/approve`, { rowVersion: 1 })).status).toBe(404);
+    expect((await call('rep2', 'POST', `/api/v1/companies/${ids.companyA}/weekly-reports`)).status).toBe(404);
+    expect((await call(null, 'GET', `/api/v1/weekly-reports/${ids.runA}`)).status).toBe(401);
+    expect((await call('rep1', 'GET', `/api/v1/weekly-reports/${ids.runA}/pptx/other`)).status).toBe(404);
+  });
+
+  it('approval renders the final deck, records its fingerprint and accepts the AI text', async () => {
+    const before = (await call('rep1', 'GET', `/api/v1/weekly-reports/${ids.runA}`)).json;
+    const stale = await call('rep1', 'POST', `/api/v1/weekly-reports/${ids.runA}/approve`, { rowVersion: before.rowVersion + 5 });
+    expect(stale.status).toBe(409);
+    expect(stale.json.code).toBe('CONCURRENT_MODIFICATION');
+    const ok = await call('rep1', 'POST', `/api/v1/weekly-reports/${ids.runA}/approve`, { rowVersion: before.rowVersion });
+    expect(ok.status).toBe(200);
+    expect(ok.json.status).toBe('approved');
+
+    const [run] = await runsOf(ids.companyA as string);
+    expect(run).toMatchObject({ status: 'approved', approvedBy: ids.rep1, finalPptxSha256: ok.json.finalPptxSha256 });
+    expect(run!.approvedAt?.toISOString()).toBe(NOW.toISOString());
+    const final = await call('rep1', 'GET', `/api/v1/weekly-reports/${ids.runA}/pptx/final`);
+    expect(final.status).toBe(200);
+    expect(sha256Hex(final.bytes)).toBe(run!.finalPptxSha256);
+    expect(final.res.headers.get('content-disposition')).toContain('Stark_Industries_Weekly_Status_2026-11-22_v1.pptx');
+    const deck = await slides(final.bytes);
+    expect(deck.xml).toHaveLength(6);
+    expect(deck.everything).not.toContain('DRAFT');
+
+    const [generation] = await ctx.db
+      .select()
+      .from(aiGeneration)
+      .where(eq(aiGeneration.id, run!.aiGenerationId as string));
+    expect(generation).toMatchObject({ feature: 'weekly_report', status: 'accepted', decidedBy: ids.rep1, requestedBy: ids.rep1, dealId: null });
+    expect((generation!.acceptedOutput as any).summary[0].text).toContain('7.3% complete');
+    expect(generation!.target).toEqual({ weeklyReportRunId: ids.runA, companyId: ids.companyA });
+    const audit = await ctx.db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.action, 'weekly_report.approved'), eq(auditLog.targetId, ids.runA as string)));
+    expect(audit).toHaveLength(1);
+    expect(audit[0]?.actorUserId).toBe(ids.rep1);
+
+    // Approved is final: no second approval, and the scheduler does not create another run for the week.
+    const again = await call('rep1', 'POST', `/api/v1/weekly-reports/${ids.runA}/approve`, { rowVersion: ok.json.rowVersion });
+    expect(again.status).toBe(409);
+    expect((await runScheduledScans(ctx)).weeklyReports).toBe(0);
+    expect((await call('rep1', 'GET', `/api/v1/weekly-reports/${ids.runA}`)).json.permissions.canApprove).toBe(false);
+  });
+
+  it('"Generate now": needs estimates, refuses a second run while one is queued, and regenerates text that fails the checks', async () => {
+    const none = await call('rep2', 'POST', `/api/v1/companies/${ids.companyB}/weekly-reports`);
+    expect(none.status).toBe(422);
+    expect(none.json.code).toBe('NO_ESTIMATES');
+    expect((await call('rep2', 'POST', `/api/v1/companies/${ids.companyB}/estimates`, { fileName: 'estimates-sample.csv', text: SAMPLE_CSV })).status).toBe(
+      201,
+    );
+
+    ai.reset();
+    ai.enqueue(unsourced); // first draft fails NO_SOURCE; the second (built-in answer) passes
+    const queued = await call('rep2', 'POST', `/api/v1/companies/${ids.companyB}/weekly-reports`);
+    expect(queued.status).toBe(201);
+    expect(queued.json).toMatchObject({ attempt: 1, status: 'queued', periodStart: '2026-11-16', periodEnd: '2026-11-22' });
+    const busy = await call('rep2', 'POST', `/api/v1/companies/${ids.companyB}/weekly-reports`);
+    expect(busy.status).toBe(409);
+    expect(busy.json.code).toBe('WEEKLY_REPORT_IN_PROGRESS');
+
+    await runDueJobs(ctx);
+    const [run] = await runsOf(ids.companyB as string);
+    expect(run).toMatchObject({ status: 'ready', trigger: 'manual', aiFallback: false, checkFlags: [], runAsUserId: ids.rep2, createdBy: ids.rep2 });
+    expect(ai.calls).toHaveLength(2); // exactly one regeneration
+    expect(ai.calls[0]?.user).not.toContain('"feedback"');
+    expect(ai.calls[1]?.user).toContain('NO_SOURCE');
+    // No CRM tasks for this company: the sheet alone decides, and nothing counts as "done this week" on a first report.
+    expect(metric(run!, 'E-03')).toBe('1');
+    expect(metric(run!, 'E-06')).toBe('0');
+    expect(run!.metrics?.health).toEqual({ level: 'amber', reasons: ['NO_ITEMS_DONE_THIS_WEEK'] });
+  });
+
+  it('falls back to placeholders when the AI text keeps failing, and such a report cannot be approved', async () => {
+    ai.reset();
+    ai.enqueue(unsourced, unsourced, unsourced); // draft + 2 regenerations all fail the checks
+    const queued = await call('rep2', 'POST', `/api/v1/companies/${ids.companyB}/weekly-reports`);
+    expect(queued.json.attempt).toBe(2);
+    await runDueJobs(ctx);
+    const runs = await runsOf(ids.companyB as string);
+    const run = runs[1]!;
+    expect(ai.calls).toHaveLength(3);
+    expect(run).toMatchObject({ status: 'needs_attention', aiFallback: true, aiGenerationId: null });
+    expect(run.checkFlags.map((f) => f.code)).toEqual(['AI_FALLBACK']);
+    for (const section of ['summary', 'completed', 'nextWeek', 'risks'] as const)
+      expect(run.narrative?.[section]).toEqual([expect.objectContaining({ text: FALLBACK_TEXT, origin: 'fallback', sources: [] })]);
+    expect(metric(run, 'E-01')).toBe('8'); // the figures are still computed: only the text is missing
+
+    const detail = (await call('rep2', 'GET', `/api/v1/weekly-reports/${run.id}`)).json;
+    expect(detail).toMatchObject({ status: 'needs_attention', aiFallback: true, approvable: false, flagCount: 1, ai: null });
+    expect(detail.permissions.canApprove).toBe(false);
+    const blocked = await call('rep2', 'POST', `/api/v1/weekly-reports/${run.id}/approve`, { rowVersion: detail.rowVersion });
+    expect(blocked.status).toBe(422);
+    expect(blocked.json.code).toBe('WEEKLY_REPORT_NOT_APPROVABLE');
+    expect(blocked.json.meta.flags.map((f: any) => f.code)).toEqual(['AI_FALLBACK']);
+    const draft = await call('rep2', 'GET', `/api/v1/weekly-reports/${run.id}/pptx/draft`);
+    expect((await slides(draft.bytes)).xml[1]).toContain(FALLBACK_TEXT);
+
+    // A provider failure also ends in placeholders — the run itself never fails because of AI.
+    ai.reset();
+    ai.enqueue(new AiProviderError('auth', 'bad key'));
+    expect((await call('rep2', 'POST', `/api/v1/companies/${ids.companyB}/weekly-reports`)).json.attempt).toBe(3);
+    await runDueJobs(ctx);
+    const third = (await runsOf(ids.companyB as string))[2]!;
+    expect(third).toMatchObject({ status: 'needs_attention', aiFallback: true, failureReason: null });
+    expect(third.checkFlags[0]?.message).toContain('AI_PROVIDER_UNAVAILABLE');
+  });
+
+  it('a run whose owner is no longer active fails with a reason instead of crashing', async () => {
+    await ctx.db
+      .update(schema.appUserProfile)
+      .set({ status: 'deactivated' })
+      .where(eq(schema.appUserProfile.userId, ids.rep2 as string));
+    const [row] = await ctx.db
+      .insert(weeklyReportRun)
+      .values({
+        companyId: ids.companyB as string,
+        runAsUserId: ids.rep2 as string,
+        periodStart: '2026-11-09',
+        periodEnd: '2026-11-15',
+        timeZone: 'UTC',
+        trigger: 'manual',
+      })
+      .returning();
+    await ctx.db.insert(schema.jobOutbox).values({ queue: 'weekly_report.run', payload: { runId: row!.id }, runAfter: NOW });
+    await runDueJobs(ctx);
+    const [after] = await ctx.db.select().from(weeklyReportRun).where(eq(weeklyReportRun.id, row!.id));
+    expect(after).toMatchObject({ status: 'failed', failureReason: 'RUN_AS_USER_INACTIVE' });
+    await ctx.db
+      .update(schema.appUserProfile)
+      .set({ status: 'active' })
+      .where(eq(schema.appUserProfile.userId, ids.rep2 as string));
+  });
+});

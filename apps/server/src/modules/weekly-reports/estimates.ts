@@ -29,6 +29,10 @@ const { company, appUserProfile } = schema;
 export async function loadCompanyFor(db: DbOrTx, actor: UserActor, companyId: string, access: 'read' | 'write') {
   const [row] = await db.select().from(company).where(eq(company.id, companyId));
   if (!row || !canAccessOwner(actor, row.ownerId, 'read', 'companies')) throw notFound('Company');
+  // Weekly report data follows the weekly_report scope (own / team / all): seeing a company through
+  // cross-visibility does not open its estimates or reports.
+  if (!canAccessOwner(actor, row.ownerId, 'read', 'companies', 'weekly_report.view'))
+    throw forbidden('VIEW_ONLY', 'You can view this company but not its weekly reports');
   if (access === 'write' && !canAccessOwner(actor, row.ownerId, 'write', 'companies'))
     throw forbidden('VIEW_ONLY', 'You can view this company but not change it');
   return row;

@@ -28,6 +28,7 @@ import { register as registerAdminRoutes } from './routes/admin.ts';
 import { register as registerImportRoutes } from './routes/imports.ts';
 import { register as registerProposalExtRoutes } from './routes/proposals-ext.ts';
 import { register as registerReportRoutes } from './routes/reports.ts';
+import { register as registerWeeklyReportRoutes } from './routes/weekly-reports.ts';
 
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9._-]{8,128}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -316,7 +317,8 @@ export function createApp(ctx: AppContext, auth: identity.Auth): Hono<Env> {
   api.get('/reports/dashboard', async (c) => c.json(await reporting.dashboard(ctx, A(c), Math.min(Math.max(Number(c.req.query('days') ?? 90) || 90, 1), 730))));
   // Feature route files (http/routes/*): each adds its own endpoints with the shared kit.
   const kit: RouteKit = { ctx, actor: A, body, query: (c, schema) => parse(schema, c.req.query()), id, file };
-  for (const register of [registerAdminRoutes, registerReportRoutes, registerImportRoutes, registerProposalExtRoutes]) register(api, kit);
+  for (const register of [registerAdminRoutes, registerReportRoutes, registerImportRoutes, registerProposalExtRoutes, registerWeeklyReportRoutes])
+    register(api, kit);
   app.route('/api/v1', api);
 
   // ───────────── /public/v1 — buyers and lead forms (no internal account) ─────────────
