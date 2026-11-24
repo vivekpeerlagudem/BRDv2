@@ -139,3 +139,22 @@ rebuilds the web app.
 The `worker` script still works where the API and worker can share storage: run the same image twice with
 start commands `pnpm --filter @crm/server serve` and `pnpm --filter @crm/server worker`, and leave
 `RUN_JOBS_IN_PROCESS` unset.
+
+## Estimates from Google Sheets (optional)
+
+Weekly reports read a client's estimates (scope) sheet. By default the sheet is uploaded as a CSV file on the company
+page. Optionally the CRM can read a linked Google Sheet instead — **read-only**; the CRM never writes to Google.
+
+1. In Google Cloud, create a **service account** and download its JSON key. Enable the **Google Sheets API** for
+   that project.
+2. On the API service set:
+   - `ESTIMATES_SOURCE=google`
+   - `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64` = the JSON key file, base64-encoded (a secret — never commit it).
+     The server refuses to start with `ESTIMATES_SOURCE=google` and no key.
+3. **Share each client's sheet with the service-account email** (`…@….iam.gserviceaccount.com`) as a **Viewer**.
+   A sheet that is not shared gives the error "The sheet is not shared with …".
+4. In the CRM: company page → **Weekly reports** → paste the sheet link → **Link Google Sheet** → **Sync now**.
+   The sheet needs the same columns as the CSV (Task and Estimate hours required). Default range `A1:Z2000`.
+
+Before each weekly run the linked sheet is read again. If it cannot be read, the report uses the latest imported
+estimates and shows a warning the approver must acknowledge.

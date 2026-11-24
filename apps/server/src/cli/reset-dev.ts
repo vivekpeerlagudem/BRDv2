@@ -39,6 +39,7 @@ const BUSINESS_TABLES = [
   'automation_execution',
   'buyer_response',
   'buyer_session',
+  'client_estimate_source',
   'company',
   'contact',
   'deal',

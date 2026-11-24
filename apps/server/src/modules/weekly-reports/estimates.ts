@@ -3,12 +3,13 @@
  * An import is all-or-nothing: one invalid row rejects the whole file with the row errors, so a report is never
  * computed from half a sheet. Each import is kept; reports always use the latest one.
  */
-import type { estimatesUploadInput } from '@crm/shared';
+import type { estimateSourceLinkInput, estimatesUploadInput } from '@crm/shared';
 import { Decimal } from 'decimal.js';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import type { z } from 'zod';
-import { estimateImport, estimateItem, type SheetStatus } from '../../db/schema-weekly-reports.ts';
+import { clientEstimateSource, estimateImport, estimateItem, type SheetStatus } from '../../db/schema-weekly-reports.ts';
 import {
+  type Actor,
   type AppContext,
   canAccessOwner,
   type DbOrTx,
@@ -20,6 +21,7 @@ import {
   type UserActor,
   unitOfWork,
 } from '../../platform/core.ts';
+import { parseSpreadsheetId } from '../../platform/google-sheets.ts';
 import { CsvError, parseCsv } from '../imports/csv.ts';
 import { IMPORT_LIMITS } from '../imports.ts';
 
@@ -139,8 +141,26 @@ export async function importEstimatesCsv(ctx: AppContext, actor: UserActor, comp
         : rule('IMPORT_FILE_INVALID', `The file is not valid CSV. ${error.message}`);
     throw error;
   }
-  if (records.length < 2) throw rule('IMPORT_NO_ROWS', 'The file needs a header row and at least one scope item');
-  const parsed = parseEstimateRecords(records);
+  return importEstimateRecords(ctx, actor, companyId, records, { source: 'csv', fileName: input.fileName, importedBy: actor.userId });
+}
+
+/**
+ * The one validation and import path for an estimates sheet, whatever it came from (CSV upload or Google Sheets):
+ * required columns, row checks, all-or-nothing, then one transaction that stores the import and its rows.
+ */
+export async function importEstimateRecords(
+  ctx: AppContext,
+  actor: Actor,
+  companyId: string,
+  records: string[][],
+  origin: { source: 'csv' | 'google'; fileName: string; importedBy: string },
+) {
+  if (records.length > IMPORT_LIMITS.maxRows + 1)
+    throw rule('IMPORT_TOO_MANY_ROWS', `The sheet has more than ${IMPORT_LIMITS.maxRows} data rows. Split it into smaller sheets.`);
+  // Rows that are completely empty (common at the end of a spreadsheet range) are ignored, like blank CSV lines.
+  const filled = records.filter((r, i) => i === 0 || r.some((cell) => cell.trim() !== ''));
+  if (filled.length < 2) throw rule('IMPORT_NO_ROWS', 'The sheet needs a header row and at least one scope item');
+  const parsed = parseEstimateRecords(filled);
   if (parsed.missing.length)
     throw rule('ESTIMATES_INVALID', `The sheet is missing required columns: ${parsed.missing.join(', ')}`, {
       missingColumns: parsed.missing,
@@ -157,24 +177,107 @@ export async function importEstimatesCsv(ctx: AppContext, actor: UserActor, comp
   return unitOfWork(ctx, actor, async (u) => {
     const [imp] = await u.tx
       .insert(estimateImport)
-      .values({ companyId, source: 'csv', fileName: input.fileName, rowCount: parsed.rows.length, importedBy: actor.userId, importedAt: ctx.now() })
+      .values({
+        companyId,
+        source: origin.source,
+        fileName: origin.fileName,
+        rowCount: parsed.rows.length,
+        importedBy: origin.importedBy,
+        importedAt: ctx.now(),
+      })
       .returning();
     for (let i = 0; i < parsed.rows.length; i += 500)
       await u.tx.insert(estimateItem).values(parsed.rows.slice(i, i + 500).map((r) => ({ ...r, importId: imp!.id, companyId })));
-    await u.audit('estimates.imported', { type: 'company', id: companyId }, { importId: imp!.id, items: parsed.rows.length, estimateHours: total });
+    await u.audit(
+      'estimates.imported',
+      { type: 'company', id: companyId },
+      { importId: imp!.id, source: origin.source, items: parsed.rows.length, estimateHours: total },
+    );
     await u.timeline({
       eventType: 'estimates_imported',
       source: { type: 'estimate_import', id: imp!.id },
-      summary: `Estimates sheet imported: ${parsed.rows.length} scope items, ${total} h`,
+      summary: `Estimates sheet imported${origin.source === 'google' ? ' from Google Sheets' : ''}: ${parsed.rows.length} scope items, ${total} h`,
       anchors: [{ type: 'company', id: companyId }],
+      ...(actor.type === 'system' ? { isAutomated: true } : {}),
     });
     return { importId: imp!.id, items: parsed.rows.length, estimateHours: total };
   });
 }
 
+// ───────────── Google Sheets link (read-only source; active only when ESTIMATES_SOURCE=google) ─────────────
+export const googleEstimatesActive = (ctx: AppContext) => ctx.config.ESTIMATES_SOURCE === 'google';
+const sheetName = (spreadsheetId: string) => `Google Sheet ${spreadsheetId.slice(0, 8)}…`;
+
+export async function linkedSheet(db: DbOrTx, companyId: string) {
+  const [row] = await db.select().from(clientEstimateSource).where(eq(clientEstimateSource.companyId, companyId));
+  return row ?? null;
+}
+
+/** Remembers which Google Sheet holds a company's estimates. Accepts the sheet URL or its id. */
+export async function linkGoogleSheet(ctx: AppContext, actor: UserActor, companyId: string, input: z.infer<typeof estimateSourceLinkInput>) {
+  requirePerm(actor, 'weekly_report.manage');
+  const co = await loadCompanyFor(ctx.db, actor, companyId, 'write');
+  if (co.archivedAt) throw rule('RECORD_ARCHIVED', 'This company is archived');
+  if (!googleEstimatesActive(ctx))
+    throw rule('ESTIMATES_SOURCE_NOT_CONFIGURED', 'Reading estimates from Google Sheets is not set up. Upload the sheet as a CSV file.');
+  const spreadsheetId = parseSpreadsheetId(input.url);
+  if (!spreadsheetId) throw rule('INVALID_SHEET_LINK', 'Paste the link of a Google Sheet (docs.google.com/spreadsheets/d/…)');
+  const range = input.range || 'A1:Z2000';
+  return unitOfWork(ctx, actor, async (u) => {
+    const now = ctx.now();
+    await u.tx
+      .insert(clientEstimateSource)
+      .values({
+        companyId,
+        googleSpreadsheetId: spreadsheetId,
+        googleRange: range,
+        linkedBy: actor.userId,
+        linkedAt: now,
+        createdBy: actor.userId,
+        updatedBy: actor.userId,
+      })
+      .onConflictDoUpdate({
+        target: clientEstimateSource.companyId,
+        set: {
+          googleSpreadsheetId: spreadsheetId,
+          googleRange: range,
+          linkedBy: actor.userId,
+          linkedAt: now,
+          updatedAt: now,
+          updatedBy: actor.userId,
+          rowVersion: sql`${clientEstimateSource.rowVersion} + 1`,
+        },
+      });
+    await u.audit('estimates.sheet_linked', { type: 'company', id: companyId }, { spreadsheetId, range });
+    return { spreadsheetId, range, linkedAt: now };
+  });
+}
+
+/** Reads the linked sheet and imports it through the same path as a CSV upload. `actor` is SYSTEM for a scheduled run. */
+export async function syncLinkedSheet(ctx: AppContext, actor: Actor, companyId: string, importedBy: string) {
+  if (!googleEstimatesActive(ctx))
+    throw rule('ESTIMATES_SOURCE_NOT_CONFIGURED', 'Reading estimates from Google Sheets is not set up. Upload the sheet as a CSV file.');
+  const link = await linkedSheet(ctx.db, companyId);
+  if (!link) throw rule('NO_SHEET_LINKED', 'Link a Google Sheet to this company first');
+  const rows = await ctx.estimates.fetchRows({ spreadsheetId: link.googleSpreadsheetId, range: link.googleRange });
+  return importEstimateRecords(ctx, actor, companyId, rows, { source: 'google', fileName: sheetName(link.googleSpreadsheetId), importedBy });
+}
+
+export async function syncEstimatesFromGoogle(ctx: AppContext, actor: UserActor, companyId: string) {
+  requirePerm(actor, 'weekly_report.manage');
+  const co = await loadCompanyFor(ctx.db, actor, companyId, 'write');
+  if (co.archivedAt) throw rule('RECORD_ARCHIVED', 'This company is archived');
+  return syncLinkedSheet(ctx, actor, companyId, actor.userId);
+}
+
 /** The latest import for a company, read without an access check (callers have already authorized). */
 export async function latestEstimates(db: DbOrTx, companyId: string) {
-  const [imp] = await db.select().from(estimateImport).where(eq(estimateImport.companyId, companyId)).orderBy(desc(estimateImport.importedAt)).limit(1);
+  const [imp] = await db
+    .select()
+    .from(estimateImport)
+    .where(eq(estimateImport.companyId, companyId))
+    .orderBy(desc(estimateImport.importedAt), desc(estimateImport.id))
+    .limit(1); // ids are time-ordered (uuidv7): the tie-breaker
   if (!imp) return null;
   const items = await db.select().from(estimateItem).where(eq(estimateItem.importId, imp.id)).orderBy(estimateItem.rowNo);
   return { import: imp, items };
@@ -184,11 +287,18 @@ export async function getEstimates(ctx: AppContext, actor: UserActor, companyId:
   requirePerm(actor, 'weekly_report.view');
   await loadCompanyFor(ctx.db, actor, companyId, 'read');
   const latest = await latestEstimates(ctx.db, companyId);
-  if (!latest) return { import: null, items: [], totals: { items: 0, estimateHours: '0' } };
+  const link = googleEstimatesActive(ctx) ? await linkedSheet(ctx.db, companyId) : null;
+  const source = {
+    mode: ctx.config.ESTIMATES_SOURCE,
+    configured: ctx.estimates.status().configured,
+    linked: link ? { spreadsheetId: link.googleSpreadsheetId, range: link.googleRange, linkedAt: link.linkedAt } : null,
+  };
+  if (!latest) return { import: null, items: [], totals: { items: 0, estimateHours: '0' }, source };
   const [by] = await ctx.db.select({ name: appUserProfile.fullName }).from(appUserProfile).where(eq(appUserProfile.userId, latest.import.importedBy));
   return {
     import: {
       id: latest.import.id,
+      source: latest.import.source,
       fileName: latest.import.fileName,
       rowCount: latest.import.rowCount,
       importedAt: latest.import.importedAt,
@@ -206,5 +316,6 @@ export async function getEstimates(ctx: AppContext, actor: UserActor, companyId:
       actualHours: i.actualHours,
     })),
     totals: { items: latest.items.length, estimateHours: hoursText(totalHours(latest.items)) },
+    source,
   };
 }

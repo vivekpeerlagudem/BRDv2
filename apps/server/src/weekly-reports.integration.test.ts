@@ -14,12 +14,14 @@ import { parseConfig } from './config/env.ts';
 import { estimateImport, weeklyReportRun } from './db/schema-weekly-reports.ts';
 import { createApp } from './http/app.ts';
 import { bootstrap, insertUser } from './modules/identity.ts';
+import { parseCsv } from './modules/imports/csv.ts';
 import { FALLBACK_TEXT } from './modules/weekly-reports/checks.ts';
 import { runDueJobs, runScheduledScans } from './modules/workflow.ts';
 import { storageKeys } from './platform/adapters.ts';
 import { schema, sha256Hex } from './platform/core.ts';
+import { DomainError } from './platform/errors/domain-error.ts';
 import { MockAiProvider } from './platform/mock-ai.ts';
-import { AiProviderError } from './platform/ports.ts';
+import { AiProviderError, type EstimatesSource } from './platform/ports.ts';
 import { testDbMigratorUrl, testDbUrl } from './test-db.ts';
 
 try {
@@ -41,10 +43,24 @@ describe.skipIf(!testUrl)('weekly report agents (PostgreSQL integration)', () =>
     BUYER_ORIGIN: 'http://proposals.localhost:5173',
     STORAGE_DIR: './.data/test-storage',
     AI_PROVIDER: 'fake',
+    // The Google estimates source is switched on, but a fake stands in for it: Google is never called.
+    ESTIMATES_SOURCE: 'google',
+    GOOGLE_SERVICE_ACCOUNT_JSON_BASE64: 'dGVzdA==',
   });
+  const sheet: { rows: string[][]; error: Error | null; reads: number } = { rows: [], error: null, reads: 0 };
+  const estimates: EstimatesSource = {
+    name: 'fake-sheets',
+    simulated: true,
+    fetchRows: async () => {
+      sheet.reads++;
+      if (sheet.error) throw sheet.error;
+      return sheet.rows;
+    },
+    status: () => ({ provider: 'fake-sheets', simulated: true, configured: true, detail: 'test double' }),
+  };
   const ai = new MockAiProvider();
   let clock = NOW;
-  const { ctx, pool, auth } = buildContext(config, { now: () => clock, ai });
+  const { ctx, pool, auth } = buildContext(config, { now: () => clock, ai, estimates });
   const app = createApp(ctx, auth);
   const { task, aiGeneration, auditLog, timelineEvent } = schema;
   const cookies: Record<string, string> = {};
@@ -77,7 +93,8 @@ describe.skipIf(!testUrl)('weekly report agents (PostgreSQL integration)', () =>
     ).join('\n');
     return { xml, everything };
   }
-  const runsOf = (companyId: string) => ctx.db.select().from(weeklyReportRun).where(eq(weeklyReportRun.companyId, companyId)).orderBy(weeklyReportRun.attempt);
+  const runsOf = (companyId: string) =>
+    ctx.db.select().from(weeklyReportRun).where(eq(weeklyReportRun.companyId, companyId)).orderBy(weeklyReportRun.periodStart, weeklyReportRun.attempt);
   const metric = (run: { metrics: { metrics: { id: string; value: string | null }[] } | null }, id: string) =>
     run.metrics?.metrics.find((m) => m.id === id)?.value;
   /** A schema-valid AI answer whose statements cite nothing: it fails the NO_SOURCE check. */
@@ -679,5 +696,76 @@ describe.skipIf(!testUrl)('weekly report agents (PostgreSQL integration)', () =>
     const found = await call('admin', 'GET', '/api/v1/weekly-reports?q=wakanda&status=ready');
     expect(found.json.items.length).toBeGreaterThan(0);
     expect(found.json.items.every((r: any) => r.companyName === 'Wakanda Design Group' && r.status === 'ready')).toBe(true);
+  });
+
+  it('estimates from a linked Google Sheet: link, sync through the same import path, and sync before each run', async () => {
+    const SHEET_ID = '1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789';
+    const bad = await call('rep2', 'PUT', `/api/v1/companies/${ids.companyB}/estimate-source`, { url: 'https://example.com/not-a-sheet' });
+    expect([bad.status, bad.json.code]).toEqual([422, 'INVALID_SHEET_LINK']);
+    expect((await call('rep1', 'PUT', `/api/v1/companies/${ids.companyB}/estimate-source`, { url: SHEET_ID })).status).toBe(404);
+    const noLink = await call('rep2', 'POST', `/api/v1/companies/${ids.companyB}/estimates/sync`);
+    expect([noLink.status, noLink.json.code]).toEqual([422, 'NO_SHEET_LINKED']);
+    const linked = await call('rep2', 'PUT', `/api/v1/companies/${ids.companyB}/estimate-source`, {
+      url: `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit#gid=0`,
+    });
+    expect(linked.status).toBe(200);
+    expect(linked.json).toMatchObject({ spreadsheetId: SHEET_ID, range: 'A1:Z2000' });
+    const info = (await call('rep2', 'GET', `/api/v1/companies/${ids.companyB}/estimates`)).json;
+    expect(info.source).toMatchObject({ mode: 'google', configured: true, linked: { spreadsheetId: SHEET_ID, range: 'A1:Z2000' } });
+
+    // "Sync now": the sheet rows go through the same validation as a CSV upload (all-or-nothing).
+    sheet.rows = [
+      ['Task', 'Estimate hours'],
+      ['Workshop', 'sixteen'],
+    ];
+    const invalid = await call('rep2', 'POST', `/api/v1/companies/${ids.companyB}/estimates/sync`);
+    expect([invalid.status, invalid.json.code]).toEqual([422, 'ESTIMATES_INVALID']);
+    sheet.rows = [...parseCsv(SAMPLE_CSV), ['', '', '', '', '', '', ''], ['S-009', 'Training sessions', 'Launch', '12', '', '', '']];
+    const synced = await call('rep2', 'POST', `/api/v1/companies/${ids.companyB}/estimates/sync`);
+    expect(synced.status).toBe(201);
+    expect(synced.json).toMatchObject({ items: 9, estimateHours: '232' }); // the empty row is ignored
+    const after = (await call('rep2', 'GET', `/api/v1/companies/${ids.companyB}/estimates`)).json;
+    expect(after.import).toMatchObject({ source: 'google', rowCount: 9, importedByName: 'Sam Second' });
+    expect(after.import.fileName).toContain('Google Sheet');
+
+    // A run syncs first: the report is built from the sheet as it is now.
+    sheet.rows = [...sheet.rows, ['S-010', 'Handover', 'Launch', '8', '', '', '']];
+    const readsBefore = sheet.reads;
+    ai.reset();
+    expect((await call('rep2', 'POST', `/api/v1/companies/${ids.companyB}/weekly-reports`)).status).toBe(201);
+    await runDueJobs(ctx);
+    const fresh = (await runsOf(ids.companyB as string)).at(-1)!;
+    expect(sheet.reads).toBe(readsBefore + 1);
+    expect(fresh).toMatchObject({ status: 'ready', checkFlags: [] });
+    expect(metric(fresh, 'E-01')).toBe('10');
+    expect(metric(fresh, 'E-02')).toBe('240');
+    const [usedImport] = await ctx.db
+      .select()
+      .from(estimateImport)
+      .where(eq(estimateImport.id, fresh.estimateImportId as string));
+    expect(usedImport).toMatchObject({ source: 'google', rowCount: 10, importedBy: ids.rep2 });
+
+    // The sheet cannot be read: the run still completes on the latest import, with a warning to acknowledge.
+    sheet.error = new DomainError('ESTIMATES_SHEET_NOT_SHARED', 422, 'The sheet is not shared with the service account');
+    expect((await call('rep2', 'POST', `/api/v1/companies/${ids.companyB}/weekly-reports`)).status).toBe(201);
+    await runDueJobs(ctx);
+    const stale = (await runsOf(ids.companyB as string)).at(-1)!;
+    expect(stale.status).toBe('ready'); // a warning does not block
+    expect(stale.checkFlags).toEqual([expect.objectContaining({ code: 'ESTIMATES_SYNC_FAILED', level: 'warning' })]);
+    expect(stale.checkFlags[0]?.message).toContain('ESTIMATES_SHEET_NOT_SHARED');
+    expect(stale.estimateImportId).toBe(fresh.estimateImportId);
+    const detail = await detailOf('rep2', stale.id);
+    expect(detail).toMatchObject({ flagCount: 0, warningCount: 1 });
+    const refused = await call('rep2', 'POST', `/api/v1/weekly-reports/${stale.id}/approve`, { rowVersion: detail.rowVersion });
+    expect(refused.json.meta).toMatchObject({ needsAcknowledgement: true });
+    // The warning describes the data, so it survives an edit of the text.
+    const edited = await call('rep2', 'PATCH', `/api/v1/weekly-reports/${stale.id}/narrative`, {
+      statements: [{ id: section(detail, 'summary')[0].id, text: 'The project is progressing.' }],
+      rowVersion: detail.rowVersion,
+    });
+    expect(edited.json).toMatchObject({ status: 'ready', warningCount: 1 });
+    const ok = await call('rep2', 'POST', `/api/v1/weekly-reports/${stale.id}/approve`, { rowVersion: edited.json.rowVersion, acknowledgeWarnings: true });
+    expect(ok.status).toBe(200);
+    sheet.error = null;
   });
 });

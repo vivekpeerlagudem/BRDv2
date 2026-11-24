@@ -5,7 +5,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { type FormEvent, useState } from 'react';
-import { ApiError, dateTime, get, post } from '../lib/api.ts';
+import { ApiError, dateTime, get, post, put } from '../lib/api.ts';
 import { useMe } from '../lib/me.ts';
 import { Badge, Button, Card, ConfirmButton, Input, useAction } from '../lib/ui.tsx';
 import { AiLabel } from './ai.tsx';
@@ -13,6 +13,8 @@ import { AiLabel } from './ai.tsx';
 interface Estimates {
   import: { id: string; fileName: string; rowCount: number; importedAt: string; importedByName: string | null } | null;
   totals: { items: number; estimateHours: string };
+  /** csv = upload only · google = a linked Google Sheet can also be read (read-only). */
+  source: { mode: 'csv' | 'google'; configured: boolean; linked: { spreadsheetId: string; range: string; linkedAt: string } | null };
 }
 export interface RunSummary {
   id: string;
@@ -116,6 +118,8 @@ export function WeeklyReportsCard({ companyId, canEdit }: { companyId: string; c
       refresh();
     },
   });
+  const linkSheet = useAction((v: { url: string }) => put(`/companies/${companyId}/estimate-source`, v), { success: 'Google Sheet linked', onDone: refresh });
+  const syncSheet = useAction(() => post(`/companies/${companyId}/estimates/sync`), { success: 'Estimates read from the Google Sheet', onDone: refresh });
   const generate = useAction(() => post(`/companies/${companyId}/weekly-reports`), { success: 'Weekly report queued', onDone: refresh });
   const approve = useAction((r: RunSummary) => post(`/weekly-reports/${r.id}/approve`, { rowVersion: r.rowVersion }), {
     success: 'Weekly report approved',
@@ -179,6 +183,41 @@ export function WeeklyReportsCard({ companyId, canEdit }: { companyId: string; c
               </Button>
               <span className="text-xs text-muted">Columns: Task and Estimate hours (required), Scope ID, Phase, Status, % Done, Actual hours</span>
             </form>
+          )}
+          {canManage && estimates.data?.source.mode === 'google' ? (
+            <div className="space-y-2 rounded-md border border-line p-3">
+              <p className="text-[13px] font-medium text-ink">Google Sheet (read-only)</p>
+              {estimates.data.source.linked ? (
+                <p className="flex flex-wrap items-center gap-2 text-sm text-muted">
+                  Linked sheet {estimates.data.source.linked.spreadsheetId.slice(0, 10)}… · range {estimates.data.source.linked.range}
+                  <Button variant="secondary" disabled={syncSheet.busy} onClick={() => syncSheet.run(undefined)}>
+                    Sync now
+                  </Button>
+                </p>
+              ) : (
+                <p className="text-sm text-muted">Share the sheet with the service-account email as a Viewer, then paste its link.</p>
+              )}
+              <form
+                className="flex flex-wrap items-center gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const url = String(new FormData(e.currentTarget).get('url') ?? '').trim();
+                  if (url) linkSheet.run({ url });
+                }}
+              >
+                <Input name="url" aria-label="Google Sheet link" placeholder="https://docs.google.com/spreadsheets/d/…" className="max-w-md" />
+                <Button type="submit" variant="secondary" disabled={linkSheet.busy}>
+                  Link Google Sheet
+                </Button>
+              </form>
+              {(linkSheet.error ?? syncSheet.error) instanceof ApiError && (
+                <p role="alert" className="text-[13px] text-danger">
+                  {((linkSheet.error ?? syncSheet.error) as ApiError).message}
+                </p>
+              )}
+            </div>
+          ) : (
+            canManage && <p className="text-xs text-muted">Estimates are uploaded as CSV files. Reading a Google Sheet is not switched on for this system.</p>
           )}
           {rowErrors && (
             <div role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800">

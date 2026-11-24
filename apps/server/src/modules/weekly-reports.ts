@@ -16,9 +16,16 @@ import {
   type weeklyReportListQuery,
   type weeklyReportSettingsInput,
 } from '@crm/shared';
-import { and, desc, eq, exists, ilike, inArray, isNull, lt, max, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, ilike, inArray, isNull, lt, max, or, sql } from 'drizzle-orm';
 import type { z } from 'zod';
-import { estimateImport, type WeeklyFlag, type WeeklyMetricsDoc, type WeeklyNarrative, weeklyReportRun } from '../db/schema-weekly-reports.ts';
+import {
+  clientEstimateSource,
+  estimateImport,
+  type WeeklyFlag,
+  type WeeklyMetricsDoc,
+  type WeeklyNarrative,
+  weeklyReportRun,
+} from '../db/schema-weekly-reports.ts';
 import { storageKeys } from '../platform/adapters.ts';
 import {
   type AppContext,
@@ -42,7 +49,7 @@ import { sanitizeText } from './ai/context.ts';
 import { checkNarrative, FALLBACK_TEXT, isBlocking, isWarning, SECTION_LABELS, SECTIONS } from './weekly-reports/checks.ts';
 import { collect, type WeeklySnapshot } from './weekly-reports/collect.ts';
 import { buildDeckModel, deckFileName, PPTX_CONTENT_TYPE, renderWeeklyPptx } from './weekly-reports/deck.ts';
-import { latestEstimates, loadCompanyFor } from './weekly-reports/estimates.ts';
+import { googleEstimatesActive, latestEstimates, linkedSheet, loadCompanyFor, syncLinkedSheet } from './weekly-reports/estimates.ts';
 import { allowedSourceIds, buildWeeklyFacts } from './weekly-reports/facts.ts';
 import { matchItems } from './weekly-reports/match.ts';
 import { computeMetrics } from './weekly-reports/metrics.ts';
@@ -74,7 +81,17 @@ export async function scheduleWeeklyReports(ctx: AppContext): Promise<number> {
   const companies = await ctx.db
     .select({ id: company.id, ownerId: company.ownerId })
     .from(company)
-    .where(and(isNull(company.archivedAt), exists(ctx.db.select({ one: sql`1` }).from(estimateImport).where(eq(estimateImport.companyId, company.id)))));
+    .where(
+      and(
+        isNull(company.archivedAt),
+        or(
+          exists(ctx.db.select({ one: sql`1` }).from(estimateImport).where(eq(estimateImport.companyId, company.id))),
+          ...(googleEstimatesActive(ctx)
+            ? [exists(ctx.db.select({ one: sql`1` }).from(clientEstimateSource).where(eq(clientEstimateSource.companyId, company.id)))]
+            : []),
+        ),
+      ),
+    );
   let queued = 0;
   for (const co of companies) {
     await unitOfWork(ctx, SYSTEM, async (u) => {
@@ -107,7 +124,8 @@ export async function requestWeeklyReport(ctx: AppContext, actor: UserActor, com
   requirePerm(actor, 'weekly_report.manage');
   const co = await loadCompanyFor(ctx.db, actor, companyId, 'write');
   if (co.archivedAt) throw rule('RECORD_ARCHIVED', 'This company is archived');
-  if (!(await latestEstimates(ctx.db, companyId))) throw rule('NO_ESTIMATES', 'Upload the estimates sheet for this company first');
+  const hasLinkedSheet = googleEstimatesActive(ctx) && (await linkedSheet(ctx.db, companyId)) !== null;
+  if (!hasLinkedSheet && !(await latestEstimates(ctx.db, companyId))) throw rule('NO_ESTIMATES', 'Upload the estimates sheet for this company first');
   const [settings] = await ctx.db.select({ timeZone: organizationSettings.timeZone }).from(organizationSettings);
   const timeZone = settings?.timeZone ?? 'UTC';
   const now = ctx.now();
@@ -204,6 +222,22 @@ export async function runJob(ctx: AppContext, runId: string, hooks: RunHooks = {
   // The report runs on behalf of the company owner: their scope decides what may be read, and AI use is theirs.
   const owner = await buildUserActor(ctx.db, run.runAsUserId);
   if (!owner) return failRun(ctx, run, 'RUN_AS_USER_INACTIVE');
+
+  // Estimates from Google Sheets (only when switched on and a sheet is linked): refresh before collecting.
+  // A failed sync does not stop the report: the latest import is used and the reviewer is warned.
+  if (googleEstimatesActive(ctx) && (await linkedSheet(ctx.db, run.companyId))) {
+    try {
+      await syncLinkedSheet(ctx, SYSTEM, run.companyId, run.runAsUserId);
+    } catch (error) {
+      if (!(error instanceof DomainError)) throw error;
+      extraFlags.push({
+        code: 'ESTIMATES_SYNC_FAILED',
+        statementId: null,
+        level: 'warning',
+        message: `The Google Sheet could not be read (${error.code}); the latest imported estimates were used`,
+      });
+    }
+  }
 
   // Collector
   const instants = periodInstants(run.periodStart, run.periodEnd, run.timeZone);

@@ -115,6 +115,22 @@ export interface AiProvider {
   status(): AiProviderStatus;
 }
 
+/** Where a client's estimates (scope) sheet can be read from, besides CSV upload. Read-only by contract. */
+export interface EstimatesSourceStatus {
+  provider: string;
+  simulated: boolean;
+  configured: boolean;
+  detail: string;
+}
+export interface EstimatesSource {
+  readonly name: string;
+  readonly simulated: boolean;
+  /** Rows of the range, header first, every cell as text. */
+  fetchRows(ref: { spreadsheetId: string; range: string }): Promise<string[][]>;
+  /** Configuration status only — never makes a network call. */
+  status(): EstimatesSourceStatus;
+}
+
 export interface TransactionalEmail {
   send(msg: { to: string; subject: string; text: string }): Promise<void>;
 }

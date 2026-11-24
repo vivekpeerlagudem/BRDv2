@@ -1,6 +1,13 @@
-import { estimatesUploadInput, weeklyNarrativeUpdateInput, weeklyReportApproveInput, weeklyReportListQuery, weeklyReportSettingsInput } from '@crm/shared';
+import {
+  estimateSourceLinkInput,
+  estimatesUploadInput,
+  weeklyNarrativeUpdateInput,
+  weeklyReportApproveInput,
+  weeklyReportListQuery,
+  weeklyReportSettingsInput,
+} from '@crm/shared';
 import type { Context } from 'hono';
-import { getEstimates, importEstimatesCsv } from '../../modules/weekly-reports/estimates.ts';
+import { getEstimates, importEstimatesCsv, linkGoogleSheet, syncEstimatesFromGoogle } from '../../modules/weekly-reports/estimates.ts';
 import * as weeklyReports from '../../modules/weekly-reports.ts';
 import { notFound, requirePerm } from '../../platform/core.ts';
 import type { Api, Env, RouteKit } from '../kit.ts';
@@ -34,6 +41,11 @@ export function register(api: Api, kit: RouteKit): void {
     const actor = as(c, 'weekly_report.manage');
     return c.json(await importEstimatesCsv(ctx, actor, kit.id(c), await kit.body(c, estimatesUploadInput)), 201);
   });
+  api.put('/companies/:id/estimate-source', async (c) => {
+    const actor = as(c, 'weekly_report.manage');
+    return c.json(await linkGoogleSheet(ctx, actor, kit.id(c), await kit.body(c, estimateSourceLinkInput)));
+  });
+  api.post('/companies/:id/estimates/sync', async (c) => c.json(await syncEstimatesFromGoogle(ctx, as(c, 'weekly_report.manage'), kit.id(c)), 201));
   api.get('/companies/:id/estimates', async (c) => c.json(await getEstimates(ctx, as(c, 'weekly_report.view'), kit.id(c))));
   api.post('/companies/:id/weekly-reports', async (c) => c.json(await weeklyReports.requestWeeklyReport(ctx, as(c, 'weekly_report.manage'), kit.id(c)), 201));
 

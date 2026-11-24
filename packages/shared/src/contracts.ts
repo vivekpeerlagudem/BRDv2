@@ -256,6 +256,16 @@ export const estimatesUploadInput = z.object({
   fileName: z.string().trim().min(1).max(255),
   text: z.string().min(1).max(3_000_000),
 });
+/** Link a company to its estimates sheet in Google Sheets: the sheet URL (or id) and an optional A1 range. */
+export const estimateSourceLinkInput = z.object({
+  url: z.string().trim().min(1).max(500),
+  range: z
+    .string()
+    .trim()
+    .max(100)
+    .regex(/^[A-Za-z0-9 _!:$.-]+$/, 'Use a range such as A1:Z2000 or Estimates!A1:G500')
+    .optional(),
+});
 export const WEEKLY_REPORT_STATUSES = ['queued', 'running', 'ready', 'needs_attention', 'approved', 'failed'] as const;
 export const weeklyReportListQuery = z.object({
   companyId: uuid.optional(),

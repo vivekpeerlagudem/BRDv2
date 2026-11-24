@@ -159,3 +159,19 @@ export const weeklyReportRun = pgTable(
     index('weekly_report_run_status_idx').on(t.status),
   ],
 );
+
+/** Optional link from a company to its estimates sheet in Google Sheets (read-only source, ESTIMATES_SOURCE=google). */
+export const clientEstimateSource = pgTable('client_estimate_source', {
+  companyId: uuid('company_id')
+    .primaryKey()
+    .references(() => company.id),
+  googleSpreadsheetId: text('google_spreadsheet_id').notNull(),
+  googleRange: text('google_range').notNull().default('A1:Z2000'),
+  linkedBy: uuid('linked_by').notNull(),
+  linkedAt: ts('linked_at').notNull().defaultNow(),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  createdBy: uuid('created_by'),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+  updatedBy: uuid('updated_by'),
+  rowVersion: integer('row_version').notNull().default(1),
+});
