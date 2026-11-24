@@ -1,5 +1,5 @@
 Scope ID,Task,Phase,Estimate hours,Status,% Done,Actual hours
-S-001,Requirements workshop and sign-off,Discovery,16,Done,100,18
+S-001,Requirements workshop and sign-off,Discovery,16,Done,100,16.5
 S-002,Solution design document,Discovery,24,In progress,50,
 S-003,ERP connector for orders,Build,40,In progress,25,
 S-004,Inventory sync service,Build,32,Not started,0,

@@ -182,4 +182,7 @@ export const storageKeys = {
   proposalDocx: (versionId: string) => join('proposals', `${versionId}.docx`).replaceAll('\\', '/'),
   signedPdf: (requestId: string) => `signed/${requestId}.pdf`,
   certificate: (requestId: string) => `signed/${requestId}.certificate.txt`,
+  weeklyReportSnapshot: (runId: string) => `weekly-reports/${runId}/snapshot.json`,
+  weeklyReportDraftPptx: (runId: string) => `weekly-reports/${runId}/draft.pptx`,
+  weeklyReportFinalPptx: (runId: string) => `weekly-reports/${runId}/final.pptx`,
 };
