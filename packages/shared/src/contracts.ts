@@ -257,11 +257,22 @@ export const estimatesUploadInput = z.object({
   text: z.string().min(1).max(3_000_000),
 });
 export const WEEKLY_REPORT_STATUSES = ['queued', 'running', 'ready', 'needs_attention', 'approved', 'failed'] as const;
-export const weeklyReportListQuery = z.object({ companyId: uuid.optional(), status: z.enum(WEEKLY_REPORT_STATUSES).optional() });
+export const weeklyReportListQuery = z.object({
+  companyId: uuid.optional(),
+  status: z.enum(WEEKLY_REPORT_STATUSES).optional(),
+  /** Company name contains … */
+  q: z.string().trim().max(120).optional(),
+});
 export const weeklyReportApproveInput = z.object({
   rowVersion: z.number().int().min(1),
   /** Required (true) when the report has warnings, for example a figure a person typed that is not in the report data. */
   acknowledgeWarnings: z.boolean().optional(),
+});
+/** When the weekly run becomes due, in the organization time zone. Weekday: 1 = Monday … 7 = Sunday. */
+export const weeklyReportSettingsInput = z.object({
+  enabled: z.boolean(),
+  runWeekday: z.number().int().min(1).max(7),
+  runTime: z.string().regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/, 'Use a 24-hour time such as 09:00'),
 });
 export const WEEKLY_REPORT_SECTIONS = ['summary', 'completed', 'nextWeek', 'risks'] as const;
 const weeklyStatementText = z.string().trim().min(1).max(600);

@@ -34,6 +34,7 @@ const TABS = [
   ['pipeline', 'Pipeline'],
   ['lost-reasons', 'Lost reasons'],
   ['teams', 'Teams'],
+  ['weekly-reports', 'Weekly reports'],
 ] as const;
 type TabKey = (typeof TABS)[number][0];
 
@@ -65,8 +66,70 @@ export function SettingsPage() {
         {tab === 'pipeline' && <PipelineSection />}
         {tab === 'lost-reasons' && <LostReasonsSection />}
         {tab === 'teams' && <TeamsSection />}
+        {tab === 'weekly-reports' && <WeeklyReportsSection />}
       </div>
     </>
+  );
+}
+
+// ───────────────────────── weekly reports schedule ─────────────────────────
+interface WeeklySettings {
+  enabled: boolean;
+  runWeekday: number;
+  runTime: string;
+  timeZone: string;
+}
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+function WeeklyReportsSection() {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ['weekly-report-settings'], queryFn: () => get<WeeklySettings>('/admin/weekly-report-settings') });
+  const save = useAction((v: { enabled: boolean; runWeekday: number; runTime: string }) => put('/admin/weekly-report-settings', v), {
+    success: 'Weekly report schedule saved',
+    onDone: () => void qc.invalidateQueries({ queryKey: ['weekly-report-settings'] }),
+  });
+  return (
+    <Query q={q}>
+      {(s) => (
+        <Card title="Weekly client reports">
+          <form
+            className="max-w-xl space-y-3"
+            onSubmit={(e: FormEvent<HTMLFormElement>) => {
+              e.preventDefault();
+              const f = new FormData(e.currentTarget);
+              save.run({ enabled: f.get('enabled') === 'on', runWeekday: Number(f.get('runWeekday')), runTime: String(f.get('runTime')) });
+            }}
+          >
+            <p className="text-sm text-muted">
+              Once a week a status report is drafted for every company that has an estimates sheet, covering the previous Monday to Sunday. A person reviews and
+              approves each report before it is sent.
+            </p>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="enabled" defaultChecked={s.enabled} /> Generate weekly reports automatically
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Day" error={save.fieldError('runWeekday')}>
+                <Select name="runWeekday" defaultValue={String(s.runWeekday)}>
+                  {WEEKDAYS.map((d, i) => (
+                    <option key={d} value={i + 1}>
+                      {d}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Time" hint={`Organization time zone: ${s.timeZone}`} error={save.fieldError('runTime')}>
+                <Input name="runTime" type="time" required defaultValue={s.runTime} />
+              </Field>
+            </div>
+            <div className="flex justify-end">
+              <Button type="submit" disabled={save.busy}>
+                Save schedule
+              </Button>
+            </div>
+          </form>
+        </Card>
+      )}
+    </Query>
   );
 }
 

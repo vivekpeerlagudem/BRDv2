@@ -16,6 +16,7 @@ import {
   type LucideIcon,
   Menu,
   Package,
+  Presentation,
   ScrollText,
   Search,
   Settings,
@@ -43,6 +44,7 @@ import { LeadsPage } from './pages/leads.tsx';
 import { ProposalPage } from './pages/proposal.tsx';
 import { ReportsPage } from './pages/reports.tsx';
 import { AuditLogPage, SettingsPage } from './pages/settings.tsx';
+import { WeeklyReportPage, WeeklyReportsPage } from './pages/weekly-report-pages.tsx';
 import '@fontsource-variable/inter'; // self-hosted Inter (OFL) — Twenty-style typography
 import './styles.css';
 
@@ -368,6 +370,7 @@ function Shell() {
         { to: '/leads', label: 'Leads', icon: UserPlus, show: Boolean(p['lead.view']) },
         { to: '/tasks', label: 'Tasks', icon: ListChecks, show: true },
         { to: '/reports', label: 'Reports', icon: ChartColumn, show: Boolean(p['report.view']) },
+        { to: '/weekly-reports', label: 'Weekly reports', icon: Presentation, show: Boolean(p['weekly_report.view']) },
       ],
     },
     {
@@ -530,6 +533,8 @@ const routeTree = rootRoute.addChildren([
     r('/tasks', TasksPage),
     r('/contacts/$id', ContactPage),
     r('/reports', ReportsPage),
+    r('/weekly-reports', WeeklyReportsPage),
+    r('/weekly-reports/$id', WeeklyReportPage),
     r('/admin/settings', SettingsPage),
     r('/admin/import', ImportPage),
     r('/admin/audit', AuditLogPage),

@@ -43,7 +43,8 @@ describe.skipIf(!testUrl)('weekly report agents (PostgreSQL integration)', () =>
     AI_PROVIDER: 'fake',
   });
   const ai = new MockAiProvider();
-  const { ctx, pool, auth } = buildContext(config, { now: () => NOW, ai });
+  let clock = NOW;
+  const { ctx, pool, auth } = buildContext(config, { now: () => clock, ai });
   const app = createApp(ctx, auth);
   const { task, aiGeneration, auditLog, timelineEvent } = schema;
   const cookies: Record<string, string> = {};
@@ -629,5 +630,54 @@ describe.skipIf(!testUrl)('weekly report agents (PostgreSQL integration)', () =>
       .from(aiGeneration)
       .where(eq(aiGeneration.id, after.aiGenerationId as string));
     expect([old?.status, fresh?.status]).toEqual(['discarded', 'pending']);
+  });
+
+  it('Admin sets the weekly schedule; a scheduled report notifies the owner once', async () => {
+    expect((await call('rep1', 'GET', '/api/v1/admin/weekly-report-settings')).status).toBe(403);
+    expect((await call('rep1', 'PUT', '/api/v1/admin/weekly-report-settings', { enabled: false, runWeekday: 1, runTime: '09:00' })).status).toBe(403);
+    expect((await call('admin', 'GET', '/api/v1/admin/weekly-report-settings')).json).toEqual({
+      enabled: true,
+      runWeekday: 1,
+      runTime: '09:00',
+      timeZone: 'UTC',
+    });
+    expect((await call('admin', 'PUT', '/api/v1/admin/weekly-report-settings', { enabled: true, runWeekday: 8, runTime: '09:00' })).status).toBe(400);
+    expect((await call('admin', 'PUT', '/api/v1/admin/weekly-report-settings', { enabled: true, runWeekday: 3, runTime: '9:00' })).status).toBe(400);
+    const saved = await call('admin', 'PUT', '/api/v1/admin/weekly-report-settings', { enabled: true, runWeekday: 3, runTime: '14:30' });
+    expect(saved.json).toEqual({ enabled: true, runWeekday: 3, runTime: '14:30', timeZone: 'UTC' });
+    const audit = await ctx.db.select().from(auditLog).where(eq(auditLog.action, 'weekly_report_settings.updated'));
+    expect(audit).toHaveLength(1);
+    expect(audit[0]?.changes).toMatchObject({ before: { runWeekday: 1 }, after: { runWeekday: 3, runTime: '14:30' } });
+
+    // The next week: nothing on Monday or before Wednesday 14:30; then one run per company with estimates.
+    clock = new Date('2026-11-30T10:00:00.000Z');
+    expect((await runScheduledScans(ctx)).weeklyReports).toBe(0);
+    clock = new Date('2026-12-02T14:29:00.000Z');
+    expect((await runScheduledScans(ctx)).weeklyReports).toBe(0);
+    clock = new Date('2026-12-02T14:30:00.000Z');
+    await call('admin', 'PUT', '/api/v1/admin/weekly-report-settings', { enabled: false, runWeekday: 3, runTime: '14:30' });
+    expect((await runScheduledScans(ctx)).weeklyReports).toBe(0); // switched off
+    await call('admin', 'PUT', '/api/v1/admin/weekly-report-settings', { enabled: true, runWeekday: 3, runTime: '14:30' });
+    expect((await runScheduledScans(ctx)).weeklyReports).toBe(2);
+    ai.reset();
+    await runDueJobs(ctx);
+    const newest = async (companyId: string) => (await runsOf(companyId)).filter((r) => r.periodStart === '2026-11-23').at(-1)!;
+    const [a, b] = [await newest(ids.companyA as string), await newest(ids.companyB as string)];
+    expect([a.trigger, a.status, b.trigger, b.status]).toEqual(['schedule', 'ready', 'schedule', 'ready']);
+    // Week over week: the earlier approved report for company A is the baseline.
+    expect(a.metrics?.metrics.find((m) => m.id === 'E-05')?.delta).toBe('0.0');
+
+    const sent = await ctx.db.select().from(schema.notification).where(eq(schema.notification.eventType, 'weekly_report_ready'));
+    const forRun = (id: string) => sent.filter((n) => n.linkPath === `/weekly-reports/${id}`);
+    expect(forRun(a.id)).toEqual([expect.objectContaining({ recipientUserId: ids.rep1, title: 'Weekly report ready for Stark Industries' })]);
+    expect(forRun(b.id)).toEqual([expect.objectContaining({ recipientUserId: ids.rep2, title: 'Weekly report ready for Wakanda Design Group' })]);
+    expect(forRun(ids.runA as string)).toHaveLength(1); // the first scheduled run of this file
+    expect(sent).toHaveLength(3); // manual "Generate now" runs and redrafts do not notify
+    const bell = await call('rep1', 'GET', '/api/v1/notifications');
+    expect(JSON.stringify(bell.json)).toContain('Weekly report ready for Stark Industries');
+    // List search and the status filter used by the list page.
+    const found = await call('admin', 'GET', '/api/v1/weekly-reports?q=wakanda&status=ready');
+    expect(found.json.items.length).toBeGreaterThan(0);
+    expect(found.json.items.every((r: any) => r.companyName === 'Wakanda Design Group' && r.status === 'ready')).toBe(true);
   });
 });

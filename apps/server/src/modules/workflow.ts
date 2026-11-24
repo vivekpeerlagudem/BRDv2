@@ -486,7 +486,20 @@ async function handle(ctx: AppContext, queue: string, payload: Record<string, un
     case 'esign.fetch-signed':
       return esign.fetchSigned(ctx, payload.signatureRequestId as string);
     case 'weekly_report.run':
-      return weeklyReports.runJob(ctx, payload.runId as string);
+      // A scheduled report nobody asked for by hand: tell the person it ran as (the company owner) that it is ready.
+      return weeklyReports.runJob(ctx, payload.runId as string, {
+        onDraftReady: async (u, info) => {
+          if (info.run.trigger !== 'schedule') return;
+          await notify(ctx, u, {
+            userId: info.run.runAsUserId,
+            eventType: 'weekly_report_ready',
+            title: `Weekly report ready for ${info.clientName}`,
+            body: info.status === 'ready' ? 'The draft is ready for your review.' : 'The draft needs your attention before it can be approved.',
+            linkPath: `/weekly-reports/${info.run.id}`,
+            dedupeKey: `weekly_report_ready:${info.run.id}`,
+          });
+        },
+      });
     case 'weekly_report.redraft':
       return weeklyReports.redraftJob(ctx, payload.runId as string);
     case 'esign.void':

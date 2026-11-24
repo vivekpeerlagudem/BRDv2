@@ -9,8 +9,14 @@
  * job). This file must NOT import workflow.ts — it only needs `unitOfWork().enqueue`, which lives in platform/core.
  */
 import { canonicalJson } from '@crm/proposal';
-import { scopeFor, type weeklyNarrativeUpdateInput, type weeklyReportApproveInput, type weeklyReportListQuery } from '@crm/shared';
-import { and, desc, eq, exists, inArray, isNull, lt, max, sql } from 'drizzle-orm';
+import {
+  scopeFor,
+  type weeklyNarrativeUpdateInput,
+  type weeklyReportApproveInput,
+  type weeklyReportListQuery,
+  type weeklyReportSettingsInput,
+} from '@crm/shared';
+import { and, desc, eq, exists, ilike, inArray, isNull, lt, max, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 import { estimateImport, type WeeklyFlag, type WeeklyMetricsDoc, type WeeklyNarrative, weeklyReportRun } from '../db/schema-weekly-reports.ts';
 import { storageKeys } from '../platform/adapters.ts';
@@ -420,6 +426,7 @@ const summaryOf = (run: Run, companyName: string) => ({
   failureReason: run.failureReason,
   approvedAt: run.approvedAt,
   createdAt: run.createdAt,
+  updatedAt: run.updatedAt,
   rowVersion: run.rowVersion,
 });
 
@@ -434,6 +441,7 @@ export async function listWeeklyReports(ctx: AppContext, actor: UserActor, q: z.
         ownerScope(actor, company.ownerId, 'companies', 'weekly_report.view'),
         ...(q.companyId ? [eq(weeklyReportRun.companyId, q.companyId)] : []),
         ...(q.status ? [eq(weeklyReportRun.status, q.status)] : []),
+        ...(q.q ? [ilike(company.name, `%${q.q.replace(/[%_]/g, '')}%`)] : []),
       ),
     )
     .orderBy(desc(weeklyReportRun.periodStart), desc(weeklyReportRun.attempt))
@@ -711,4 +719,27 @@ export async function downloadPptx(ctx: AppContext, actor: UserActor, id: string
   if (!run.draftPptxFileId) throw notFound('Draft report');
   const bytes = await ctx.storage.get(storageKeys.weeklyReportDraftPptx(run.id));
   return { bytes, contentType: PPTX_CONTENT_TYPE, fileName: deckFileName(companyName, run.periodEnd, run.attempt, true) };
+}
+
+// ───────────── schedule settings (Admin) ─────────────
+export async function getWeeklyReportSettings(ctx: AppContext, actor: UserActor) {
+  requirePerm(actor, 'settings.manage');
+  const [row] = await ctx.db.select({ weekly: organizationSettings.weeklyReportSettings, timeZone: organizationSettings.timeZone }).from(organizationSettings);
+  if (!row) throw notFound('Organization settings');
+  return { ...row.weekly, timeZone: row.timeZone };
+}
+
+export async function updateWeeklyReportSettings(ctx: AppContext, actor: UserActor, input: z.infer<typeof weeklyReportSettingsInput>) {
+  requirePerm(actor, 'settings.manage');
+  return unitOfWork(ctx, actor, async (u) => {
+    const [row] = await u.tx.select().from(organizationSettings).for('update');
+    if (!row) throw notFound('Organization settings');
+    const after = { enabled: input.enabled, runWeekday: input.runWeekday, runTime: input.runTime };
+    await u.tx
+      .update(organizationSettings)
+      .set({ weeklyReportSettings: after, updatedAt: ctx.now(), updatedBy: actor.userId })
+      .where(eq(organizationSettings.id, row.id));
+    await u.audit('weekly_report_settings.updated', null, { before: row.weeklyReportSettings, after });
+    return { ...after, timeZone: row.timeZone };
+  });
 }

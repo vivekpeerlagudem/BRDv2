@@ -3,6 +3,7 @@
  * generate the weekly status report, read the AI text, approve it and download the PowerPoint.
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { type FormEvent, useState } from 'react';
 import { ApiError, dateTime, get, post } from '../lib/api.ts';
 import { useMe } from '../lib/me.ts';
@@ -13,7 +14,7 @@ interface Estimates {
   import: { id: string; fileName: string; rowCount: number; importedAt: string; importedByName: string | null } | null;
   totals: { items: number; estimateHours: string };
 }
-interface RunSummary {
+export interface RunSummary {
   id: string;
   periodLabel: string;
   attempt: number;
@@ -45,7 +46,7 @@ interface RowError {
   message: string;
 }
 
-const STATUS_LABEL: Record<RunSummary['status'], string> = {
+export const STATUS_LABEL: Record<RunSummary['status'], string> = {
   queued: 'Queued',
   running: 'Generating…',
   ready: 'Ready for review',
@@ -53,7 +54,7 @@ const STATUS_LABEL: Record<RunSummary['status'], string> = {
   approved: 'Approved',
   failed: 'Failed',
 };
-const STATUS_TONE: Record<RunSummary['status'], 'neutral' | 'info' | 'ok' | 'warn' | 'danger'> = {
+export const STATUS_TONE: Record<RunSummary['status'], 'neutral' | 'info' | 'ok' | 'warn' | 'danger'> = {
   queued: 'neutral',
   running: 'info',
   ready: 'info',
@@ -61,16 +62,17 @@ const STATUS_TONE: Record<RunSummary['status'], 'neutral' | 'info' | 'ok' | 'war
   approved: 'ok',
   failed: 'danger',
 };
-const HEALTH: Record<'green' | 'amber' | 'red', { label: string; tone: 'ok' | 'warn' | 'danger' }> = {
+export const HEALTH: Record<'green' | 'amber' | 'red', { label: string; tone: 'ok' | 'warn' | 'danger' }> = {
   green: { label: 'On track', tone: 'ok' },
   amber: { label: 'Needs attention', tone: 'warn' },
   red: { label: 'At risk', tone: 'danger' },
 };
-const FAILURE: Record<string, string> = {
+export const FAILURE: Record<string, string> = {
   RUN_AS_USER_INACTIVE: 'The company owner is not an active user',
   COMPANY_NOT_VISIBLE: 'The company owner can no longer see this company',
   NO_ESTIMATES: 'No estimates sheet was found',
   STUCK: 'The run took too long and was stopped',
+  NO_SNAPSHOT: 'The stored report data is missing',
 };
 const link = 'cursor-pointer text-[13px] font-medium text-brand hover:underline';
 
@@ -228,6 +230,9 @@ export function WeeklyReportsCard({ companyId, canEdit }: { companyId: string; c
                       <span className="text-xs text-danger">{FAILURE[r.failureReason ?? ''] ?? 'The report could not be generated'}</span>
                     )}
                     <span className="ml-auto flex flex-wrap items-center gap-3">
+                      <Link to="/weekly-reports/$id" params={{ id: r.id }} className={link}>
+                        Open
+                      </Link>
                       {r.hasDraft && r.status !== 'approved' && (
                         <a className={link} href={`/api/v1/weekly-reports/${r.id}/pptx/draft`}>
                           Download draft

@@ -1,4 +1,4 @@
-import { estimatesUploadInput, weeklyNarrativeUpdateInput, weeklyReportApproveInput, weeklyReportListQuery } from '@crm/shared';
+import { estimatesUploadInput, weeklyNarrativeUpdateInput, weeklyReportApproveInput, weeklyReportListQuery, weeklyReportSettingsInput } from '@crm/shared';
 import type { Context } from 'hono';
 import { getEstimates, importEstimatesCsv } from '../../modules/weekly-reports/estimates.ts';
 import * as weeklyReports from '../../modules/weekly-reports.ts';
@@ -17,6 +17,18 @@ export function register(api: Api, kit: RouteKit): void {
     requirePerm(actor, perm);
     return actor;
   };
+
+  // Schedule settings (Admin). The permission is checked before the body is parsed.
+  api.get('/admin/weekly-report-settings', async (c) => {
+    const actor = kit.actor(c);
+    requirePerm(actor, 'settings.manage');
+    return c.json(await weeklyReports.getWeeklyReportSettings(ctx, actor));
+  });
+  api.put('/admin/weekly-report-settings', async (c) => {
+    const actor = kit.actor(c);
+    requirePerm(actor, 'settings.manage');
+    return c.json(await weeklyReports.updateWeeklyReportSettings(ctx, actor, await kit.body(c, weeklyReportSettingsInput)));
+  });
 
   api.post('/companies/:id/estimates', async (c) => {
     const actor = as(c, 'weekly_report.manage');
