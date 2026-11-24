@@ -47,7 +47,7 @@ const publicMeta = (m: AiMeta) => ({
   costMicroUsd: m.costMicroUsd,
 });
 
-const numbersIn = (value: unknown, out = new Set<string>()): Set<string> => {
+export const numbersIn = (value: unknown, out = new Set<string>()): Set<string> => {
   if (typeof value === 'string' || typeof value === 'number') {
     for (const m of String(value).matchAll(/\d[\d,]*(?:\.\d+)?/g)) out.add(m[0].replace(/,/g, '').replace(/\.0+$/, ''));
   } else if (value && typeof value === 'object') for (const v of Object.values(value)) numbersIn(v, out);

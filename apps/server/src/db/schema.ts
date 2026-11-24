@@ -618,7 +618,7 @@ export const esignWebhookInbox = pgTable(
 
 // ───────────────────────── ai ─────────────────────────
 /** Organization AI settings (BR-AIA-008). Older rows hold only {enabled, perUserDailyCalls}; code fills the rest with defaults. */
-export type AiFeature = 'draft_section' | 'presend_review' | 'deal_summary' | 'rewrite_text' | 'follow_up_email';
+export type AiFeature = 'draft_section' | 'presend_review' | 'deal_summary' | 'rewrite_text' | 'follow_up_email' | 'weekly_report';
 export interface AiSettings {
   enabled: boolean;
   perUserDailyCalls: number;

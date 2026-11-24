@@ -29,6 +29,7 @@ const envSchema = z.object({
   AI_MODEL_FOLLOW_UP: z.string().default('claude-sonnet-5-5'),
   AI_MODEL_REWRITE: z.string().default('claude-haiku-5-5'),
   AI_MODEL_REVIEW: z.string().default('claude-opus-5-5'),
+  AI_MODEL_WEEKLY: z.string().default('claude-sonnet-5-5'),
   AI_TIMEOUT_MS: z.coerce.number().int().min(1000).max(600000).default(90000),
   AI_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(4).default(2),
   AI_RETRY_DELAY_MS: z.coerce.number().int().min(0).max(30000).default(1000),

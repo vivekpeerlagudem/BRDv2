@@ -13,10 +13,13 @@ import { and, desc, eq, exists, inArray, isNull, lt, max, sql } from 'drizzle-or
 import { estimateImport, type WeeklyMetricsDoc, weeklyReportRun } from '../db/schema-weekly-reports.ts';
 import { storageKeys } from '../platform/adapters.ts';
 import { type AppContext, buildUserActor, conflict, requirePerm, rule, SYSTEM, schema, sha256Hex, type UserActor, unitOfWork } from '../platform/core.ts';
+import { isBlocking } from './weekly-reports/checks.ts';
 import { collect, type WeeklySnapshot } from './weekly-reports/collect.ts';
 import { latestEstimates, loadCompanyFor } from './weekly-reports/estimates.ts';
+import { buildWeeklyFacts } from './weekly-reports/facts.ts';
 import { matchItems } from './weekly-reports/match.ts';
 import { computeMetrics } from './weekly-reports/metrics.ts';
+import { storeWeeklyGeneration, writeNarrative } from './weekly-reports/narrative.ts';
 import { isDue, lastFullWeek, periodInstants } from './weekly-reports/period.ts';
 
 const { company, organizationSettings, fileObject } = schema;
@@ -193,6 +196,22 @@ export async function runJob(ctx: AppContext, runId: string): Promise<void> {
   });
   const snapshotSha256 = sha256Hex(stored.bytes);
 
+  // Narrative (AI, on behalf of the owner) → Checks. AI problems end in placeholders, never in a failed run.
+  const [org] = await ctx.db.select({ name: organizationSettings.organizationName }).from(organizationSettings);
+  const facts = buildWeeklyFacts(snapshot, metrics, org?.name ?? '');
+  const written = await writeNarrative(ctx, owner, run, facts);
+  const aiGenerationId = written.meta
+    ? await storeWeeklyGeneration(ctx, owner, { runId: run.id, companyId: run.companyId, narrative: written.narrative, meta: written.meta, facts })
+    : null;
+  const mismatches = metrics.items.filter((i) => i.mismatch).length;
+  const flags = [
+    ...written.flags,
+    // Internal notice for the reviewer only: the sheet and the CRM disagree on some rows (the CRM was used).
+    ...(mismatches
+      ? [{ code: 'STATUS_MISMATCH', statementId: null, message: `${mismatches} scope row(s) differ between the sheet and the CRM; the CRM status was used` }]
+      : []),
+  ];
+
   await ctx.db.transaction(async (tx) => {
     const [file] = await tx
       .insert(fileObject)
@@ -213,7 +232,11 @@ export async function runJob(ctx: AppContext, runId: string): Promise<void> {
         snapshotFileId: file!.id,
         snapshotSha256,
         metrics,
-        status: 'ready',
+        narrative: written.narrative,
+        checkFlags: flags,
+        aiGenerationId,
+        aiFallback: written.aiFallback,
+        status: flags.some(isBlocking) ? 'needs_attention' : 'ready',
         updatedAt: ctx.now(),
         rowVersion: sql`${weeklyReportRun.rowVersion} + 1`,
       })

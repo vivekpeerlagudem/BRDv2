@@ -51,7 +51,7 @@ export interface ESignatureProvider {
 }
 
 // ───────────────────────── AI provider port (ADR-014: provider-switchable, no tools, no side effects) ─────────────────────────
-export type AiFeature = 'draft_section' | 'presend_review' | 'deal_summary' | 'rewrite_text' | 'follow_up_email';
+export type AiFeature = 'draft_section' | 'presend_review' | 'deal_summary' | 'rewrite_text' | 'follow_up_email' | 'weekly_report';
 
 /** One structured-output completion. The provider receives text only: it has no tools and cannot act on anything. */
 export interface AiRequest {

@@ -57,6 +57,17 @@ export const summaryOutput = z.object({
 });
 export const rewriteOutput = z.object({ replacement: z.string() });
 export const followUpOutput = z.object({ subject: z.string(), body: z.string() });
+const weeklyStatement = z.object({
+  text: z.string(),
+  /** Ids copied from the facts this sentence is based on (checked by code; never shown to the client). */
+  sources: z.array(z.string()),
+});
+export const weeklyReportOutput = z.object({
+  summary: z.array(weeklyStatement),
+  completed: z.array(weeklyStatement),
+  nextWeek: z.array(weeklyStatement),
+  risks: z.array(weeklyStatement),
+});
 
 export const REWRITE_MODES = {
   improve: 'Improve clarity and flow. Keep the meaning and every fact unchanged.',
@@ -150,6 +161,17 @@ export const PROMPTS = {
     system: `${BASE_RULES}\n\nTask: draft a follow-up email from the salesperson (<task>.senderName) to the contact in <task>.recipient about the proposal in <crm_context>. Follow <task>.scenario. Address the recipient by first name. Keep it under 150 words, specific to this deal, with one clear next step. Do not mention view counts, reading time or that the proposal is tracked. Do not promise discounts, dates or terms. This is a draft the salesperson will edit and send themselves: do not say it was sent. "subject" is a short subject line; "body" is the email text ending with the sender's name.`,
     schema: followUpOutput,
   } satisfies PromptDef<z.infer<typeof followUpOutput>>,
+  weekly_report: {
+    feature: 'weekly_report',
+    version: 'weekly_report/v1',
+    model: (c) => c.AI_MODEL_WEEKLY,
+    effort: 'low',
+    maxTokens: 6000,
+    contextBudget: 16_000,
+    sources: [],
+    system: `${BASE_RULES}\n\nTask: write the text of a weekly status report that sellerOrganization sends to its CLIENT (<crm_context>.client). Write in the seller's voice, first person plural ("we"). Return four lists of short statements: "summary" (2-3 sentences on overall progress this week), "completed" (at most 5: what was finished this week), "nextWeek" (at most 5: what is planned next) and "risks" (at most 3: risks or support needed from the client; an empty list when there are none).\nEVERY statement must list in "sources" at least one id copied exactly from an "id" field in <crm_context> (for example "metric:E-05" or "scope:…"). A statement without a source will be rejected.\nNumbers: only copy a number exactly as it appears in a metric or fact value. Never calculate, add up, round or estimate.\nNever mention internal matters: unmatched items, mismatches, flags, tracking, how the report is produced, or the name of any internal user other than accountOwner.\nNo blame, no guarantees and no promises. One sentence per statement, plain words, no ids or codes in the text itself.`,
+    schema: weeklyReportOutput,
+  } satisfies PromptDef<z.infer<typeof weeklyReportOutput>>,
 } as const;
 
 /** JSON Schema sent to the provider for constrained output. */
