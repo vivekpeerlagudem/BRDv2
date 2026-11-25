@@ -37,7 +37,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const SLIDES = join(root, 'demo-preview', 'sales-brief', 'fresh');
 const OUT_DIR = join(root, 'deliverables');
 const OUT = join(OUT_DIR, 'Weekly-Sales-Brief-Architecture.docx');
-const AUTHOR = 'Vivek Peeralagudem';
+const AUTHOR = 'Kensium'; // document metadata only: no personal names in this document
 const TITLE = 'Weekly Sales Brief: architecture';
 const BRAND = '1F4E79';
 const FONT = 'Arial';
@@ -246,7 +246,7 @@ function build(img: { architecture: Buffer; thumbs: Buffer | null }): Block[] {
     new Paragraph({ spacing: { after: 40 }, children: [run('Weekly Sales Brief', { bold: true, size: 44, color: BRAND })] }),
     new Paragraph({
       spacing: { after: 200 },
-      children: [run(`Architecture · Internal Sales CRM · ${AUTHOR} · ${TODAY} · branch ${BRANCH} (${COMMIT})`, { size: SMALL, color: '4A5560' })],
+      children: [run(`Architecture · Internal Sales CRM · ${TODAY} · branch ${BRANCH} (${COMMIT})`, { size: SMALL, color: '4A5560' })],
     }),
     h1('1', 'Purpose and outcome', true),
     h2('The requirement'),
@@ -439,7 +439,7 @@ const doc = new Document({
             new Paragraph({
               alignment: AlignmentType.CENTER,
               children: [
-                footerRun(`${TITLE} · ${AUTHOR} · Page `),
+                footerRun(`${TITLE} · Page `),
                 new TextRun({ children: [PageNumber.CURRENT], font: FONT, size: SMALL, color: '5F6368' }),
                 footerRun(' of '),
                 new TextRun({ children: [PageNumber.TOTAL_PAGES], font: FONT, size: SMALL, color: '5F6368' }),
