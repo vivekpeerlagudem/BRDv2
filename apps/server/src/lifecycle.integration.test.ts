@@ -220,6 +220,12 @@ describe.skipIf(!testUrl)('sales lifecycle (PostgreSQL integration)', () => {
     ids.proposal = created.json.id;
     expect((await call('rep2', 'GET', `/api/v1/proposals/${ids.proposal}`)).status).toBe(404);
     let p = (await call('rep1', 'GET', `/api/v1/proposals/${ids.proposal}`)).json;
+    // Proposals list search: plain text finds the proposal; "%" and "_" are searched as text, not as LIKE wildcards.
+    const search = async (q: string) =>
+      ((await call('rep1', 'GET', `/api/v1/proposals?q=${encodeURIComponent(q)}`)).json.items as { id: string }[]).map((x) => x.id);
+    expect(await search(String(p.title).slice(0, 5))).toContain(ids.proposal);
+    expect(await search('%')).not.toContain(ids.proposal);
+    expect(await search('_')).not.toContain(ids.proposal);
     const content = p.currentVersion.content;
     const pricing = {
       lines: [

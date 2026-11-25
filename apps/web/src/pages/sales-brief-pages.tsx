@@ -122,7 +122,8 @@ const grouped = (v: string) => {
 function show(m: Pick<Metric, 'unit' | 'value'> | undefined, currency: string | null): string {
   if (!m || m.value === null) return '—';
   if (m.unit === 'money') return `${currency ?? ''} ${grouped(m.value)}`.trim();
-  if (m.unit === 'money_per_day') return `${currency ?? ''} ${grouped(m.value)} / day`.trim();
+  // Whole amount, like the slides and the server's formatMetric: "USD 10,162 / day" (Math.round is safe at this size).
+  if (m.unit === 'money_per_day') return `${currency ?? ''} ${grouped(String(Math.round(Number(m.value))))} / day`.trim();
   if (m.unit === 'percent') return `${m.value}%`;
   if (m.unit === 'days') return `${m.value} days`;
   return m.value;

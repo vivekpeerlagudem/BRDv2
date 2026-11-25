@@ -280,11 +280,20 @@ function salesBrief(c: Json): Json {
   const actionFor = (s: Json): string | null => {
     const finding = String(s.finding);
     const who = person(s);
-    if (s.kind === 'risk' && finding.includes('stalled')) return 'Review the stalled deals with their owners and agree one next step for each.';
+    // Singular or plural follows the number of deals the finding names (its "deal:" evidence).
+    const one = (Array.isArray(s.records) ? s.records : []).filter((r) => String(r).startsWith('deal:')).length === 1;
+    if (s.kind === 'risk' && finding.includes('stalled'))
+      return one
+        ? 'Review the stalled deal with its owner and agree one next step.'
+        : 'Review the stalled deals with their owners and agree one next step for each.';
     if (s.kind === 'risk' && finding.includes('stage time limit'))
-      return 'Decide for each deal over its stage time limit whether to move it forward or close it.';
-    if (s.kind === 'risk' && finding.includes('expected close date')) return 'Ask the owners to update the expected close dates that have passed.';
-    if (s.kind === 'risk' && finding.includes('not been viewed')) return 'Follow up with the buyers whose proposals have not been viewed.';
+      return one
+        ? 'Decide whether to move the deal over its stage time limit forward or close it.'
+        : 'Decide for each deal over its stage time limit whether to move it forward or close it.';
+    if (s.kind === 'risk' && finding.includes('expected close date'))
+      return one ? 'Ask the owner to update the expected close date that has passed.' : 'Ask the owners to update the expected close dates that have passed.';
+    if (s.kind === 'risk' && finding.includes('not been viewed'))
+      return one ? 'Follow up with the buyer whose proposal has not been viewed.' : 'Follow up with the buyers whose proposals have not been viewed.';
     if (s.kind === 'concentration') return 'Build more pipeline alongside the largest position so results do not depend on it.';
     if (s.kind === 'team')
       return who ? `Check in with ${who} about their open deals and whether activity is being logged.` : 'Check in with the rep about their open deals.';

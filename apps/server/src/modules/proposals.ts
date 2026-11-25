@@ -335,7 +335,8 @@ type ProposalListStatus = 'draft' | 'sent' | 'viewed' | 'accepted' | 'signed' | 
  * the existing tracking tables (counted view sessions, distinct viewers, active reading time, downloads).
  */
 export async function listAllProposals(ctx: AppContext, actor: UserActor, page: { q?: string; status?: ProposalListStatus; limit: number; offset: number }) {
-  const term = page.q?.trim().replace(/[%_]/g, (c) => `\${c}`);
+  // Escape LIKE wildcards with a backslash ("50%" searches for the text "50%"). `\${c}` was the literal text "${c}".
+  const term = page.q?.trim().replace(/[%_]/g, (c) => `\\${c}`);
   const where = and(
     ownerScope(actor, deal.ownerId, 'deals'),
     page.status ? eq(proposal.status, page.status) : undefined,

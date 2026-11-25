@@ -15,10 +15,29 @@ export function formatAmount(value: string | null): string {
 /** "74000.00", "USD" → "USD 74,000". */
 export const formatMoney = (value: string | null, currency: string): string => (value === null ? '–' : `${currency} ${formatAmount(value)}`);
 
+/** "10161.94" → "10162" · "-2.5" → "-3" (half away from zero), on the decimal string, without floating point. */
+function roundWhole(value: string): string {
+  const negative = value.startsWith('-');
+  const [whole = '0', cents = ''] = value.replace('-', '').split('.');
+  let digits = whole;
+  if ((cents[0] ?? '0') >= '5') {
+    const out: string[] = [];
+    let carry = 1;
+    for (let i = digits.length - 1; i >= 0; i--) {
+      const d = Number(digits[i]) + carry;
+      out.unshift(String(d % 10));
+      carry = d >= 10 ? 1 : 0;
+    }
+    digits = (carry ? '1' : '') + out.join('');
+  }
+  return `${negative && digits !== '0' ? '-' : ''}${digits}`;
+}
+
 export function formatMetric(m: Pick<SalesMetric, 'unit' | 'value'> | undefined, currency: string): string {
   if (!m || m.value === null) return '–';
   if (m.unit === 'money') return formatMoney(m.value, currency);
-  if (m.unit === 'money_per_day') return `${formatMoney(m.value, currency)} / day`;
+  // A rate per day is an average, so it is shown whole like every other amount: "USD 10,162 / day" (half up).
+  if (m.unit === 'money_per_day') return `${formatMoney(roundWhole(m.value), currency)} / day`;
   if (m.unit === 'percent') return `${m.value}%`;
   if (m.unit === 'days') return `${m.value} days`;
   return m.value;

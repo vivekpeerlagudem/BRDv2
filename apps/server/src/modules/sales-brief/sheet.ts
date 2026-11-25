@@ -21,7 +21,7 @@ export function safeText(value: string): string {
 }
 const num = (v: string | number | null | undefined): number | null => (v === null || v === undefined || v === '' ? null : Number(v));
 const REASON: Record<string, string> = { stalled: 'Stalled', overdue: 'Past expected close date', unviewed_proposal: 'Proposal not viewed' };
-const FORMAT = { count: '0', money: '#,##0.00', percent: '0.0"%"', days: '0.0', money_per_day: '#,##0.00' };
+const FORMAT = { count: '0', money: '#,##0.00', percent: '0.0"%"', days: '0.0', money_per_day: '#,##0' }; // velocity shown whole, as on the slides; the cell keeps the exact value
 
 export interface BriefHistoryRow {
   periodStart: string;

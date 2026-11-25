@@ -110,7 +110,9 @@ dialog[open] {
 @media (prefers-reduced-motion: reduce) {
   *,
   dialog[open] {
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must win over every component animation */
     animation: none !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must win over every component transition */
     transition: none !important;
   }
 }

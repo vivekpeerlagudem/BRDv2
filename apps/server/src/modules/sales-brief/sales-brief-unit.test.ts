@@ -793,7 +793,16 @@ describe('one money format everywhere', () => {
     expect(formatMoney('1250.50', 'EUR')).toBe('EUR 1,250.50');
     expect(formatMoney('1234567.00', 'USD')).toBe('USD 1,234,567'); // en-US grouping, never 12,34,567
     expect(formatMoney(null, 'USD')).toBe('–');
-    expect(formatMetric({ unit: 'money_per_day', value: '4333.33' }, 'USD')).toBe('USD 4,333.33 / day');
+    expect(formatMetric({ unit: 'money_per_day', value: '4333.33' }, 'USD')).toBe('USD 4,333 / day');
+  });
+
+  it('shows sales velocity as a whole amount per day, rounded half up', () => {
+    const v = (value: string) => formatMetric({ unit: 'money_per_day', value }, 'USD');
+    expect(v('10161.94')).toBe('USD 10,162 / day');
+    expect(v('10161.49')).toBe('USD 10,161 / day');
+    expect(v('999.50')).toBe('USD 1,000 / day');
+    expect(v('99999.99')).toBe('USD 100,000 / day');
+    expect(v('250.00')).toBe('USD 250 / day');
   });
 
   it('the facts carry money already written, so the AI copies it; the checks accept the written form', () => {
@@ -837,7 +846,7 @@ describe('one money format everywhere', () => {
       approverName: 'Tony Stark',
     });
     expect(model.asOfLabel).toBe('Pipeline and attention as of 23 Nov 2026');
-    expect(model.velocity).toBe('Sales velocity per day: USD 4,333.33 / day (uses quarter-to-date averages)');
+    expect(model.velocity).toBe('Sales velocity per day: USD 4,333 / day (uses quarter-to-date averages)');
     expect(model.kpis[4]).toMatchObject({ value: 'USD 200,000', change: 'weighted USD 114,000' });
     const zip = await JSZip.loadAsync(await renderBriefPptx(model));
     const slide = async (n: number) => (zip.file(`ppt/slides/slide${n}.xml`) as JSZip.JSZipObject).async('string');
@@ -878,5 +887,56 @@ describe('simulator text with written money (found in the slide check)', () => {
     expect(JSON.stringify(data)).not.toContain('%%');
     // The rep who won the most revenue: Captain America (USD 52,000), not the first in the list.
     expect(data.team[0]?.text).toBe('Captain America won 1 deal worth USD 52,000.');
+  });
+});
+
+describe('simulator actions follow the count (singular or plural)', () => {
+  const s = snapshot();
+  const doc = computeSalesMetrics(s);
+  const base = buildSalesFacts(s, doc, computeSignals(s, doc));
+  const actionsFor = async (signals: Record<string, unknown>[]) => {
+    const context = { ...base, facts: { ...base.facts, signals } };
+    const result = await new MockAiProvider().complete({
+      requestId: '77777777-7777-7777-8777-777777777777',
+      feature: 'sales_brief',
+      model: 'x',
+      effort: 'medium',
+      maxTokens: 100,
+      timeoutMs: 1000,
+      system: PROMPTS.sales_brief.system,
+      user: renderUserMessage({ report: 'weekly_sales_brief' }, context),
+      jsonSchema: jsonSchemaOf(PROMPTS.sales_brief.schema),
+      userRef: 'u',
+    });
+    return salesBriefOutput.parse(JSON.parse(result.text)).actions.map((a) => a.text);
+  };
+  const risk = (id: string, finding: string, deals: number) => ({
+    id,
+    kind: 'risk',
+    severity: 'medium',
+    finding,
+    metrics: ['metric:S-13'],
+    records: Array.from({ length: deals }, (_, i) => [`deal:d${id}${i}`, 'user:u1']).flat(),
+  });
+
+  it('writes the singular when one deal or proposal is named', async () => {
+    expect(
+      await actionsFor([
+        risk('signal:1', '1 proposal sent more than 3 days ago has not been viewed: A (B).', 1),
+        risk('signal:2', 'Deals past their expected close date rose from 0 to 1: A (B).', 1),
+      ]),
+    ).toEqual(['Follow up with the buyer whose proposal has not been viewed.', 'Ask the owner to update the expected close date that has passed.']);
+  });
+
+  it('writes the plural when several are named', async () => {
+    expect(
+      await actionsFor([
+        risk('signal:1', '2 proposals sent more than 3 days ago have not been viewed: A (B), C (D).', 2),
+        risk('signal:2', '2 deals are stalled in Discovery: A (B), C (D).', 2),
+      ]),
+    ).toEqual([
+      'Follow up with the buyers whose proposals have not been viewed.',
+      'Review the stalled deals with their owners and agree one next step for each.',
+    ]);
   });
 });

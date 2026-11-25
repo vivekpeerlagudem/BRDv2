@@ -361,7 +361,7 @@ function build(img: { architecture: Buffer; thumbs: Buffer | null }): Block[] {
       '**6 Wins & losses:** won deals with owner, amount and cycle days; loss reasons chart.',
       '**7 Team:** per rep open deals, pipeline, won, revenue, win rate and activity.',
       '**8 Attention & risks:** named deals with stage, amount and why (stalled, past close, proposal not viewed).',
-      '**9 Month & quarter to date:** six figures for week, month and quarter; sales velocity (quarter-to-date averages).',
+      '**9 Month & quarter to date:** six figures for week, month and quarter; sales velocity, a whole amount ("USD 10,162 / day", quarter-to-date averages).',
     ].map((text) => new Paragraph({ spacing: { after: 0, line: 240 }, children: rich(text, SMALL) })),
     new Paragraph({ spacing: { after: 60 }, children: [] }),
     p('**Excel tabs:** Summary · Insights · Funnel · Pipeline by stage · Deals won · Deals lost · Team · Attention · Brief history. Money is a number with en-US grouping; headers are frozen.'),
@@ -383,8 +383,8 @@ function build(img: { architecture: Buffer; thumbs: Buffer | null }): Block[] {
     table(
       ['Test', 'Result'],
       [
-        ['pnpm verify (lint, types, all unit and integration tests, builds)', '24 test files, 317 tests passed; 50 of them are for the sales brief (37 unit, 13 integration)'],
-        ['e2e/sales-brief-preview.spec.ts (browser, Edge)', 'Passed. Figures equal the Reports page: won 2, revenue 37000.00, pipeline 236000.00. Evidence opens the deal; PowerPoint and Excel downloaded; settings saved, reloaded and restored'],
+        ['pnpm verify (lint, types, all unit and integration tests, builds)', '24 test files, 320 tests passed, no lint warnings; 53 of them are for the sales brief (40 unit, 13 integration)'],
+        ['e2e/sales-brief-preview.spec.ts (browser, Edge)', 'Passed. On fresh demo data the figures equal the Reports page: won 2, revenue 37000.00, pipeline 236000.00. Evidence opens the deal; PowerPoint and Excel downloaded; settings saved, reloaded and restored'],
         ['e2e/weekly-reports and weekly-workflow-preview (per-client report)', '1 and 2 passed: the separate per-client feature still works'],
         ['Visual check', 'All 9 slides exported with PowerPoint and checked: no overlap or wrapping, labels present, numbers equal the brief page'],
       ],
