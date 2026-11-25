@@ -483,6 +483,8 @@ export async function decide(ctx: AppContext, actor: UserActor, generationId: st
     if (!g || g.requestedBy !== actor.userId) throw notFound('AI suggestion');
     // Weekly report text is decided only by approving the report (modules/weekly-reports.ts), never here.
     if (g.feature === 'weekly_report') throw rule('WEEKLY_REPORT_DECIDED_BY_APPROVAL', 'This text is accepted by approving the weekly report');
+    // The same holds for the weekly sales brief (modules/sales-brief.ts).
+    if (g.feature === 'sales_brief') throw rule('SALES_BRIEF_DECIDED_BY_APPROVAL', 'This text is accepted by approving the sales brief');
     if (g.status !== 'pending') throw conflict('INVALID_STATE_TRANSITION', 'This suggestion was already decided');
     const output = g.output as { text?: string; subject?: string; body?: string; overview?: string };
     let accepted: Record<string, unknown> | null = null;

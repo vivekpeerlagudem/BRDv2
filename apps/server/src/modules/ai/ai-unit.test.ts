@@ -205,6 +205,7 @@ describe('prompts and schemas', () => {
       AI_MODEL_REWRITE: 'm-rw',
       AI_MODEL_REVIEW: 'm-rev',
       AI_MODEL_WEEKLY: 'm-wk',
+      AI_MODEL_SALES_BRIEF: 'm-sb',
     } as never;
     expect(Object.values(PROMPTS).map((p) => [p.feature, p.model(config)])).toEqual([
       ['draft_section', 'm-draft'],
@@ -213,6 +214,7 @@ describe('prompts and schemas', () => {
       ['rewrite_text', 'm-rw'],
       ['follow_up_email', 'm-fu'],
       ['weekly_report', 'm-wk'],
+      ['sales_brief', 'm-sb'],
     ]);
     for (const p of Object.values(PROMPTS)) {
       expect(p.version).toMatch(new RegExp(`^${p.feature}/v\\d+$`));
@@ -281,7 +283,15 @@ describe('guardrails and accounting', () => {
       enabled: true,
       perUserDailyCalls: 50,
       monthlyBudgetUsd: 50,
-      features: { draft_section: true, presend_review: true, deal_summary: true, rewrite_text: true, follow_up_email: true, weekly_report: true },
+      features: {
+        draft_section: true,
+        presend_review: true,
+        deal_summary: true,
+        rewrite_text: true,
+        follow_up_email: true,
+        weekly_report: true,
+        sales_brief: true,
+      },
     });
     expect(resolveAiSettings(undefined).enabled).toBe(false);
     expect(resolveAiSettings({ enabled: true, perUserDailyCalls: 5, features: { rewrite_text: false } }).features.rewrite_text).toBe(false);

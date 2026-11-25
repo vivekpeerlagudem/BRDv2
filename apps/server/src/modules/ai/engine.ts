@@ -15,7 +15,7 @@ import { jsonSchemaOf, type PromptDef } from './prompts.ts';
 
 const { aiUsage, organizationSettings } = schema;
 
-export const AI_FEATURES: AiFeature[] = ['draft_section', 'presend_review', 'deal_summary', 'rewrite_text', 'follow_up_email', 'weekly_report'];
+export const AI_FEATURES: AiFeature[] = ['draft_section', 'presend_review', 'deal_summary', 'rewrite_text', 'follow_up_email', 'weekly_report', 'sales_brief'];
 export interface ResolvedAiSettings {
   enabled: boolean;
   perUserDailyCalls: number;

@@ -229,6 +229,130 @@ function weeklyReport(c: Json): Json {
   return { summary, completed, nextWeek, risks };
 }
 
+/**
+ * Weekly sales brief: analysis and recommended actions built only from the facts. Every statement cites the ids it
+ * used, insights and actions name their signal, numbers are copied (never computed), and causes are stated only when
+ * the facts record them.
+ */
+function salesBrief(c: Json): Json {
+  const metricFact = (id: string): Json | undefined => (c.metrics ?? []).find((m: Json) => m.id === `metric:${id}`);
+  const metric = (id: string): string | null => metricFact(id)?.value ?? null;
+  const signals: Json[] = c.signals ?? [];
+  const deals: Json[] = c.deals ?? [];
+  const team: Json[] = c.team ?? [];
+  const money = (v: unknown) => `${v} ${c.currency ?? ''}`.trim();
+  const many = (n: unknown, one: string, plural = `${one}s`) => `${n} ${String(n) === '1' ? one : plural}`;
+  const short = (text: string) => (text.length <= 300 ? text : `${text.slice(0, text.lastIndexOf(' ', 280))}…`);
+  const evidence = (s: Json) => [s.id, ...(s.metrics ?? []), ...(s.records ?? []).slice(0, 4)];
+  const person = (s: Json) => team.find((t) => (s.records ?? []).includes(t.id))?.name as string | undefined;
+
+  const headline: Json[] = [];
+  const won = metric('S-07');
+  const revenue = metric('S-08');
+  const created = metric('S-05');
+  if (won !== null && revenue !== null && created !== null)
+    headline.push({
+      text: `This week the team won ${many(won, 'deal')} worth ${money(revenue)} and opened ${many(created, 'new opportunity', 'new opportunities')}.`,
+      sources: ['metric:S-07', 'metric:S-08', 'metric:S-05'],
+    });
+  const pipeline = metric('S-11');
+  if (pipeline !== null) headline.push({ text: `The open pipeline stands at ${money(pipeline)}.`, sources: ['metric:S-11'] });
+  const top = signals[0];
+  if (top) headline.push({ text: `The main point to look at: ${short(String(top.finding)).replace(/\.$/, '')}.`, sources: evidence(top) });
+  if (!headline.length) headline.push({ text: `This is the weekly sales brief for ${c.organization ?? 'the company'}.`, sources: ['period'] });
+
+  const meaning: Record<string, string> = {
+    risk: 'This puts revenue at risk if nothing changes.',
+    bottleneck: 'This step limits how many leads become deals.',
+    concentration: 'Results depend heavily on one place.',
+    team: 'It is worth checking whether work is happening but not being logged.',
+    trend: 'It is worth checking what changed.',
+    opportunity: 'This may be worth more attention.',
+  };
+  const insights = signals.slice(0, 5).map((s) => ({
+    text: short(`${String(s.finding)} ${meaning[String(s.kind)] ?? ''}`.trim()),
+    sources: evidence(s),
+    signalIds: [s.id],
+    kind: s.kind,
+  }));
+
+  const actionFor = (s: Json): string | null => {
+    const finding = String(s.finding);
+    const who = person(s);
+    if (s.kind === 'risk' && finding.includes('stalled')) return 'Review the stalled deals with their owners and agree one next step for each.';
+    if (s.kind === 'risk' && finding.includes('stage time limit'))
+      return 'Decide for each deal over its stage time limit whether to move it forward or close it.';
+    if (s.kind === 'risk' && finding.includes('expected close date')) return 'Ask the owners to update the expected close dates that have passed.';
+    if (s.kind === 'risk' && finding.includes('not been viewed')) return 'Follow up with the buyers whose proposals have not been viewed.';
+    if (s.kind === 'concentration') return 'Build more pipeline alongside the largest position so results do not depend on it.';
+    if (s.kind === 'team')
+      return who ? `Check in with ${who} about their open deals and whether activity is being logged.` : 'Check in with the rep about their open deals.';
+    if (s.kind === 'bottleneck') return 'Look at the weakest funnel step before adding more leads at the top.';
+    if (s.kind === 'trend' && finding.includes('fell')) return 'Look into what is behind the drop before next week.';
+    if (s.kind === 'opportunity') return 'Consider putting more effort into the lead source that converted best.';
+    return null;
+  };
+  const actions: Json[] = [];
+  for (const s of signals) {
+    const text = actionFor(s);
+    if (text && actions.length < 4 && !actions.some((a) => a.text === text)) actions.push({ text, sources: evidence(s), signalIds: [s.id] });
+  }
+
+  const throughput: Json[] = [];
+  const [leads, qualified, converted] = [metric('S-01'), metric('S-02'), metric('S-03')];
+  if (leads !== null && qualified !== null && converted !== null)
+    throughput.push({
+      text: `${many(leads, 'new lead')} came in, ${qualified} ${qualified === '1' ? 'was' : 'were'} qualified and ${converted} converted.`,
+      sources: ['metric:S-01', 'metric:S-02', 'metric:S-03'],
+    });
+  const rate = metric('S-04');
+  if (rate !== null) throughput.push({ text: `Lead conversion rate was ${rate}%.`, sources: ['metric:S-04'] });
+  const bottleneck = signals.find((s) => s.kind === 'bottleneck');
+  if (bottleneck) throughput.push({ text: short(String(bottleneck.finding)), sources: evidence(bottleneck) });
+
+  const wins = deals
+    .filter((d) => d.status === 'won')
+    .slice(0, 3)
+    .map((d) => ({ text: d.amount ? `${d.owner} won ${d.name} for ${money(d.amount)}.` : `${d.owner} won ${d.name}.`, sources: [d.id] }));
+
+  const pipelineLines: Json[] = [];
+  if (pipeline !== null) pipelineLines.push({ text: `Open pipeline is ${money(pipeline)}.`, sources: ['metric:S-11'] });
+  const stages: Json[] = [...(c.pipelineByStage ?? [])].sort((a, b) => Number(b.value) - Number(a.value));
+  if (stages[0])
+    pipelineLines.push({
+      text: `The largest stage is ${stages[0].stage} with ${many(stages[0].deals, 'deal')} worth ${money(stages[0].value)}.`,
+      sources: ['metric:S-11'],
+    });
+  const advanced = metric('S-06');
+  if (advanced !== null)
+    pipelineLines.push({ text: `${many(advanced, 'opportunity', 'opportunities')} moved forward a stage this week.`, sources: ['metric:S-06'] });
+
+  const risks: Json[] = deals
+    .filter((d) => d.status === 'lost')
+    .slice(0, 2)
+    .map((d) => ({ text: `${d.name} was lost; the recorded reason is ${d.lostReason}.`, sources: [d.id] }));
+  const attention = metricFact('S-13');
+  if (attention && attention.value !== '0')
+    risks.push({ text: `${many(attention.value, 'open deal')} need attention (${attention.detail}).`, sources: ['metric:S-13'] });
+
+  const teamLines: Json[] = [];
+  const best = [...team].filter((t) => Number(t.dealsWon ?? 0) > 0).sort((a, b) => Number(b.revenueWon) - Number(a.revenueWon))[0];
+  if (best) teamLines.push({ text: `${best.name} won ${many(best.dealsWon, 'deal')} worth ${money(best.revenueWon)}.`, sources: [best.id] });
+  const activity = metricFact('S-15');
+  if (activity) teamLines.push({ text: `The team logged ${many(activity.value, 'activity', 'activities')} (${activity.detail}).`, sources: ['metric:S-15'] });
+
+  return {
+    headline: headline.slice(0, 3),
+    insights,
+    actions,
+    throughput: throughput.slice(0, 3),
+    wins,
+    pipeline: pipelineLines.slice(0, 3),
+    risks: risks.slice(0, 4),
+    team: teamLines.slice(0, 3),
+  };
+}
+
 export class MockAiProvider implements AiProvider {
   readonly name = 'fake';
   readonly simulated = true;
@@ -269,7 +393,9 @@ export class MockAiProvider implements AiProvider {
                 ? rewrite(task)
                 : req.feature === 'weekly_report'
                   ? weeklyReport(context)
-                  : followUp(task, context);
+                  : req.feature === 'sales_brief'
+                    ? salesBrief(context)
+                    : followUp(task, context);
       text = JSON.stringify(answer);
     }
     return {

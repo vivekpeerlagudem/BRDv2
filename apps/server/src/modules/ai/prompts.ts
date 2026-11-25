@@ -62,6 +62,23 @@ const weeklyStatement = z.object({
   /** Ids copied from the facts this sentence is based on (checked by code; never shown to the client). */
   sources: z.array(z.string()),
 });
+const briefStatement = z.object({ text: z.string(), sources: z.array(z.string()) });
+const briefInsight = briefStatement.extend({
+  signalIds: z.array(z.string()),
+  kind: z.enum(['trend', 'bottleneck', 'risk', 'opportunity', 'concentration', 'team']),
+});
+const briefAction = briefStatement.extend({ signalIds: z.array(z.string()) });
+/** Weekly sales brief for leadership: analysis and recommended actions, every sentence tied to its evidence. */
+export const salesBriefOutput = z.object({
+  headline: z.array(briefStatement),
+  insights: z.array(briefInsight),
+  actions: z.array(briefAction),
+  throughput: z.array(briefStatement),
+  wins: z.array(briefStatement),
+  pipeline: z.array(briefStatement),
+  risks: z.array(briefStatement),
+  team: z.array(briefStatement),
+});
 export const weeklyReportOutput = z.object({
   summary: z.array(weeklyStatement),
   completed: z.array(weeklyStatement),
@@ -172,6 +189,17 @@ export const PROMPTS = {
     system: `${BASE_RULES}\n\nTask: write the text of a weekly status report that sellerOrganization sends to its CLIENT (<crm_context>.client). Write in the seller's voice, first person plural ("we"). Return four lists of short statements: "summary" (2-3 sentences on overall progress this week), "completed" (at most 5: what was finished this week), "nextWeek" (at most 5: what is planned next) and "risks" (at most 3: risks or support needed from the client; an empty list when there are none).\nEVERY statement must list in "sources" at least one id copied exactly from an "id" field in <crm_context> (for example "metric:E-05" or "scope:…"). A statement without a source will be rejected.\nNumbers: only copy a number exactly as it appears in a metric or fact value. Never calculate, add up, round or estimate.\nNever mention internal matters: unmatched items, mismatches, flags, tracking, how the report is produced, or the name of any internal user other than accountOwner.\nNo blame, no guarantees and no promises. One sentence per statement, plain words, no ids or codes in the text itself.`,
     schema: weeklyReportOutput,
   } satisfies PromptDef<z.infer<typeof weeklyReportOutput>>,
+  sales_brief: {
+    feature: 'sales_brief',
+    version: 'sales_brief/v1',
+    model: (c) => c.AI_MODEL_SALES_BRIEF,
+    effort: 'medium',
+    maxTokens: 8000,
+    contextBudget: 24_000,
+    sources: [],
+    system: `${BASE_RULES}\n\nTask: write the weekly SALES BRIEF for the leadership of <crm_context>.organization (the CEO and administrators). It is internal: it is never sent to customers, and you may name sales reps and deals that appear in <crm_context>. The figures and the "signals" (findings) were computed by code and are correct; your job is to explain them and recommend actions, not to calculate.\nReturn eight lists of short statements: "headline" (2-3: the week in brief), "insights" (at most 5: what a signal means for the business), "actions" (at most 4: a concrete recommended next step, naming the owner when <crm_context> names one), "throughput" (at most 3: the lead-to-deal funnel), "wins" (at most 3), "pipeline" (at most 3), "risks" (at most 4) and "team" (at most 3). A list may be empty when there is nothing to say.\nEvidence: EVERY statement must list in "sources" at least one id copied exactly from an "id" field in <crm_context> (for example "metric:S-08", "signal:2", "deal:…", "user:…"). Every insight and every action must also list in "signalIds" at least one signal id it is about; an insight copies that signal's "kind". Statements without evidence are rejected.\nNumbers: only copy a number exactly as it appears in <crm_context>. Never calculate, add up, round, estimate or project.\nWhy: explain a cause only when <crm_context> records it (a lost reason, a stage age, days without activity, a proposal not viewed, a lead source). Otherwise say it is something to check, not what the cause is.\nNo forecasts and no certainty: never say a deal "will close", never forecast, never write "certainly" or "guarantee". No blame: describe what the records show, not who is at fault. One or two plain sentences per statement, no ids or codes in the text itself.`,
+    schema: salesBriefOutput,
+  } satisfies PromptDef<z.infer<typeof salesBriefOutput>>,
 } as const;
 
 /** JSON Schema sent to the provider for constrained output. */

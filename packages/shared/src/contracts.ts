@@ -198,7 +198,7 @@ export const userPatchInput = z.object({
 });
 export const deactivateInput = z.object({ reassignToUserId: uuid });
 // ───────────────────────── AI assistance (BR-AIA-001..008) ─────────────────────────
-export const AI_FEATURES = ['draft_section', 'presend_review', 'deal_summary', 'rewrite_text', 'follow_up_email', 'weekly_report'] as const;
+export const AI_FEATURES = ['draft_section', 'presend_review', 'deal_summary', 'rewrite_text', 'follow_up_email', 'weekly_report', 'sales_brief'] as const;
 export type AiFeatureKey = (typeof AI_FEATURES)[number];
 export const AI_REWRITE_MODES = ['improve', 'professional', 'concise', 'expand', 'friendly', 'formal', 'simplify', 'custom'] as const;
 export const AI_FOLLOW_UP_SCENARIOS = ['initial', 'viewed', 'revisited', 'not_viewed', 'changes_requested', 'gone_quiet'] as const;
@@ -239,15 +239,16 @@ export const aiSettingsInput = z.object({
   enabled: z.boolean(),
   perUserDailyCalls: z.number().int().min(1).max(1000),
   monthlyBudgetUsd: z.number().min(0).max(100000),
-  // 'weekly_report' was added later: optional, so clients that send only the original switches keep working (default on).
+  // 'weekly_report' and 'sales_brief' were added later: optional, so clients that send only the original switches
+  // keep working (default on).
   features: z
     .object(
-      Object.fromEntries(AI_FEATURES.filter((f) => f !== 'weekly_report').map((f) => [f, z.boolean()])) as Record<
-        Exclude<AiFeatureKey, 'weekly_report'>,
+      Object.fromEntries(AI_FEATURES.filter((f) => f !== 'weekly_report' && f !== 'sales_brief').map((f) => [f, z.boolean()])) as Record<
+        Exclude<AiFeatureKey, 'weekly_report' | 'sales_brief'>,
         z.ZodBoolean
       >,
     )
-    .extend({ weekly_report: z.boolean().optional() }),
+    .extend({ weekly_report: z.boolean().optional(), sales_brief: z.boolean().optional() }),
 });
 
 // ───────────────────────── Weekly Report Agents (prototype) ─────────────────────────

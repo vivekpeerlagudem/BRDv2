@@ -1,9 +1,15 @@
 /** Weekly Sales Brief — metrics, signals and the facts pack. Pure functions, no database. */
 import { describe, expect, it } from 'vitest';
+import type { SalesBriefNarrative, SalesBriefStatement } from '../../db/schema-sales-brief.ts';
+import { MockAiProvider } from '../../platform/mock-ai.ts';
+import { jsonSchemaOf, PROMPTS, renderUserMessage, salesBriefOutput } from '../ai/prompts.ts';
+import { FALLBACK_TEXT } from '../weekly-reports/checks.ts';
 import { allowedSourceIds } from '../weekly-reports/facts.ts';
+import { BRIEF_LIMITS, checkBrief, composeBriefFlags } from './checks.ts';
 import { monthAndQuarterStart, type SalesSnapshot, type SalesWindow } from './collect.ts';
 import { buildSalesFacts } from './facts.ts';
 import { changePct, computeSalesMetrics, metricOf } from './metrics.ts';
+import { briefFallbackMessage, fallbackBrief } from './narrative.ts';
 import { computeSignals, THRESHOLDS } from './signals.ts';
 
 const U = { cap: 'u-cap', spidey: 'u-spidey', widow: 'u-widow' };
@@ -380,5 +386,134 @@ describe('sales brief facts pack', () => {
     expect(text).toContain('"finding"');
     expect(text).not.toContain('snapshot');
     expect(context.refs).toEqual([{ type: 'sales_brief_run', id: 'run-1' }]);
+  });
+});
+
+describe('sales brief checks and simulator', () => {
+  const s = snapshot();
+  const doc = computeSalesMetrics(s);
+  const signals = computeSignals(s, doc);
+  const context = buildSalesFacts(s, doc, signals);
+  let n = 0;
+  const st = (text: string, sources: string[], extra: Partial<SalesBriefStatement> = {}): SalesBriefStatement => ({
+    id: `t${++n}`,
+    text,
+    sources,
+    origin: 'ai',
+    ...extra,
+  });
+  const brief = (o: Partial<SalesBriefNarrative> = {}): SalesBriefNarrative => ({
+    headline: [st('The team won 2 deals this week.', ['metric:S-07'])],
+    insights: [],
+    actions: [],
+    throughput: [],
+    wins: [],
+    pipeline: [],
+    risks: [],
+    team: [],
+    ...o,
+  });
+  const codes = (b: SalesBriefNarrative) => checkBrief(b, context.facts, signals).map((f) => f.code);
+
+  it('the simulator answer matches the schema, passes every check and ties insights and actions to signals', async () => {
+    const result = await new MockAiProvider().complete({
+      requestId: '55555555-5555-7555-8555-555555555555',
+      feature: 'sales_brief',
+      model: 'x',
+      effort: 'medium',
+      maxTokens: 100,
+      timeoutMs: 1000,
+      system: PROMPTS.sales_brief.system,
+      user: renderUserMessage({ report: 'weekly_sales_brief' }, context),
+      jsonSchema: jsonSchemaOf(PROMPTS.sales_brief.schema),
+      userRef: 'u',
+    });
+    const data = salesBriefOutput.parse(JSON.parse(result.text));
+    let i = 0;
+    const narrative = Object.fromEntries(
+      Object.entries(data).map(([section, list]) => [section, list.map((x) => ({ id: `m${++i}`, origin: 'ai' as const, ...x }))]),
+    ) as SalesBriefNarrative;
+    expect(checkBrief(narrative, context.facts, signals)).toEqual([]);
+    expect(narrative.headline[0]?.text).toBe('This week the team won 2 deals worth 74000.00 USD and opened 6 new opportunities.');
+    expect(narrative.insights.length).toBeGreaterThanOrEqual(3);
+    expect(narrative.insights.length).toBeLessThanOrEqual(5);
+    for (const insight of narrative.insights) {
+      expect(insight.signalIds).toHaveLength(1);
+      expect(insight.kind).toBe(signals.find((x) => x.id === insight.signalIds?.[0])?.kind);
+    }
+    expect(narrative.actions.length).toBeGreaterThanOrEqual(2);
+    expect(narrative.actions.length).toBeLessThanOrEqual(4);
+    expect(narrative.actions[0]?.text).toBe('Review the stalled deals with their owners and agree one next step for each.');
+    expect(narrative.wins.map((w) => w.text)).toContain('Captain America won Stark – ERP integration for 52000.00 USD.');
+    expect(narrative.risks.map((r) => r.text)).toContain('Daily Bugle – Archive was lost; the recorded reason is Price.');
+    expect(JSON.stringify(data)).not.toMatch(/will close|forecast|certainly|guarantee/i);
+  });
+
+  it('accepts a sourced statement and rejects missing or unknown evidence', () => {
+    expect(codes(brief())).toEqual([]);
+    expect(codes(brief({ headline: [st('The team won 2 deals this week.', [])] }))).toEqual(['NO_SOURCE']);
+    expect(codes(brief({ headline: [st('The team won 2 deals this week.', ['metric:S-99'])] }))).toEqual(['UNKNOWN_SOURCE']);
+    expect(codes(brief({ wins: [st('A deal was won.', ['deal:not-in-the-brief'])] }))).toEqual(['UNKNOWN_SOURCE']);
+    expect(codes(brief({ headline: [] }))).toEqual(['EMPTY_SECTION']);
+  });
+
+  it('every insight and every action must name a real signal', () => {
+    const ok = { signalIds: ['signal:1'], kind: 'risk' as const };
+    expect(codes(brief({ insights: [st('Two deals are stalled.', ['signal:1'], ok)] }))).toEqual([]);
+    expect(codes(brief({ insights: [st('Two deals are stalled.', ['signal:1'])] }))).toEqual(['NO_SIGNAL']);
+    expect(codes(brief({ insights: [st('Two deals are stalled.', ['signal:1'], { signalIds: [] })] }))).toEqual(['NO_SIGNAL']);
+    expect(codes(brief({ actions: [st('Review the stalled deals.', ['signal:1'], { signalIds: ['signal:99'] })] }))).toEqual(['UNKNOWN_SIGNAL']);
+    expect(codes(brief({ actions: [st('Review the stalled deals.', ['signal:1', `user:${U.cap}`], { signalIds: ['signal:1'] })] }))).toEqual([]);
+    expect(codes(brief({ actions: [st('Ask Hawkeye to help.', ['signal:1', 'user:someone-else'], { signalIds: ['signal:1'] })] }))).toEqual(['UNKNOWN_SOURCE']);
+    // A person vouches for their own sentence: no signal needed.
+    expect(codes(brief({ actions: [st('Call the client on Monday.', [], { origin: 'user' })] }))).toEqual([]);
+  });
+
+  it('numbers must be in the facts: blocking for AI text, a warning for a person', () => {
+    const invented = checkBrief(brief({ headline: [st('Revenue will reach 999000 next month.', ['metric:S-08'])] }), context.facts, signals);
+    expect(invented.map((f) => [f.code, f.level])).toEqual([['UNVERIFIED_NUMBER', undefined]]);
+    const byHand = checkBrief(brief({ headline: [st('We expect 12 demos next week.', [], { origin: 'user' })] }), context.facts, signals);
+    expect(byHand.map((f) => [f.code, f.level])).toEqual([['UNVERIFIED_NUMBER', 'warning']]);
+    expect(codes(brief({ headline: [st('Revenue won was 74,000 USD, up from 30000.', ['metric:S-08'])] }))).toEqual([]);
+    // Digits inside record ids never count as known numbers.
+    expect(codes(brief({ headline: [st('There were 5555 calls.', ['metric:S-15'])] }))).toEqual(['UNVERIFIED_NUMBER']);
+  });
+
+  it('no forecasts, certainty or blame; limits on length and count', () => {
+    for (const text of [
+      'This deal will close next week.',
+      'We forecast a strong month.',
+      'It will certainly improve.',
+      'This is the fault of the rep.',
+      'We guarantee growth.',
+    ])
+      expect(codes(brief({ risks: [st(text, ['metric:S-13'])] }))).toEqual(['BANNED_WORD']);
+    expect(codes(brief({ risks: [st('x'.repeat(321), ['metric:S-13'])] }))).toEqual(['TOO_LONG']);
+    expect(codes(brief({ headline: [1, 2, 3, 4].map(() => st('The team won 2 deals this week.', ['metric:S-07'])) }))).toEqual(['TOO_MANY']);
+    expect(BRIEF_LIMITS).toEqual({ headline: 3, insights: 5, actions: 4, throughput: 3, wins: 3, pipeline: 3, risks: 4, team: 3 });
+  });
+
+  it('fallback: placeholders for headline, insights and actions; one blocking flag until a person writes them', () => {
+    const fallback = fallbackBrief();
+    expect(Object.fromEntries(Object.entries(fallback).map(([k, v]) => [k, v.length]))).toEqual({
+      headline: 1,
+      insights: 1,
+      actions: 1,
+      throughput: 0,
+      wins: 0,
+      pipeline: 0,
+      risks: 0,
+      team: 0,
+    });
+    expect(fallback.headline[0]).toMatchObject({ text: FALLBACK_TEXT, origin: 'fallback', sources: [] });
+    expect(checkBrief(fallback, context.facts, signals)).toEqual([]); // placeholders are not checked one by one
+    expect(composeBriefFlags(fallback, context.facts, signals).map((f) => f.code)).toEqual(['PLACEHOLDER_TEXT']);
+    const aiFallback = [{ code: 'AI_FALLBACK', statementId: null, message: briefFallbackMessage('AI_DISABLED') }];
+    expect(composeBriefFlags(fallback, context.facts, signals, aiFallback).map((f) => f.code)).toEqual(['AI_FALLBACK']);
+    expect(briefFallbackMessage('AI_DISABLED')).toBe(
+      'No AI analysis: AI is switched off for the sales brief. The figures and findings are complete; write the text yourself, or regenerate.',
+    );
+    for (const code of ['AI_DISABLED', 'AI_QUOTA_EXCEEDED', 'AI_PROVIDER_UNAVAILABLE', 'CHECKS_FAILED', 'NEW_CODE'])
+      expect(briefFallbackMessage(code)).not.toMatch(/[A-Z]{2,}_[A-Z]/);
   });
 });

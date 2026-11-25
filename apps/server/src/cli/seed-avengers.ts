@@ -236,7 +236,15 @@ try {
     enabled: true,
     perUserDailyCalls: Math.max(ai.perUserDailyCalls ?? 50, 200),
     monthlyBudgetUsd: ai.monthlyBudgetUsd ?? 50,
-    features: { draft_section: true, presend_review: true, deal_summary: true, rewrite_text: true, follow_up_email: true, weekly_report: true },
+    features: {
+      draft_section: true,
+      presend_review: true,
+      deal_summary: true,
+      rewrite_text: true,
+      follow_up_email: true,
+      weekly_report: true,
+      sales_brief: true,
+    },
   });
 
   // ── d. Catalogue and template ───────────────────────────────────────────────────────────────────────────────────
