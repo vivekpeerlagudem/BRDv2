@@ -168,7 +168,7 @@ export async function importEstimateRecords(
       errorCount: 0,
     });
   if (parsed.errors.length)
-    throw rule('ESTIMATES_INVALID', `${parsed.errors.length} problem(s) in the sheet. Nothing was imported.`, {
+    throw rule('ESTIMATES_INVALID', `${parsed.errors.length === 1 ? '1 problem' : `${parsed.errors.length} problems`} in the sheet. Nothing was imported.`, {
       errors: parsed.errors.slice(0, 20),
       errorCount: parsed.errors.length,
     });

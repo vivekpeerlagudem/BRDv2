@@ -274,6 +274,10 @@ describe.skipIf(!testUrl)('weekly report agents (PostgreSQL integration)', () =>
     const completed = detail.json.narrative.find((s: any) => s.section === 'completed');
     expect(completed.statements.map((s: any) => s.text)).toEqual(['We completed Requirements workshop and sign-off.']);
     expect(completed.statements[0].sources[0].label).toBe('S-001 · Requirements workshop and sign-off');
+    // A scope source opens the record that holds its CRM task (it used to have no link, and tasks linked to the task list).
+    expect(completed.statements[0].sources[0].link).toMatch(/^\/(deals|companies|contacts)\/[0-9a-f-]{36}$/);
+    const links = detail.json.narrative.flatMap((s: any) => s.statements.flatMap((x: any) => x.sources.map((src: any) => src.link)));
+    expect(links).not.toContain('/tasks');
 
     // Draft deck: 6 slides, the client on slide 1, marked DRAFT, no source ids or internal words anywhere.
     const draft = await call('rep1', 'GET', `/api/v1/weekly-reports/${run!.id}/pptx/draft`);
@@ -409,7 +413,7 @@ describe.skipIf(!testUrl)('weekly report agents (PostgreSQL integration)', () =>
     await runDueJobs(ctx);
     const third = (await runsOf(ids.companyB as string))[2]!;
     expect(third).toMatchObject({ status: 'needs_attention', aiFallback: true, failureReason: null });
-    expect(third.checkFlags[0]?.message).toContain('AI_PROVIDER_UNAVAILABLE');
+    expect(third.checkFlags[0]?.message).toBe('No AI text: the AI service was not available. Write the text yourself, or regenerate.'); // plain words, no error code
   });
 
   it('a run whose owner is no longer active fails with a reason instead of crashing', async () => {
@@ -474,7 +478,7 @@ describe.skipIf(!testUrl)('weekly report agents (PostgreSQL integration)', () =>
     await runDueJobs(ctx);
     const run = (await runsOf(ids.companyA as string)).at(-1)!;
     expect(run).toMatchObject({ status: 'needs_attention', aiFallback: true });
-    expect(run.checkFlags[0]?.message).toContain('AI_DISABLED');
+    expect(run.checkFlags[0]?.message).toBe('No AI text: AI is switched off for weekly reports. Write the text yourself, or regenerate.');
     expect(ai.calls).toHaveLength(0);
     ids.runFallbackA = run.id;
     expect(

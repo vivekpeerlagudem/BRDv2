@@ -303,7 +303,13 @@ function composeFlags(
     ...extra,
     // Internal notice for the reviewer only: the sheet and the CRM disagree on some rows (the CRM was used).
     ...(mismatches
-      ? [{ code: 'STATUS_MISMATCH', statementId: null, message: `${mismatches} scope row(s) differ between the sheet and the CRM; the CRM status was used` }]
+      ? [
+          {
+            code: 'STATUS_MISMATCH',
+            statementId: null,
+            message: `${mismatches === 1 ? '1 scope row differs' : `${mismatches} scope rows differ`} between the sheet and the CRM; the CRM status was used`,
+          },
+        ]
       : []),
   ];
 }
@@ -491,13 +497,25 @@ export async function listWeeklyReports(ctx: AppContext, actor: UserActor, q: z.
 }
 
 /** Labels (and CRM links) for the ids a statement cites, taken from the frozen snapshot. */
-function sourceIndex(snapshot: WeeklySnapshot, doc: WeeklyMetricsDoc): Map<string, { label: string; link: string | null }> {
+/** Where a task lives in the CRM: the page of the opportunity, company or person it belongs to. */
+const RECORD_PATH = { deal: 'deals', company: 'companies', contact: 'contacts' } as const;
+export function taskLink(task: { relatedType?: 'company' | 'contact' | 'deal'; relatedId?: string } | undefined): string | null {
+  return task?.relatedType && task.relatedId ? `/${RECORD_PATH[task.relatedType]}/${task.relatedId}` : null;
+}
+
+export function sourceIndex(snapshot: WeeklySnapshot, doc: WeeklyMetricsDoc): Map<string, { label: string; link: string | null }> {
   const index = new Map<string, { label: string; link: string | null }>();
+  const tasks = new Map(snapshot.tasks.map((t) => [t.id, t]));
+  const taskOfRow = new Map(doc.items.map((i) => [i.rowId, i.taskId]));
   index.set(`company:${snapshot.company.id}`, { label: snapshot.company.name, link: `/companies/${snapshot.company.id}` });
   index.set('period', { label: periodLabel(snapshot.period.start, snapshot.period.end), link: null });
   for (const m of doc.metrics) index.set(`metric:${m.id}`, { label: `${m.label}: ${m.value ?? 'n/a'}`, link: null });
-  for (const i of snapshot.estimates.items) index.set(`scope:${i.id}`, { label: i.scopeId ? `${i.scopeId} · ${i.title}` : i.title, link: null });
-  for (const t of snapshot.tasks) index.set(`task:${t.id}`, { label: `Task: ${t.title}`, link: '/tasks' });
+  for (const i of snapshot.estimates.items) {
+    // A scope row opens the record that holds its matched CRM task; a row without a task has nowhere to go.
+    const taskId = taskOfRow.get(i.id);
+    index.set(`scope:${i.id}`, { label: i.scopeId ? `${i.scopeId} · ${i.title}` : i.title, link: taskId ? taskLink(tasks.get(taskId)) : null });
+  }
+  for (const t of snapshot.tasks) index.set(`task:${t.id}`, { label: `Task: ${t.title}`, link: taskLink(t) });
   for (const a of snapshot.activities)
     index.set(`activity:${a.id}`, { label: `${a.kind === 'call' ? 'Call' : 'Meeting'} on ${a.occurredAt.slice(0, 10)}`, link: null });
   return index;

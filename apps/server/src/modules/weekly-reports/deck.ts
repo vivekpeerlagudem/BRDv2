@@ -74,6 +74,13 @@ function change(delta: string | null | undefined, unit: string): string | null {
   return `${n > 0 ? '▲' : '▼'} ${delta.replace(/^-/, '')}${unit} vs last week`;
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** "2026-11-27" → "27 Nov". */
+const shortDate = (isoDate: string) => {
+  const [, month, day] = isoDate.split('-').map(Number);
+  return month && day ? `${day} ${MONTHS[month - 1]}` : isoDate;
+};
+
 export function buildDeckModel(input: {
   draft: boolean;
   attempt: number;
@@ -90,7 +97,12 @@ export function buildDeckModel(input: {
   const texts = (list: { text: string }[], max: number) => list.slice(0, max).map((s) => truncate(s.text, 320));
   const itemLabel = (i: { scopeId: string | null; title: string }) => truncate(i.scopeId ? `${i.scopeId} · ${i.title}` : i.title, 90);
   const inProgress = doc.items.filter((i) => i.state === 'in_progress').map(itemLabel);
-  const upcoming = doc.upcomingTasks.map((t) => truncate(`${t.title} (due ${t.dueDate})`, 90));
+  // Coming up: CRM tasks due soon, written for the client — without the "[S-003]" tag that links a task to its
+  // scope row, with a readable date, and not repeating a scope item that is already listed as in progress.
+  const listed = new Set(doc.items.filter((i) => i.state === 'in_progress' && i.taskId).map((i) => i.taskId));
+  const upcoming = doc.upcomingTasks
+    .filter((t) => !listed.has(t.id))
+    .map((t) => truncate(`${t.title.replace(/^\s*\[[^\]]{1,40}\]\s*/, '') || t.title} (due ${shortDate(t.dueDate)})`, 90));
   const risks = texts(narrative.risks, 3);
   return {
     draft: input.draft,
@@ -166,7 +178,9 @@ export interface WeeklyTemplate {
 export const WEEKLY_TEMPLATES = {
   default: {
     label: 'Default (mock)',
-    font: 'Inter', // PowerPoint substitutes its default sans-serif (Arial) where Inter is not installed
+    // A font every PowerPoint has. "Inter" (the CRM's screen font) is not installed on most PCs: PowerPoint then
+    // substitutes another font but keeps Inter's spacing on some slides, which showed as stretched letters.
+    font: 'Arial',
     ink: '1B1F22',
     muted: '5F6368',
     logo: KENSIUM_LOGO_PNG,

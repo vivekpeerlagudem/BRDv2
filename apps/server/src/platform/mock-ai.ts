@@ -219,7 +219,12 @@ function weeklyReport(c: Json): Json {
   const overdue = metric('E-10');
   const risks =
     overdue !== null && overdue !== '0'
-      ? [{ text: `${overdue} ${overdue === '1' ? 'task is' : 'tasks are'} overdue on scope items and we are prioritising them.`, sources: ['metric:E-10'] }]
+      ? [
+          {
+            text: `${overdue} ${overdue === '1' ? 'task is' : 'tasks are'} overdue on scope items and we are prioritising ${overdue === '1' ? 'it' : 'them'}.`,
+            sources: ['metric:E-10'],
+          },
+        ]
       : [];
   return { summary, completed, nextWeek, risks };
 }

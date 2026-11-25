@@ -65,10 +65,24 @@ export interface NarrativeResult {
   meta: AiMeta | null;
 }
 
+/** Why the AI text is missing, in words for the reviewer (the report page shows it; error codes stay out of the UI). */
+const FALLBACK_REASON: Record<string, string> = {
+  AI_DISABLED: 'AI is switched off for weekly reports',
+  AI_QUOTA_EXCEEDED: 'the AI limit for today or the monthly budget was reached',
+  AI_RATE_LIMITED: 'too many AI requests were made at once',
+  AI_PROVIDER_UNAVAILABLE: 'the AI service was not available',
+  AI_REFUSED: 'the AI declined to write the text',
+  AI_OUTPUT_INVALID: 'the AI answer could not be read',
+  FORBIDDEN: 'the company owner may not use AI',
+  CHECKS_FAILED: 'the AI text did not pass the checks',
+};
+export const fallbackMessage = (code: string) =>
+  `No AI text: ${FALLBACK_REASON[code] ?? 'the AI text could not be produced'}. Write the text yourself, or regenerate.`;
+
 export async function writeNarrative(ctx: AppContext, owner: UserActor, run: RunRef, facts: AiContext): Promise<NarrativeResult> {
   const fallback = (why: string): NarrativeResult => ({
     narrative: fallbackNarrative(),
-    flags: [{ code: 'AI_FALLBACK', statementId: null, message: `The AI text could not be used (${why}). Write the text before sending.` }],
+    flags: [{ code: 'AI_FALLBACK', statementId: null, message: fallbackMessage(why) }],
     aiFallback: true,
     meta: null,
   });

@@ -1,7 +1,8 @@
 /** Weekly report deck — the default template: masters, logo, six slides, nothing internal. No database. */
 import JSZip from 'jszip';
 import { describe, expect, it } from 'vitest';
-import { type DeckModel, renderWeeklyPptx, resolveTemplateKey, WEEKLY_TEMPLATES } from './deck.ts';
+import type { WeeklyMetricsDoc } from '../../db/schema-weekly-reports.ts';
+import { buildDeckModel, type DeckModel, renderWeeklyPptx, resolveTemplateKey, WEEKLY_TEMPLATES } from './deck.ts';
 
 const model: DeckModel = {
   draft: true,
@@ -66,5 +67,55 @@ describe('weekly report deck — default template', () => {
     expect(resolveTemplateKey(undefined)).toBe('default');
     expect(resolveTemplateKey('acme-2027')).toBe('default');
     expect(resolveTemplateKey('toString')).toBe('default');
+  });
+});
+
+describe('weekly report deck — client wording and fonts (found in the PowerPoint preview)', () => {
+  it('uses a font every PowerPoint has, never the screen font', async () => {
+    const deck = await unzip(await renderWeeklyPptx(model));
+    const everything = (await deck.all('ppt/')).join('\n');
+    expect(everything).toContain('typeface="Arial"');
+    expect(everything).not.toContain('typeface="Inter"'); // Inter is not installed on most PCs: letters came out stretched
+  });
+
+  it('lists upcoming tasks without the scope tag, with a readable date, and not twice', () => {
+    const item = (rowId: string, scopeId: string, title: string, state: 'in_progress' | 'not_started', taskId: string | null) => ({
+      rowId,
+      rowNo: 2,
+      scopeId,
+      title,
+      phase: 'Build',
+      estimateHours: '40',
+      actualHours: null,
+      state,
+      doneAt: null,
+      doneThisWeek: false,
+      taskId,
+      mismatch: false,
+    });
+    const doc = {
+      metrics: [],
+      health: { level: 'green', reasons: [] },
+      phases: [],
+      items: [item('r3', 'S-003', 'ERP connector for orders', 'in_progress', 't3'), item('r4', 'S-004', 'Inventory sync service', 'not_started', 't4')],
+      upcomingTasks: [
+        { id: 't3', title: '[S-003] Build the integration', dueDate: '2026-11-27' }, // already listed as the scope item in progress
+        { id: 't4', title: '[S-004] Set up test environment', dueDate: '2026-11-28' },
+        { id: 't9', title: 'Send the access list', dueDate: '2026-12-01' },
+      ],
+    } as unknown as WeeklyMetricsDoc;
+    const built = buildDeckModel({
+      draft: false,
+      attempt: 1,
+      periodStart: '2026-11-16',
+      periodEnd: '2026-11-22',
+      clientName: 'Stark Industries',
+      orgName: 'Kensium',
+      branding: { primaryColor: '#0B2A4A', footerText: 'Kensium' },
+      metrics: doc,
+      narrative: { summary: [], completed: [], nextWeek: [], risks: [] },
+    });
+    expect(built.nextWeek.items).toEqual(['S-003 · ERP connector for orders', 'Set up test environment (due 28 Nov)', 'Send the access list (due 1 Dec)']);
+    expect(built.nextWeek.items.join(' ')).not.toContain('[');
   });
 });

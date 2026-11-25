@@ -65,9 +65,9 @@ export const STATUS_TONE: Record<RunSummary['status'], 'neutral' | 'info' | 'ok'
   failed: 'danger',
 };
 export const HEALTH: Record<'green' | 'amber' | 'red', { label: string; tone: 'ok' | 'warn' | 'danger' }> = {
-  green: { label: 'On track', tone: 'ok' },
-  amber: { label: 'Needs attention', tone: 'warn' },
-  red: { label: 'At risk', tone: 'danger' },
+  green: { label: 'Health: on track', tone: 'ok' },
+  amber: { label: 'Health: needs attention', tone: 'warn' },
+  red: { label: 'Health: at risk', tone: 'danger' },
 };
 export const FAILURE: Record<string, string> = {
   RUN_AS_USER_INACTIVE: 'The company owner is not an active user',

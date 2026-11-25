@@ -18,7 +18,16 @@ export interface WeeklySnapshot {
   company: { id: string; name: string; ownerName: string };
   period: { start: string; end: string; timeZone: string; startInstant: string; endInstant: string };
   deals: { id: string; name: string; status: string; stage: string }[];
-  tasks: { id: string; title: string; status: 'open' | 'completed' | 'cancelled'; dueAt: string; completedAt: string | null }[];
+  tasks: {
+    id: string;
+    title: string;
+    status: 'open' | 'completed' | 'cancelled';
+    dueAt: string;
+    completedAt: string | null;
+    /** The record the task belongs to (for links on the report page). Absent in snapshots written before this existed. */
+    relatedType?: 'company' | 'contact' | 'deal';
+    relatedId?: string;
+  }[];
   activities: { id: string; kind: 'call' | 'meeting'; occurredAt: string; outcome: string | null }[];
   estimates: {
     importId: string;
@@ -93,7 +102,15 @@ export async function collect(
   };
 
   const tasks = await db
-    .select({ id: task.id, title: task.title, status: task.status, dueAt: task.dueAt, completedAt: task.completedAt })
+    .select({
+      id: task.id,
+      title: task.title,
+      status: task.status,
+      dueAt: task.dueAt,
+      completedAt: task.completedAt,
+      relatedType: task.relatedType,
+      relatedId: task.relatedId,
+    })
     .from(task)
     .where(and(related(task.relatedType, task.relatedId), ne(task.status, 'cancelled')))
     .orderBy(asc(task.id));

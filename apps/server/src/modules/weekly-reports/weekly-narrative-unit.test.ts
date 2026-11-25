@@ -7,7 +7,7 @@ import type { WeeklySnapshot } from './collect.ts';
 import { allowedSourceIds, buildWeeklyFacts } from './facts.ts';
 import { matchItems } from './match.ts';
 import { computeMetrics } from './metrics.ts';
-import { fallbackNarrative } from './narrative.ts';
+import { fallbackMessage, fallbackNarrative } from './narrative.ts';
 
 const ROW = (n: number) => `00000000-0000-7000-8000-00000000000${n}`;
 const snapshot: WeeklySnapshot = {
@@ -228,5 +228,59 @@ describe('weekly report simulator', () => {
     expect(nar.risks).toEqual([]);
     const text = JSON.stringify(data).toLowerCase();
     for (const word of ['mismatch', 'unmatched', 'scope:', 'metric:e-1']) expect(text.replace(/"sources":\[[^\]]*\]/g, '')).not.toContain(word);
+  });
+});
+
+describe('weekly report simulator — overdue work', () => {
+  const risksFor = async (dueDates: string[]) => {
+    const late: WeeklySnapshot = {
+      ...snapshot,
+      tasks: dueDates.map((dueAt, i) => ({ id: `late${i}`, title: `[S-00${i + 2}] Open work`, status: 'open' as const, dueAt, completedAt: null })),
+    };
+    const lateDoc = computeMetrics({
+      matched: matchItems(late.estimates.items, late.tasks),
+      tasks: late.tasks,
+      activities: late.activities,
+      startInstant: new Date(late.period.startInstant),
+      endInstant: new Date(late.period.endInstant),
+      previous: null,
+    });
+    const result = await new MockAiProvider().complete({
+      requestId: '44444444-4444-7444-8444-444444444444',
+      feature: 'weekly_report',
+      model: 'x',
+      effort: 'low',
+      maxTokens: 100,
+      timeoutMs: 1000,
+      system: PROMPTS.weekly_report.system,
+      user: renderUserMessage({ report: 'weekly_client_status' }, buildWeeklyFacts(late, lateDoc, 'Kensium')),
+      jsonSchema: jsonSchemaOf(PROMPTS.weekly_report.schema),
+      userRef: 'u',
+    });
+    return weeklyReportOutput.parse(JSON.parse(result.text)).risks.map((r) => r.text);
+  };
+
+  it('writes the risk sentence in the singular for one overdue task and in the plural for several', async () => {
+    expect(await risksFor(['2026-11-20T00:00:00.000Z'])).toEqual(['1 task is overdue on scope items and we are prioritising it.']);
+    expect(await risksFor(['2026-11-19T00:00:00.000Z', '2026-11-20T00:00:00.000Z'])).toEqual([
+      '2 tasks are overdue on scope items and we are prioritising them.',
+    ]);
+  });
+});
+
+describe('weekly report fallback message', () => {
+  it('tells the reviewer why there is no AI text in plain words, never with an error code', () => {
+    expect(fallbackMessage('AI_DISABLED')).toBe('No AI text: AI is switched off for weekly reports. Write the text yourself, or regenerate.');
+    for (const code of [
+      'AI_DISABLED',
+      'AI_QUOTA_EXCEEDED',
+      'AI_RATE_LIMITED',
+      'AI_PROVIDER_UNAVAILABLE',
+      'AI_REFUSED',
+      'AI_OUTPUT_INVALID',
+      'CHECKS_FAILED',
+      'SOMETHING_NEW',
+    ])
+      expect(fallbackMessage(code)).not.toMatch(/[A-Z]{2,}_[A-Z]/);
   });
 });
