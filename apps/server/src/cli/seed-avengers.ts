@@ -81,6 +81,7 @@ const WIPE = [
   'notification',
   'proposal',
   'proposal_version',
+  'sales_brief_run',
   'share_link',
   'signature_event',
   'signature_request',

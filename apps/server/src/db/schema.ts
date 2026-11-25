@@ -88,6 +88,11 @@ export const organizationSettings = pgTable('organization_settings', {
     .$type<{ enabled: boolean; runWeekday: number; runTime: string; templateKey?: string }>()
     .notNull()
     .default({ enabled: true, runWeekday: 1, runTime: '09:00' }),
+  /** Weekly Sales Brief: schedule and the admin it runs for (organization time zone). */
+  salesBriefSettings: jsonb('sales_brief_settings')
+    .$type<{ enabled: boolean; runWeekday: number; runTime: string; ownerUserId: string | null }>()
+    .notNull()
+    .default({ enabled: true, runWeekday: 1, runTime: '08:00', ownerUserId: null }),
   ...audit,
 });
 

@@ -30,6 +30,8 @@ export const PERMISSIONS = {
   'lead.manage': { admin: 'all', sales_manager: 'team', salesperson: 'own' }, // create/edit/assign/qualify/convert managed leads
   'weekly_report.view': { admin: 'all', sales_manager: 'team', salesperson: 'own' }, // weekly client status reports (scoped by company owner)
   'weekly_report.manage': { admin: 'all', sales_manager: 'team', salesperson: 'own' }, // import estimates, generate, approve
+  'sales_brief.view': { admin: 'all', sales_manager: 'none', salesperson: 'none' }, // weekly sales brief for leadership (company-wide)
+  'sales_brief.manage': { admin: 'all', sales_manager: 'none', salesperson: 'none' }, // generate, edit, approve the sales brief
 } as const satisfies Record<string, Record<Role, Scope>>;
 
 export type PermKey = keyof typeof PERMISSIONS;
