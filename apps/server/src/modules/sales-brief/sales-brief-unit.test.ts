@@ -13,6 +13,7 @@ import { BRIEF_LIMITS, checkBrief, composeBriefFlags } from './checks.ts';
 import { monthAndQuarterStart, type SalesSnapshot, type SalesWindow } from './collect.ts';
 import { briefFileName, buildBriefDeck, formatAmount, formatChange, formatMetric, renderBriefPptx } from './deck.ts';
 import { buildSalesFacts } from './facts.ts';
+import { asOfLabel, formatMoney, VELOCITY_NOTE } from './format.ts';
 import { changePct, computeSalesMetrics, metricOf } from './metrics.ts';
 import { briefFallbackMessage, fallbackBrief } from './narrative.ts';
 import { BRIEF_TABS, buildBriefTabs, renderBriefXlsx, safeText } from './sheet.ts';
@@ -209,7 +210,7 @@ describe('sales brief metrics', () => {
       'S-16': '3',
       'S-17': '4333.33', // 6 open × 34666.67 average size × 62.5 % ÷ 30 days
     });
-    expect(metricOf(doc, 'S-11')?.detail).toBe('6 open · weighted 114000.00');
+    expect(metricOf(doc, 'S-11')?.detail).toBe('6 open · weighted USD 114,000');
     expect(metricOf(doc, 'S-13')?.detail).toBe('stalled 2 · past close date 1 · proposal not viewed 1');
     expect(metricOf(doc, 'S-14')?.detail).toBe('sent 3 · viewed 2 · signed 1');
     expect(metricOf(doc, 'S-09')?.detail).toBe('Price 1');
@@ -456,7 +457,7 @@ describe('sales brief checks and simulator', () => {
       Object.entries(data).map(([section, list]) => [section, list.map((x) => ({ id: `m${++i}`, origin: 'ai' as const, ...x }))]),
     ) as SalesBriefNarrative;
     expect(checkBrief(narrative, context.facts, signals)).toEqual([]);
-    expect(narrative.headline[0]?.text).toBe('This week the team won 2 deals worth 74000.00 USD and opened 6 new opportunities.');
+    expect(narrative.headline[0]?.text).toBe('This week the team won 2 deals worth USD 74,000 and opened 6 new opportunities.');
     expect(narrative.insights.length).toBeGreaterThanOrEqual(3);
     expect(narrative.insights.length).toBeLessThanOrEqual(5);
     for (const insight of narrative.insights) {
@@ -466,7 +467,7 @@ describe('sales brief checks and simulator', () => {
     expect(narrative.actions.length).toBeGreaterThanOrEqual(2);
     expect(narrative.actions.length).toBeLessThanOrEqual(4);
     expect(narrative.actions[0]?.text).toBe('Review the stalled deals with their owners and agree one next step for each.');
-    expect(narrative.wins.map((w) => w.text)).toContain('Captain America won Stark – ERP integration for 52000.00 USD.');
+    expect(narrative.wins.map((w) => w.text)).toContain('Captain America won Stark – ERP integration for USD 52,000.');
     expect(narrative.risks.map((r) => r.text)).toContain('Daily Bugle – Archive was lost; the recorded reason is Price.');
     expect(JSON.stringify(data)).not.toMatch(/will close|forecast|certainly|guarantee/i);
   });
@@ -564,12 +565,12 @@ describe('sales brief outputs: PowerPoint, Excel and the Google Sheets publisher
     ...extra,
   });
   const narrative: SalesBriefNarrative = {
-    headline: [ai('This week the team won 2 deals worth 74000.00 USD and opened 6 new opportunities.')],
+    headline: [ai('This week the team won 2 deals worth USD 74,000 and opened 6 new opportunities.')],
     insights: [ai('2 deals are stalled in Discovery. This puts revenue at risk if nothing changes.', { signalIds: ['signal:1'], kind: 'risk' })],
     actions: [ai('Review the stalled deals with their owners and agree one next step for each.', { signalIds: ['signal:1'] })],
     throughput: [ai('10 new leads came in, 5 were qualified and 3 converted.')],
     wins: [ai('Captain America won the largest deal of the week.')],
-    pipeline: [ai('Open pipeline is 200000.00 USD.')],
+    pipeline: [ai('Open pipeline is USD 200,000.')],
     risks: [ai('3 open deals need attention.')],
     team: [ai('The team logged 15 activities.')],
   };
@@ -778,5 +779,104 @@ describe('sales brief outputs: PowerPoint, Excel and the Google Sheets publisher
     const file = new FileOnlyPublisher();
     expect([file.enabled, file.status().provider]).toEqual([false, 'file']);
     expect((await failure(file.publish()))?.code).toBe('SALES_BRIEF_SHEETS_NOT_CONFIGURED');
+  });
+});
+
+describe('one money format everywhere', () => {
+  const s = snapshot();
+  const doc = computeSalesMetrics(s);
+  const signals = computeSignals(s, doc);
+  const context = buildSalesFacts(s, doc, signals);
+
+  it('writes money as "USD 37,000": no ".00" for whole amounts, cents only when there are any', () => {
+    expect(formatMoney('37000.00', 'USD')).toBe('USD 37,000');
+    expect(formatMoney('1250.50', 'EUR')).toBe('EUR 1,250.50');
+    expect(formatMoney('1234567.00', 'USD')).toBe('USD 1,234,567'); // en-US grouping, never 12,34,567
+    expect(formatMoney(null, 'USD')).toBe('–');
+    expect(formatMetric({ unit: 'money_per_day', value: '4333.33' }, 'USD')).toBe('USD 4,333.33 / day');
+  });
+
+  it('the facts carry money already written, so the AI copies it; the checks accept the written form', () => {
+    const text = JSON.stringify(context.facts);
+    expect(text).toContain('"value":"USD 74,000"');
+    expect(text).toContain('"amount":"USD 52,000"');
+    expect(text).not.toMatch(/"(value|amount|openPipeline|revenueWon|weighted)":"\d+\.\d{2}"/); // no raw money left
+    const ok: SalesBriefNarrative = {
+      headline: [{ id: 'f1', text: 'Revenue won was USD 74,000, and USD 52,000 of it came from one deal.', sources: ['metric:S-08'], origin: 'ai' }],
+      insights: [],
+      actions: [],
+      throughput: [],
+      wins: [],
+      pipeline: [],
+      risks: [],
+      team: [],
+    };
+    expect(checkBrief(ok, context.facts, signals)).toEqual([]);
+    ok.headline = [{ id: 'f2', text: 'Revenue won was USD 75,000.', sources: ['metric:S-08'], origin: 'ai' }];
+    expect(checkBrief(ok, context.facts, signals).map((f) => f.code)).toEqual(['UNVERIFIED_NUMBER']);
+  });
+
+  it('findings write money the same way, and the as-of and velocity labels are set', () => {
+    expect(signals.find((x) => x.kind === 'concentration' && x.title.startsWith('One deal'))?.title).toContain('(USD 100,000 of USD 200,000)');
+    expect(signals.find((x) => x.kind === 'concentration' && x.title.startsWith('Captain America'))?.title).toContain('(USD 120,000 of USD 200,000, 2 deals)');
+    expect(metricOf(doc, 'S-17')?.detail).toBe(VELOCITY_NOTE);
+    expect(doc.asOf).toBe(s.cutoff);
+    expect(asOfLabel('2026-11-23T03:00:00.000Z', 'America/New_York')).toBe('Pipeline and attention as of 22 Nov 2026'); // organization time zone
+  });
+
+  it('the deck shows the as-of label on slides 2, 5, 8 and 9, the velocity note, and an en-US number format in charts', async () => {
+    const model = buildBriefDeck({
+      draft: false,
+      attempt: 1,
+      periodStart: '2026-11-16',
+      periodEnd: '2026-11-22',
+      orgName: 'Kensium',
+      branding: { primaryColor: '#1f4e79', footerText: 'Kensium — Confidential' },
+      metrics: doc,
+      narrative: { headline: [], insights: [], actions: [], throughput: [], wins: [], pipeline: [], risks: [], team: [] },
+      approverName: 'Tony Stark',
+    });
+    expect(model.asOfLabel).toBe('Pipeline and attention as of 23 Nov 2026');
+    expect(model.velocity).toBe('Sales velocity per day: USD 4,333.33 / day (uses quarter-to-date averages)');
+    expect(model.kpis[4]).toMatchObject({ value: 'USD 200,000', change: 'weighted USD 114,000' });
+    const zip = await JSZip.loadAsync(await renderBriefPptx(model));
+    const slide = async (n: number) => (zip.file(`ppt/slides/slide${n}.xml`) as JSZip.JSZipObject).async('string');
+    for (const n of [2, 5, 8, 9]) expect(await slide(n)).toContain('Pipeline and attention as of 23 Nov 2026');
+    expect(await slide(9)).toContain('uses quarter-to-date averages');
+    const charts = (
+      await Promise.all(
+        Object.keys(zip.files)
+          .filter((f) => /^ppt\/charts\/chart\d+\.xml$/.test(f))
+          .map((f) => (zip.file(f) as JSZip.JSZipObject).async('string')),
+      )
+    ).join('\n');
+    expect(charts).toContain('0,&quot;k&quot;'); // axis in thousands: no regional grouping
+  });
+});
+
+describe('simulator text with written money (found in the slide check)', () => {
+  it('names the largest stage by value and writes the conversion rate with one percent sign', async () => {
+    const s = snapshot();
+    const doc = computeSalesMetrics(s);
+    const signals = computeSignals(s, doc);
+    const result = await new MockAiProvider().complete({
+      requestId: '66666666-6666-7666-8666-666666666666',
+      feature: 'sales_brief',
+      model: 'x',
+      effort: 'medium',
+      maxTokens: 100,
+      timeoutMs: 1000,
+      system: PROMPTS.sales_brief.system,
+      user: renderUserMessage({ report: 'weekly_sales_brief' }, buildSalesFacts(s, doc, signals)),
+      jsonSchema: jsonSchemaOf(PROMPTS.sales_brief.schema),
+      userRef: 'u',
+    });
+    const data = salesBriefOutput.parse(JSON.parse(result.text));
+    // Negotiation (USD 100,000) is the largest stage — not the first one listed (Qualification, USD 30,000).
+    expect(data.pipeline.map((p) => p.text)).toContain('The largest stage is Negotiation with 1 deal worth USD 100,000.');
+    expect(data.throughput.map((t) => t.text)).toContain('Lead conversion rate was 75.0%.');
+    expect(JSON.stringify(data)).not.toContain('%%');
+    // The rep who won the most revenue: Captain America (USD 52,000), not the first in the list.
+    expect(data.team[0]?.text).toBe('Captain America won 1 deal worth USD 52,000.');
   });
 });

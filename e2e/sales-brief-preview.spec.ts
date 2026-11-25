@@ -9,12 +9,13 @@ import { login } from './helpers.ts';
  * A salesperson has no "Sales brief" navigation item and gets 403 from every sales-brief route.
  *
  * Runs against the development database on the AI simulator (best after `pnpm db:seed:avengers`, which loads two
- * weeks of sales activity). It adds one more version of the brief for the last full week and changes nothing else.
+ * weeks of sales activity). It works on its OWN new version of the brief ("Generate now") and never edits the demo
+ * brief; the sentence it writes is ordinary business text, so no test wording shows on the dashboard. The sales brief
+ * settings it changes are put back at the end.
  * The only non-UI step is POST /dev/jobs/run (runs the job queue). Screenshots, the .pptx, the .xlsx and
  * brief.json go to demo-preview/sales-brief/ (not committed). AI settings are restored afterwards.
  */
 const OUT = 'demo-preview/sales-brief';
-const stamp = Date.now().toString(36);
 let original: Record<string, unknown> | null = null;
 let shotNo = 0;
 mkdirSync(OUT, { recursive: true });
@@ -133,7 +134,8 @@ test('admin generates, reviews, edits, approves and downloads the weekly sales b
   await page.goto(url);
 
   // 4 ── Edit a sentence → approve → final files ────────────────────────────────────────────────────────────────────
-  const edited = `Preview ${stamp}: a solid week for the team, with the stalled deals as the main point to act on.`;
+  // Ordinary business text (never "Preview" or "E2E"): this version may become the latest brief on the dashboard.
+  const edited = 'The stalled deals in Discovery are the main point to act on this week.';
   await page.getByRole('button', { name: 'Edit', exact: true }).first().click();
   await page.getByLabel(/^Edit sentence in /).fill(edited);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
@@ -171,9 +173,30 @@ test('admin generates, reviews, edits, approves and downloads the weekly sales b
   await page.goto('/admin/settings');
   await page.getByRole('tab', { name: 'Sales brief' }).click();
   await expect(page.getByText('Generate the sales brief automatically')).toBeVisible();
-  await expect(page.getByLabel('Runs for')).toBeVisible();
   await expect(page.getByText(/Excel download/).first()).toBeVisible();
+  // Save a different weekday, time and owner, reload, and see them kept; then put the settings back.
+  const savedSettings = (await apiCall(page, 'GET', '/admin/sales-brief-settings')).json;
+  const form = page.locator('form').filter({ has: page.getByLabel('Runs for') });
+  await form.getByLabel('Day').selectOption({ label: 'Tuesday' });
+  await form.getByLabel('Time').fill('07:30');
+  await form.getByLabel('Runs for').selectOption({ label: 'Tony Stark' });
+  await form.getByRole('button', { name: 'Save sales brief settings' }).click();
+  await expect(page.getByText('Sales brief settings saved')).toBeVisible();
+  await page.reload();
+  await page.getByRole('tab', { name: 'Sales brief' }).click();
+  const reloaded = page.locator('form').filter({ has: page.getByLabel('Runs for') });
+  await expect(reloaded.getByLabel('Day')).toHaveValue('2');
+  await expect(reloaded.getByLabel('Time')).toHaveValue('07:30');
+  await expect(reloaded.getByLabel('Runs for').locator('option:checked')).toHaveText('Tony Stark');
   await shot(page, 'settings-sales-brief', false);
+  const restored = await apiCall(page, 'PUT', '/admin/sales-brief-settings', {
+    enabled: savedSettings.enabled,
+    runWeekday: savedSettings.runWeekday,
+    runTime: savedSettings.runTime,
+    ownerUserId: savedSettings.ownerUserId,
+  });
+  expect(restored.status).toBe(200);
+  log(`settings saved (Tuesday 07:30, Tony Stark), reloaded, then restored to day ${savedSettings.runWeekday} ${savedSettings.runTime}`);
 
   // 6 ── A salesperson: no navigation item, 403 everywhere ──────────────────────────────────────────────────────────
   const otherContext = await browser.newContext();

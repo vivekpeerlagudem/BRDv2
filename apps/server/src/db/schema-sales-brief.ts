@@ -62,6 +62,9 @@ export interface SalesRepRow {
 }
 export interface SalesMetricsDoc {
   currency: string;
+  /** When the data was read: pipeline and attention figures are "as of" this instant. Absent in briefs made before it existed. */
+  asOf?: string;
+  timeZone?: string;
   periodStart: string;
   periodEnd: string;
   metrics: SalesMetric[];

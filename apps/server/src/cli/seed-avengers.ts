@@ -45,15 +45,26 @@ import {
 } from '../modules/crm.ts';
 import { hasOpenSignature, voidOpenSignature } from '../modules/esign.ts';
 import { deactivateUser, patchUser } from '../modules/identity.ts';
-import { createProduct, createTemplate, getTemplate, publishTemplate, saveTemplateDraft } from '../modules/proposals.ts';
+import {
+  createProduct,
+  createProposal,
+  createTemplate,
+  getProposal,
+  getTemplate,
+  publishTemplate,
+  saveDraft,
+  saveTemplateDraft,
+  sendProposal,
+} from '../modules/proposals.ts';
 import { requestSalesBrief } from '../modules/sales-brief.ts';
+import { createLinks } from '../modules/sharing.ts';
 import { importEstimatesCsv } from '../modules/weekly-reports/estimates.ts';
 import { metricValue } from '../modules/weekly-reports/metrics.ts';
 import { lastFullWeek, periodInstants } from '../modules/weekly-reports/period.ts';
 import { requestWeeklyReport, updateWeeklyReportSettings } from '../modules/weekly-reports.ts';
 import { runDueJobs } from '../modules/workflow.ts';
-import { StubPdfRenderer } from '../platform/adapters.ts';
-import { buildUserActor, schema, type UserActor } from '../platform/core.ts';
+import { BrowserPdfRenderer } from '../platform/adapters.ts';
+import { buildUserActor, schema, type Uow, type UserActor } from '../platform/core.ts';
 
 const config = loadConfig();
 if (config.NODE_ENV === 'production') throw new Error('db:seed:avengers must not run in production.');
@@ -191,7 +202,8 @@ const CLIENTS: Client[] = [
   },
 ];
 
-const { ctx, pool } = buildContext({ ...config, LOG_LEVEL: 'warn' }, { pdf: new StubPdfRenderer() });
+const pdf = new BrowserPdfRenderer(config.PDF_BROWSER_CHANNEL);
+const { ctx, pool } = buildContext({ ...config, LOG_LEVEL: 'warn' }, { pdf });
 const { appUserProfile, team, teamMembership, organizationSettings, pipelineStage, task } = schema;
 try {
   // ── a. Wipe business data (migrator role: the app role may not delete append-only history) ──────────────────────
@@ -317,7 +329,7 @@ try {
   const { startInstant, endInstant } = periodInstants(week.periodStart, week.periodEnd, timeZone);
   const inWeek = (day: number, hour: number) => new Date(startInstant.getTime() + (day * 24 + hour) * 3_600_000);
   const owners: Record<string, string> = { 'Spider-Man': spidey.userId, 'Black Widow': widow.userId, 'Captain America': cap.userId };
-  const created: { client: Client; companyId: string; dealId: string; ownerA: UserActor }[] = [];
+  const created: { client: Client; companyId: string; dealId: string; contactIds: string[]; ownerA: UserActor }[] = [];
   for (const c of CLIENTS) {
     const ownerA = await actor(owners[c.owner] as string);
     const company = await createCompany(ctx, ownerA, { name: c.company, domain: c.domain, industry: c.industry });
@@ -360,7 +372,7 @@ try {
       relatedType: 'deal',
       relatedId: deal.id,
     });
-    created.push({ client: c, companyId: company.id, dealId: deal.id, ownerA });
+    created.push({ client: c, companyId: company.id, dealId: deal.id, contactIds, ownerA });
   }
 
   // ── h. Leads and two weeks of sales activity (for the weekly sales brief) ──────────────────────────────────────
@@ -371,7 +383,7 @@ try {
   const capA = await actor(cap.userId);
   const raw = new pg.Client({ connectionString: migratorUrl });
   await raw.connect();
-  const briefDemo = { leads: 0, deals: 0 };
+  const briefDemo = { leads: 0, deals: 0, proposals: 0 };
   try {
     const W = (day: number, hour = 10) => inWeek(day, hour); // last full week
     const P = (day: number, hour = 10) => new Date(inWeek(day, hour).getTime() - 7 * DAY); // the week before
@@ -513,6 +525,50 @@ try {
         relatedId: dealId,
       });
 
+    // A proposal for Stark Industries, sent through the app's real send path (pre-send checks, frozen version, PDF,
+    // tracked link) by the deal owner, then dated to Tuesday of the reported week. Nobody opens the link, so it shows
+    // as "proposal not viewed" once the follow-up window has passed.
+    const stark = created.find((c) => c.client.company === 'Stark Industries');
+    if (stark) {
+      const proposal = await createProposal(ctx, stark.ownerA, stark.dealId, { templateId: tpl.id, signatureRequired: false });
+      const draft = await getProposal(ctx, stark.ownerA, proposal.id);
+      const doc = structuredClone(draft.currentVersion.content) as Parameters<typeof saveDraft>[3]['content'];
+      for (const sec of doc.sections)
+        if (sec.id === 'scope')
+          sec.body =
+            'Kensium will connect the Stark Industries ERP to the order and warehouse systems in four phases: discovery, build, testing and go-live, with two weeks of hypercare.';
+      await saveDraft(ctx, stark.ownerA, proposal.id, {
+        content: doc,
+        pricing: {
+          lines: [
+            {
+              lineKey: 'impl',
+              name: 'Implementation package',
+              unit: 'package',
+              quantity: '1',
+              unitPrice: '42000',
+              taxRatePercent: '0',
+              billingType: 'one_time',
+            },
+            { lineKey: 'sub', name: 'Platform subscription', unit: 'month', quantity: '4', unitPrice: '1500', taxRatePercent: '0', billingType: 'one_time' },
+          ],
+        },
+        termMonths: 12,
+        rowVersion: draft.currentVersion.rowVersion,
+      });
+      const contactId = stark.contactIds[0] as string;
+      const ports = { createLinks: (u: Uow, args: Parameters<typeof createLinks>[2]) => createLinks(ctx, u, args), voidOpenSignature, hasOpenSignature };
+      try {
+        await sendProposal(ctx, stark.ownerA, proposal.id, { recipientContactIds: [contactId] }, ports);
+      } catch (error) {
+        const needed = (error as { code?: string; meta?: { confirmations?: { code: string }[] } }).meta?.confirmations;
+        if ((error as { code?: string }).code !== 'CONFIRMATION_REQUIRED' || !needed) throw error;
+        await sendProposal(ctx, stark.ownerA, proposal.id, { recipientContactIds: [contactId], confirm: needed.map((c) => c.code) }, ports);
+      }
+      await raw.query('update proposal_version set sent_at = $1 where proposal_id = $2 and sent_at is not null', [W(1, 11), proposal.id]);
+      briefDemo.proposals++;
+    }
+
     // Two deals stalled in the same stage, and one past its expected close date. This comes last: logging an
     // activity on a deal clears its "stalled" flag.
     const shield = created.find((c) => c.client.company === 'S.H.I.E.L.D.');
@@ -576,7 +632,7 @@ try {
       'Users: Tony Stark (admin) · Captain America (sales manager, team Avengers) · Spider-Man, Black Widow (salespeople, team Avengers)' +
         (deactivated ? ` · ${deactivated} other user(s) deactivated` : ''),
       'Catalogue: Implementation package, Platform subscription, Support plan · Template: Kensium services proposal (published)',
-      `Sales activity (last two weeks): ${briefDemo.leads} leads (5 qualified, 3 converted, 1 disqualified), ${briefDemo.deals} more opportunities, 2 won, 1 lost`,
+      `Sales activity (last two weeks): ${briefDemo.leads} leads (5 qualified, 3 converted, 1 disqualified), ${briefDemo.deals} more opportunities, 2 won, 1 lost, ${briefDemo.proposals} proposal sent and not viewed`,
       '',
       ...reports.flatMap((r) => [
         `${r.client.company} — owner ${r.client.owner}`,
@@ -596,5 +652,6 @@ try {
     ].join('\n'),
   );
 } finally {
+  await pdf.close();
   await pool.end();
 }

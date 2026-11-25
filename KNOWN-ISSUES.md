@@ -75,11 +75,11 @@ Last updated: 2026-11-18. Scope gaps per requirement are in REQUIREMENT-TRACEABI
 |---|---|
 | K-60 | The analysis text comes from the AI simulator; prompt `sales_brief/v1` has never been read by a real model. Real quality, cost and speed are unknown |
 | K-61 | The Google Sheets publisher has never called Google (tested with a fake `fetch`). It rewrites whole tabs and does not format the Google Sheet |
-| K-62 | Sentences written by the simulator show money as stored ("37000.00 USD"); tables and tiles show "USD 37,000". Numbers in text must be copied exactly from the facts |
-| K-63 | Open pipeline and deals needing attention are "as of now", not as of the end of the reported week; a brief generated later for the same week shows the current pipeline |
-| K-64 | Sales velocity uses quarter-to-date averages; early in a quarter it is empty or based on very few deals |
+| K-62 | Fixed: money is written one way everywhere ("USD 37,000"); the facts carry it already written, so AI sentences copy it as is |
+| K-63 | Open pipeline and deals needing attention are "as of" when the brief was generated, not the end of the reported week; slides and the brief page now say "Pipeline and attention as of <date>" |
+| K-64 | Sales velocity uses quarter-to-date averages (labelled on slide 9 and the brief page); early in a quarter it is empty or based on very few deals |
 | K-65 | Completed tasks count for the person a task is assigned to, as on the Reports page |
-| K-66 | "Proposals sent but not viewed" is covered by unit tests only; the demo data has no such proposal |
+| K-66 | Fixed: the demo data sends one proposal through the real send path in the reported week and leaves it unviewed |
 | K-67 | The run-as admin's daily AI limit applies; one brief uses 1 to 3 AI calls |
-| K-68 | Chart axis numbers follow the PC's regional format when PowerPoint renders them (for example 1,40,000) |
+| K-68 | Fixed: the pipeline chart axis shows thousands as "140k", independent of the PC's regional number format |
 | K-69 | The sales brief is not emailed: admins get an in-app notification and download the files |

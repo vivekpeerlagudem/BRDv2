@@ -15,8 +15,9 @@
  * At most 8 signals are kept, ranked by severity.
  */
 import { Decimal } from 'decimal.js';
-import type { SalesMetricsDoc, SalesSignal, SalesSignalKind } from '../../db/schema-sales-brief.ts';
+import type { SalesMetric, SalesMetricsDoc, SalesSignal, SalesSignalKind } from '../../db/schema-sales-brief.ts';
 import type { SalesSnapshot } from './collect.ts';
+import { formatMetric, formatMoney } from './format.ts';
 import { changePct, metricOf } from './metrics.ts';
 
 export const THRESHOLDS = {
@@ -39,6 +40,8 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 const names = (list: string[], max = 3) => (list.length > max ? `${list.slice(0, max).join(', ')} and ${list.length - max} more` : list.join(', '));
 
 export function computeSignals(s: SalesSnapshot, doc: SalesMetricsDoc): SalesSignal[] {
+  const money = (v: string) => formatMoney(v, s.currency);
+  const show = (unit: SalesMetric['unit'], value: string) => formatMetric({ unit, value }, s.currency);
   const out: Draft[] = [];
   const trends: Draft[] = [];
 
@@ -53,7 +56,7 @@ export function computeSignals(s: SalesSnapshot, doc: SalesMetricsDoc): SalesSig
         trends.push({
           kind: 'trend',
           severity: 'low',
-          title: `${m.label} is ${m.value}, up from 0 in the comparison period.`,
+          title: `${m.label} is ${show(m.unit, m.value)}, up from 0 in the comparison period.`,
           metricIds: [id],
           recordIds: [],
           values: { value: m.value, baseline: m.baseline, changePct: null },
@@ -67,7 +70,7 @@ export function computeSignals(s: SalesSnapshot, doc: SalesMetricsDoc): SalesSig
     trends.push({
       kind: 'trend',
       severity: down ? (strong && KEY_RESULTS.includes(id) ? 'high' : 'medium') : strong ? 'medium' : 'low',
-      title: `${m.label} ${down ? 'fell' : 'rose'} ${size.toFixed(1)}% against the comparison period (${m.value} now, ${m.baseline} before).`,
+      title: `${m.label} ${down ? 'fell' : 'rose'} ${size.toFixed(1)}% against the comparison period (${show(m.unit, m.value)} now, ${show(m.unit, m.baseline)} before).`,
       metricIds: [id],
       recordIds: [],
       values: { value: m.value, baseline: m.baseline, changePct: change },
@@ -125,7 +128,7 @@ export function computeSignals(s: SalesSnapshot, doc: SalesMetricsDoc): SalesSig
       out.push({
         kind: 'concentration',
         severity: share(big.amount).gt(60) ? 'high' : 'medium',
-        title: `One deal, ${big.name} (${big.owner}), is ${share(big.amount).toFixed(1)}% of the open pipeline (${big.amount} of ${s.pipelineTotals.value}).`,
+        title: `One deal, ${big.name} (${big.owner}), is ${share(big.amount).toFixed(1)}% of the open pipeline (${money(big.amount)} of ${money(s.pipelineTotals.value)}).`,
         metricIds: ['S-11'],
         recordIds: [`deal:${big.dealId}`, `user:${big.ownerId}`],
         values: { amount: big.amount, pipeline: s.pipelineTotals.value, sharePct: share(big.amount).toFixed(1) },
@@ -135,7 +138,7 @@ export function computeSignals(s: SalesSnapshot, doc: SalesMetricsDoc): SalesSig
       out.push({
         kind: 'concentration',
         severity: 'medium',
-        title: `${top.owner} holds ${share(top.value).toFixed(1)}% of the open pipeline (${top.value} of ${s.pipelineTotals.value}, ${plural(top.count, 'deal')}).`,
+        title: `${top.owner} holds ${share(top.value).toFixed(1)}% of the open pipeline (${money(top.value)} of ${money(s.pipelineTotals.value)}, ${plural(top.count, 'deal')}).`,
         metricIds: ['S-11', 'S-16'],
         recordIds: [`user:${top.ownerId}`],
         values: { value: top.value, pipeline: s.pipelineTotals.value, sharePct: share(top.value).toFixed(1), deals: top.count },
@@ -196,7 +199,7 @@ export function computeSignals(s: SalesSnapshot, doc: SalesMetricsDoc): SalesSig
     out.push({
       kind: 'team',
       severity: 'medium',
-      title: `${r.name} has ${plural(r.openDeals, 'open deal')} worth ${r.openValue} and logged no calls, meetings or completed tasks this week.`,
+      title: `${r.name} has ${plural(r.openDeals, 'open deal')} worth ${money(r.openValue)} and logged no calls, meetings or completed tasks this week.`,
       metricIds: ['S-15', 'S-16'],
       recordIds: [`user:${r.userId}`],
       values: { openDeals: r.openDeals, openValue: r.openValue },

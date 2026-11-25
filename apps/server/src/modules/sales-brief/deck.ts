@@ -8,30 +8,17 @@
 import type { SalesBriefNarrative, SalesMetric, SalesMetricsDoc } from '../../db/schema-sales-brief.ts';
 import { type Box, DRAFT_LABEL, SLIDE_WIDTH, startDeck } from '../weekly-reports/deck.ts';
 import { periodLabel } from '../weekly-reports/period.ts';
+import { asOfLabel, formatAmount, formatMetric, formatMoney, VELOCITY_NOTE } from './format.ts';
 import { metricOf } from './metrics.ts';
 
 export { PPTX_CONTENT_TYPE } from '../weekly-reports/deck.ts';
+export { formatAmount, formatMetric } from './format.ts';
 
 const W = SLIDE_WIDTH;
 const cut = (text: string, max: number) => {
   const t = text.replace(/\s+/g, ' ').trim();
   return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
 };
-const grouped = (digits: string) => digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-/** "74000.00" → "74,000" · "1250.50" → "1,250.50". */
-export function formatAmount(value: string | null): string {
-  if (value === null) return '–';
-  const [whole = '0', cents = ''] = value.split('.');
-  return `${whole.startsWith('-') ? '-' : ''}${grouped(whole.replace('-', ''))}${cents && !/^0+$/.test(cents) ? `.${cents}` : ''}`;
-}
-export function formatMetric(m: Pick<SalesMetric, 'unit' | 'value'> | undefined, currency: string): string {
-  if (!m || m.value === null) return '–';
-  if (m.unit === 'money') return `${currency} ${formatAmount(m.value)}`;
-  if (m.unit === 'money_per_day') return `${currency} ${formatAmount(m.value)} / day`;
-  if (m.unit === 'percent') return `${m.value}%`;
-  if (m.unit === 'days') return `${m.value} days`;
-  return m.value;
-}
 /** Week-over-week change in words; empty when there is nothing to compare with. */
 export function formatChange(m: Pick<SalesMetric, 'changePct' | 'lastWeek' | 'value'> | undefined): string {
   if (!m || m.value === null || m.lastWeek === null) return '';
@@ -69,6 +56,8 @@ export interface BriefDeckModel {
   actions: string[];
   funnel: { label: string; value: number; step: string }[];
   throughput: string[];
+  asOfLabel: string;
+  velocity: string;
   stages: { stage: string; deals: string; value: string; weighted: string; valueNumber: number; weightedNumber: number }[];
   pipeline: string[];
   won: string[][];
@@ -93,6 +82,8 @@ export function buildBriefDeck(input: {
   metrics: SalesMetricsDoc;
   narrative: SalesBriefNarrative;
   approverName: string | null;
+  /** When the data was read (pipeline and attention are "as of" this); defaults to the metrics document's own. */
+  asOf?: string;
 }): BriefDeckModel {
   const { metrics: doc, narrative } = input;
   const c = doc.currency;
@@ -119,8 +110,10 @@ export function buildBriefDeck(input: {
       tile('S-05', 'New opportunities'),
       tile('S-08', 'Revenue won'),
       tile('S-10', 'Win rate'),
-      { label: 'Open pipeline', value: formatMetric(m('S-11'), c), change: `weighted ${c} ${formatAmount(doc.pipelineTotals.weighted)}` },
+      { label: 'Open pipeline', value: formatMetric(m('S-11'), c), change: `weighted ${formatMoney(doc.pipelineTotals.weighted, c)}` },
     ],
+    asOfLabel: asOfLabel(input.asOf ?? doc.asOf ?? new Date(0).toISOString(), doc.timeZone ?? 'UTC'),
+    velocity: `Sales velocity per day: ${formatMetric(m('S-17'), c)} (${VELOCITY_NOTE.toLowerCase().replace('sales velocity ', '')})`,
     analysisLabel: input.draft
       ? `${byAi ? 'AI analysis' : 'Analysis'} — draft, not yet reviewed`
       : `${byAi ? 'AI analysis' : 'Analysis'} — reviewed by ${cut(input.approverName ?? 'an administrator', 60)}`,
@@ -237,6 +230,8 @@ export async function renderBriefPptx(model: BriefDeckModel, templateKey?: strin
     if (k.change) first.addText(k.change, { x: x + 0.18, y: 5.8, w: tileW - 0.36, h: 0.5, fontFace: FONT, fontSize: 10.5, color: t.muted, valign: 'top' });
   });
 
+  first.addText(model.asOfLabel, { x: 0.5, y: 6.55, w: W - 1, h: 0.3, fontFace: FONT, fontSize: 10.5, italic: true, color: t.muted });
+
   // 3 — Key insights and recommended actions (the analysis slide)
   const analysis = titled('Key insights & recommended actions');
   heading(analysis, 'What the numbers show', 0.5, 1.45, 7.0);
@@ -272,6 +267,7 @@ export async function renderBriefPptx(model: BriefDeckModel, templateKey?: strin
 
   // 5 — Pipeline by stage
   const pipeline = titled('Open pipeline by stage');
+  note(pipeline, model.asOfLabel, { x: 0.5, y: 6.5, w: W - 1, h: 0.3 });
   table(
     pipeline,
     [
@@ -302,7 +298,8 @@ export async function renderBriefPptx(model: BriefDeckModel, templateKey?: strin
         legendPos: 'b',
         legendFontFace: FONT,
         legendFontSize: 10,
-        valAxisLabelFormatCode: '#,##0',
+        // Axis in thousands ("140k"): no thousands separator at all, so PowerPoint's regional grouping (1,40,000) never applies.
+        valAxisLabelFormatCode: '0,"k"',
         ...chartText,
       },
     );
@@ -369,6 +366,7 @@ export async function renderBriefPptx(model: BriefDeckModel, templateKey?: strin
 
   // 8 — Attention and risks
   const risks = titled('Attention & risks');
+  note(risks, model.asOfLabel, { x: 0.5, y: 6.5, w: W - 1, h: 0.3 });
   if (model.attention.length)
     table(
       risks,
@@ -403,9 +401,10 @@ export async function renderBriefPptx(model: BriefDeckModel, templateKey?: strin
     { x: 0.5, y: 1.6, w: 9.0 },
     [3.3, 1.9, 1.9, 1.9],
   );
-  note(toDate, 'Month and quarter run to the last day of the reported week. Figures match the Reports page for the same dates.', {
+  toDate.addText(model.velocity, { x: 0.5, y: 4.2, w: 9.0, h: 0.4, fontFace: FONT, fontSize: 13, color: t.ink });
+  note(toDate, `Month and quarter run to the last day of the reported week. Figures match the Reports page for the same dates. ${model.asOfLabel}.`, {
     x: 0.5,
-    y: 4.4,
+    y: 4.8,
     w: 9.0,
     h: 0.6,
   });

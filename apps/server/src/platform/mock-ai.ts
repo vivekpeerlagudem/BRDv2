@@ -240,7 +240,8 @@ function salesBrief(c: Json): Json {
   const signals: Json[] = c.signals ?? [];
   const deals: Json[] = c.deals ?? [];
   const team: Json[] = c.team ?? [];
-  const money = (v: unknown) => `${v} ${c.currency ?? ''}`.trim();
+  const money = (v: unknown) => String(v); // the facts already carry money written as "USD 37,000"
+  const amountOf = (v: unknown) => Number(String(v).replace(/[^0-9.-]/g, '')) || 0; // "USD 128,000" → 128000, for sorting only
   const many = (n: unknown, one: string, plural = `${one}s`) => `${n} ${String(n) === '1' ? one : plural}`;
   const short = (text: string) => (text.length <= 300 ? text : `${text.slice(0, text.lastIndexOf(' ', 280))}…`);
   const evidence = (s: Json) => [s.id, ...(s.metrics ?? []), ...(s.records ?? []).slice(0, 4)];
@@ -306,7 +307,7 @@ function salesBrief(c: Json): Json {
       sources: ['metric:S-01', 'metric:S-02', 'metric:S-03'],
     });
   const rate = metric('S-04');
-  if (rate !== null) throughput.push({ text: `Lead conversion rate was ${rate}%.`, sources: ['metric:S-04'] });
+  if (rate !== null) throughput.push({ text: `Lead conversion rate was ${rate}.`, sources: ['metric:S-04'] }); // the fact is written "66.7%"
   const bottleneck = signals.find((s) => s.kind === 'bottleneck');
   if (bottleneck) throughput.push({ text: short(String(bottleneck.finding)), sources: evidence(bottleneck) });
 
@@ -317,7 +318,7 @@ function salesBrief(c: Json): Json {
 
   const pipelineLines: Json[] = [];
   if (pipeline !== null) pipelineLines.push({ text: `Open pipeline is ${money(pipeline)}.`, sources: ['metric:S-11'] });
-  const stages: Json[] = [...(c.pipelineByStage ?? [])].sort((a, b) => Number(b.value) - Number(a.value));
+  const stages: Json[] = [...(c.pipelineByStage ?? [])].sort((a, b) => amountOf(b.value) - amountOf(a.value));
   if (stages[0])
     pipelineLines.push({
       text: `The largest stage is ${stages[0].stage} with ${many(stages[0].deals, 'deal')} worth ${money(stages[0].value)}.`,
@@ -336,7 +337,7 @@ function salesBrief(c: Json): Json {
     risks.push({ text: `${many(attention.value, 'open deal')} need attention (${attention.detail}).`, sources: ['metric:S-13'] });
 
   const teamLines: Json[] = [];
-  const best = [...team].filter((t) => Number(t.dealsWon ?? 0) > 0).sort((a, b) => Number(b.revenueWon) - Number(a.revenueWon))[0];
+  const best = [...team].filter((t) => Number(t.dealsWon ?? 0) > 0).sort((a, b) => amountOf(b.revenueWon) - amountOf(a.revenueWon))[0];
   if (best) teamLines.push({ text: `${best.name} won ${many(best.dealsWon, 'deal')} worth ${money(best.revenueWon)}.`, sources: [best.id] });
   const activity = metricFact('S-15');
   if (activity) teamLines.push({ text: `The team logged ${many(activity.value, 'activity', 'activities')} (${activity.detail}).`, sources: ['metric:S-15'] });

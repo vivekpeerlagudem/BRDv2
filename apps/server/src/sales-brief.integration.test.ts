@@ -374,7 +374,7 @@ describe.skipIf(!testUrl)('weekly sales brief (PostgreSQL integration)', () => {
     });
     expect(b.ai).toMatchObject({ provider: 'fake', simulated: true, promptVersion: 'sales_brief/v1', status: 'pending' });
     expect(b.kpis.map((k: any) => k.id)).toEqual(['S-01', 'S-05', 'S-08', 'S-10', 'S-11']);
-    expect(statements(b, 'headline')[0].text).toBe('This week the team won 1 deal worth 20000.00 USD and opened 3 new opportunities.');
+    expect(statements(b, 'headline')[0].text).toBe('This week the team won 1 deal worth USD 20,000 and opened 3 new opportunities.');
     const signalIds = new Set(run.signals.map((s) => s.id));
     const insights = statements(b, 'insights');
     const actions = statements(b, 'actions');
@@ -583,7 +583,7 @@ describe.skipIf(!testUrl)('weekly sales brief (PostgreSQL integration)', () => {
     expect(after.metrics).toEqual(run.metrics);
     expect(after.narrative?.headline[0]).toMatchObject({
       origin: 'ai',
-      text: 'This week the team won 1 deal worth 20000.00 USD and opened 3 new opportunities.',
+      text: 'This week the team won 1 deal worth USD 20,000 and opened 3 new opportunities.',
     });
   });
 

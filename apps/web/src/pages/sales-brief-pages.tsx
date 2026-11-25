@@ -65,6 +65,8 @@ interface Flag {
   message: string;
 }
 interface Detail extends Summary {
+  asOf: string;
+  timeZone: string;
   runAsName: string | null;
   approvedByName: string | null;
   metrics: Metric[];
@@ -88,6 +90,16 @@ const FAILURE: Record<string, string> = {
   STUCK: 'The run took too long and was stopped.',
   NO_SNAPSHOT: 'The stored brief data is missing.',
 };
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** Same wording as the slides: "Pipeline and attention as of 23 Nov 2026" (organization time zone). */
+function asOfLabel(iso: string, timeZone: string) {
+  const [y, m, d] = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
+    .format(new Date(iso))
+    .split('-')
+    .map(Number) as [number, number, number];
+  return `Pipeline and attention as of ${d} ${MONTHS[m - 1]} ${y}`;
+}
+const VELOCITY_NOTE = 'Sales velocity uses quarter-to-date averages';
 const SEVERITY = { high: 'danger', medium: 'warn', low: 'neutral' } as const;
 const KIND: Record<string, string> = {
   trend: 'Trend',
@@ -337,6 +349,9 @@ export function SalesBriefPage() {
                     </div>
                   ))}
                 </section>
+                <p className="text-xs text-muted">
+                  {asOfLabel(r.asOf, r.timeZone)} · {VELOCITY_NOTE}
+                </p>
 
                 {(r.blockers.length > 0 || r.warnings.length > 0) && (
                   <Card title="Points to review">

@@ -14,6 +14,7 @@
 import { Decimal } from 'decimal.js';
 import type { SalesFunnelStep, SalesMetric, SalesMetricsDoc, SalesRepRow, SalesUnit } from '../../db/schema-sales-brief.ts';
 import type { SalesSnapshot, SalesWindow } from './collect.ts';
+import { formatMoney, VELOCITY_NOTE } from './format.ts';
 
 const num = (v: string | null): Decimal | null => (v === null ? null : new Decimal(v));
 const fixed = (d: Decimal | null, places: number) => (d === null ? null : d.toFixed(places));
@@ -121,7 +122,7 @@ export function computeSalesMetrics(s: SalesSnapshot, earlier: SalesMetricsDoc[]
     metric('S-09', 'Deals lost', 'count', String(s.week.lost), String(s.lastWeek.lost), topReasons ? { detail: topReasons } : {}),
     metric('S-10', 'Win rate', 'percent', rate(s.week), rate(s.lastWeek), { mtd: rate(s.mtd), qtd: rate(s.qtd) }),
     metric('S-11', 'Open pipeline', 'money', s.pipelineTotals.value, previousBrief('S-11'), {
-      detail: `${s.pipelineTotals.count} open · weighted ${s.pipelineTotals.weighted}`,
+      detail: `${s.pipelineTotals.count} open · weighted ${formatMoney(s.pipelineTotals.weighted, s.currency)}`,
     }),
     metric('S-12', 'Average sales cycle', 'days', cycle, previousBrief('S-12')),
     metric('S-13', 'Deals needing attention', 'count', String(s.attention.length), previousBrief('S-13'), {
@@ -134,7 +135,7 @@ export function computeSalesMetrics(s: SalesSnapshot, earlier: SalesMetricsDoc[]
       detail: `calls ${s.week.calls} · meetings ${s.week.meetings} · tasks completed ${s.week.tasksCompleted}`,
     }),
     metric('S-16', 'Reps with deals or activity', 'count', String(reps.length), previousBrief('S-16')),
-    metric('S-17', 'Sales velocity per day', 'money_per_day', velocity, previousBrief('S-17')),
+    metric('S-17', 'Sales velocity per day', 'money_per_day', velocity, previousBrief('S-17'), { detail: VELOCITY_NOTE }),
   ];
 
   // Throughput funnel: each step as a share of the step before it.
@@ -162,6 +163,8 @@ export function computeSalesMetrics(s: SalesSnapshot, earlier: SalesMetricsDoc[]
 
   return {
     currency: s.currency,
+    asOf: s.cutoff,
+    timeZone: s.timeZone,
     periodStart: s.period.start,
     periodEnd: s.period.end,
     metrics,

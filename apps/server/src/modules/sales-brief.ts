@@ -259,9 +259,10 @@ const renderDeck = (run: Run, org: Org, metrics: SalesMetricsDoc, narrative: Sal
       periodEnd: run.periodEnd,
       orgName: org.name,
       branding: org.branding,
-      metrics,
+      metrics: { ...metrics, timeZone: metrics.timeZone ?? run.timeZone },
       narrative,
       approverName,
+      asOf: metrics.asOf ?? run.createdAt.toISOString(),
     }),
     org.templateKey,
   );
@@ -490,6 +491,8 @@ export async function getSalesBrief(ctx: AppContext, actor: UserActor, id: strin
   return {
     ...summaryOf(run),
     timeZone: run.timeZone,
+    /** When the data was read: pipeline and attention figures are as of this instant. */
+    asOf: run.metrics?.asOf ?? run.createdAt.toISOString(),
     runAsName: nameOf(run.runAsUserId),
     approvedByName: nameOf(run.approvedBy),
     finalPptxSha256: run.finalPptxSha256,
