@@ -86,3 +86,28 @@ One weekly status PowerPoint per client (company), produced inside the CRM from 
 Tests: 15 unit tests (period incl. a DST week, matcher, metrics), 12 unit tests (facts, checks, simulator output) and 8 integration tests (`weekly-reports.integration.test.ts`: import, schedule exactly once, exact metrics, deck contents, owner scoping, approval, regeneration, fallback).
 
 Not in Part 1: editing the report text (so a report that fell back to placeholders cannot be approved yet), a full report page, Google Sheets, email delivery, real AI provider runs, settings screen for the weekly schedule.
+
+## Weekly Report Agents — Part 2 (2026-11-25)
+Finishes the feature: a person can edit the text, regenerate it, approve with acknowledged warnings, and work from full report pages. Estimates can also be read from a linked Google Sheet (read-only, off by default). Mock AI only.
+
+| Piece | Where | Status |
+|---|---|---|
+| Fixes from Part 1 review: AI "decide" refused for weekly reports, AI settings merge feature switches, internal-term check compares with the fact text | `modules/ai.ts`, `modules/weekly-reports/checks.ts` | Built |
+| Edit text (change / remove / add sentences, sources from the report's facts, `rowVersion` guard, checks and draft deck redone) | `updateNarrative` in `modules/weekly-reports.ts`, `PATCH /weekly-reports/:id/narrative` | Built |
+| Regenerate text from the stored snapshot (same figures and version) | `regenerateNarrative`, `redraftJob`, job `weekly_report.redraft`, `POST /weekly-reports/:id/regenerate` | Built — simulator only |
+| Approve with warnings acknowledged | `approveWeeklyReport` (`acknowledgeWarnings`), `POST /weekly-reports/:id/approve` | Built |
+| Weekly reports list (status tabs, search by client) and report page (figures, text with sources, edit, points to review, scope progress, regenerate, approve, downloads) | `apps/web/src/pages/weekly-report-pages.tsx`, nav item "Weekly reports" | Built |
+| Schedule settings (on/off, weekday, time) for Admins | Settings → Weekly reports, `GET/PUT /admin/weekly-report-settings` | Built |
+| In-app notification to the company owner when a scheduled draft is ready | `workflow.ts` (`weekly_report_ready`) | Built |
+| Google Sheets estimates reader (read-only), per-company sheet link, "Sync now", sync before each run with fallback to the latest import | `platform/google-sheets.ts`, `modules/weekly-reports/estimates.ts`, `drizzle/0008_estimate_source.sql`, company page card | Built — never called live |
+
+Tests added in Part 2: integration tests now 16 in `weekly-reports.integration.test.ts` (edit, stale edit, regenerate, warnings at approval, schedule settings, notification, Google link / sync / failed sync with a fake source), 8 unit tests for the Google reader (`platform/google-sheets.test.ts`, fake `fetch`, throw-away key), narrative/check unit tests now 13, and one browser test `e2e/weekly-reports.spec.ts` (upload → generate → edit → approve → download final `.pptx` → a salesperson who does not own the client gets "not found").
+
+Not built / not done: email delivery of reports (by design), writing anything to Google Sheets (by design), per-client schedules, the real slide template, a real AI provider run, a live Google call, a visual check of the decks in PowerPoint. See KNOWN-ISSUES.md "Weekly reports".
+
+Verification (2026-11-25, this machine, branch `feature/weekly-report-agents`):
+| Check | Result |
+|---|---|
+| `pnpm verify` (typecheck, lint, test, build) | Pass — **260 tests in 21 files**; Biome 148 files, 3 warnings that existed before this feature |
+| `e2e/weekly-reports.spec.ts` | Pass (1 test) |
+| `pnpm test:e2e` (all specs) | **28 passed, 10 failed.** The 10 failures are in specs written before this feature (`ai`, `crm-edit`, `journey`, `marvel-seed`, `personas-demo`, `personas-sign-demo`, `proposal-ext`, `qa-demo` B, `reports`, `session-isolation`). They expect the original demo data and screens: user names "Riley Chen" / "Avery Admin" / "Jordan Patel" (the users were renamed), a published template named "Services proposal" (not in the Marvel-only database), and the old person form with a plain Company drop-down. They were not changed. |

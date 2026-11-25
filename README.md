@@ -29,6 +29,7 @@ to run, demo and host it.
 | **Buyer portal** | Personal tracked link per recipient (token kept in the URL fragment), proposal view, accept / decline, PDF download |
 | **E-signature** | Signature requests, multiple signers, webhook-driven status, signed PDF + completion certificate (simulated provider) |
 | **AI assistance** | Draft sections, rewrite text, pre-send review, opportunity summary, follow-up email drafts (simulated provider unless configured) |
+| **Weekly client reports** | One status PowerPoint per client each week, from CRM tasks and activity plus the client’s estimates sheet (CSV upload, or a linked Google Sheet read-only). Figures are computed by code, the text is drafted by AI with sources, a person edits, approves and downloads the final deck. Report list and report page, Monday schedule (Admin setting), in-app notification when a draft is ready |
 | **Automation** | Stage moves on send, Closed Won on signing, follow-up checks, stalled / overdue flags, task reminders |
 | **Admin** | Users (including renaming), teams, pipeline stages, lost reasons, organization settings and branding, import, audit log, AI settings |
 
@@ -106,7 +107,7 @@ separate worker. First admin on an empty production database: `pnpm --filter @cr
 
 ## Simulated parts
 
-E-signature, AI and email are **simulated** by default. Production refuses to start with them unless
+E-signature, AI and email are **simulated** by default (weekly report text included; the Google Sheets reader is off by default and has never called Google). Production refuses to start with them unless
 `ALLOW_SIMULATED_PROVIDERS=true` (demos only). In production mode the "Simulate sign" action is not available, so
 signatures cannot be completed until a real provider is connected. See KNOWN-ISSUES.md before any real use.
 
@@ -123,6 +124,7 @@ signatures cannot be completed until a real provider is connected. See KNOWN-ISS
 | Admins can rename users; organization name and PDF footer set to Kensium | `patchUser`, organization settings |
 | `db:reset:dev --demo`, Marvel seed and demo specs | `apps/server/src/cli/reset-dev.ts`, `e2e/` |
 | Hosting: Dockerfile, Render Blueprint, Vercel config, `bootstrap:admin`, in-process jobs, Cloudflare tunnel script | `Dockerfile`, `render.yaml`, `apps/web/vercel.json`, `scripts/tunnel.ps1`, `DEPLOY.md` |
+| Weekly client reports (branch `feature/weekly-report-agents`): estimates import, metrics, AI narrative with checks, PowerPoint, edit / regenerate / approve, report pages, schedule setting, read-only Google Sheets reader | `apps/server/src/modules/weekly-reports*`, `platform/google-sheets.ts`, `apps/web/src/pages/weekly-report*.tsx`, `e2e/weekly-reports.spec.ts` |
 
 ## Project records
 
