@@ -118,3 +118,22 @@ Verification (2026-11-25, this machine, branch `feature/weekly-report-agents`):
 | Named PowerPoint template `default` ("Default (mock)") on slide masters `WR_TITLE` and `WR_CONTENT`: brand colour, header bar, Kensium logo (PNG generated once from the SVG), footer text, slide number, fixed positions for title, KPI tiles, table, chart and statements | `modules/weekly-reports/deck.ts`, `deck-logo.ts`, `deck-unit.test.ts` | Built — a mock, not the real company template; not opened in PowerPoint |
 | `weekly_report_settings.templateKey` (code default `default`, no migration); shown read-only in Settings → Weekly reports | `modules/weekly-reports.ts`, `apps/web/src/pages/settings.tsx` | Built |
 | `pnpm weekly:demo` | `apps/server/src/cli/weekly-demo.ts` | Built — run twice on `crm_dev` (second run: new version, no duplicate tasks or import) |
+
+## Weekly Sales Brief (2026-11-25)
+One company-wide brief per week for leadership (Admin role): overall sales and throughput, findings computed by code, AI analysis with recommended actions, delivered as PowerPoint and Excel. Internal only. Independent of deals and clients; the per-client weekly report is unchanged.
+
+| Piece | Where | Status |
+|---|---|---|
+| Data: `sales_brief_run`, `organization_settings.sales_brief_settings`, permissions `sales_brief.view/manage` (admin only) | `drizzle/0009_sales_brief.sql`, `db/schema-sales-brief.ts`, `packages/shared/src/permissions.ts` | Built |
+| Orchestrator: Monday 08:00 schedule, "Generate now", versions, stuck-run guard, run-as admin | `modules/sales-brief.ts`, `modules/workflow.ts` | Built |
+| Collector (admin scope, reuses `reportOverview` for 4 windows), snapshot write-once + sha256 | `modules/sales-brief/collect.ts` | Built |
+| Metrics S-01…S-17, funnel, week-over-week, MTD/QTD, baseline | `modules/sales-brief/metrics.ts` | Built |
+| Signals (the analysis layer, code only): trend, bottleneck, concentration, risk, team, opportunity; max 8 | `modules/sales-brief/signals.ts` | Built |
+| Insights & narrative (AI feature `sales_brief`, prompt `sales_brief/v1`), checks, 2 retries, placeholders | `modules/sales-brief/{facts,narrative,checks}.ts`, `modules/ai/prompts.ts`, `platform/mock-ai.ts` | Built — simulator only |
+| PowerPoint (9 slides on the shared template masters) | `modules/sales-brief/deck.ts` | Built — exported with PowerPoint and checked slide by slide |
+| Excel (9 tabs, exceljs 4.4.0, formula-injection guard) | `modules/sales-brief/sheet.ts` | Built — opened in Excel |
+| Google Sheets publisher behind `SALES_BRIEF_SHEETS=google` (job `sales_brief.sheet`, after approval only) | `platform/sales-brief-sheets.ts` | Built — never called live (fake fetch only) |
+| API and screens: nav "Sales brief", list, brief page, dashboard card, Settings → Sales brief | `http/routes/sales-brief.ts`, `apps/web/src/pages/sales-brief-pages.tsx` | Built |
+| Demo data: two weeks of sales activity in `pnpm db:seed:avengers` | `cli/seed-avengers.ts` | Built |
+
+Tests: 32 unit tests (`sales-brief-unit.test.ts`: every metric, every signal rule, facts, checks, simulator, deck, Excel read-back, Google publisher with a fake fetch), 13 integration tests (`sales-brief.integration.test.ts`: exact S-01…S-17, equality with the Reports page, admin-only 403, schedule once, edit, approve with final file fingerprints, regenerate, fallback, Google switch, no active admin), 1 browser test (`e2e/sales-brief-preview.spec.ts`).

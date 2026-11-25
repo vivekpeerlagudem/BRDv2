@@ -51,6 +51,8 @@ export function briefFileName(orgName: string, periodEnd: string, attempt: numbe
   return `${org}_Sales_Brief_${periodEnd}_v${attempt}${draft ? '_DRAFT' : ''}.${ext}`;
 }
 
+/** A funnel step as a share of the step before. Above 100 % it is not a share (reps also open opportunities directly), so nothing is shown. */
+export const shareOfStepBefore = (stepPct: string | null) => (stepPct === null || Number(stepPct) > 100 ? '' : `${stepPct}% of the step before`);
 const REASON: Record<string, string> = { stalled: 'Stalled', overdue: 'Past close date', unviewed_proposal: 'Proposal not viewed' };
 export interface BriefDeckModel {
   draft: boolean;
@@ -124,7 +126,7 @@ export function buildBriefDeck(input: {
       : `${byAi ? 'AI analysis' : 'Analysis'} — reviewed by ${cut(input.approverName ?? 'an administrator', 60)}`,
     insights: texts(narrative.insights, 5),
     actions: texts(narrative.actions, 4),
-    funnel: doc.funnel.map((f) => ({ label: f.label, value: f.value, step: f.stepPct === null ? '' : `${f.stepPct}% of the step before` })),
+    funnel: doc.funnel.map((f) => ({ label: f.label, value: f.value, step: shareOfStepBefore(f.stepPct) })),
     throughput: texts(narrative.throughput, 3),
     stages: doc.pipelineByStage.map((p) => ({
       stage: cut(p.stage, 30),
@@ -231,7 +233,7 @@ export async function renderBriefPptx(model: BriefDeckModel, templateKey?: strin
     const x = 0.5 + i * (tileW + gap);
     first.addShape(pptx.ShapeType.roundRect, { x, y: 4.45, w: tileW, h: 2.0, rectRadius: 0.08, fill: { color: 'F4F5F7' }, line: { color: 'E4E7EB' } });
     first.addText(k.label, { x: x + 0.18, y: 4.55, w: tileW - 0.36, h: 0.35, fontFace: FONT, fontSize: 11, color: t.muted });
-    first.addText(k.value, { x: x + 0.18, y: 4.9, w: tileW - 0.36, h: 0.85, fontFace: FONT, fontSize: 24, bold: true, color: t.ink, fit: 'shrink' });
+    first.addText(k.value, { x: x + 0.18, y: 4.9, w: tileW - 0.36, h: 0.85, fontFace: FONT, fontSize: k.value.length > 9 ? 18 : 24, bold: true, color: t.ink });
     if (k.change) first.addText(k.change, { x: x + 0.18, y: 5.8, w: tileW - 0.36, h: 0.5, fontFace: FONT, fontSize: 10.5, color: t.muted, valign: 'top' });
   });
 

@@ -498,7 +498,7 @@ export function SalesBriefPage() {
                               <span className="text-ink">{f.label}</span>
                               <span className="tabular-nums text-ink">
                                 {f.value}
-                                {f.stepPct !== null && <span className="ml-1 text-xs text-muted">({f.stepPct}%)</span>}
+                                {f.stepPct !== null && Number(f.stepPct) <= 100 && <span className="ml-1 text-xs text-muted">({f.stepPct}%)</span>}
                               </span>
                             </div>
                             <div className="mt-1 h-2 rounded bg-surface">
@@ -507,7 +507,7 @@ export function SalesBriefPage() {
                           </li>
                         ))}
                       </ul>
-                      <p className="mt-2 text-xs text-muted">Percent = share of the step before.</p>
+                      <p className="mt-2 text-xs text-muted">Percent = share of the step before (not shown where reps also open opportunities directly).</p>
                     </Card>
                     <Card title="Findings (computed by code)">
                       {r.signals.length === 0 ? (

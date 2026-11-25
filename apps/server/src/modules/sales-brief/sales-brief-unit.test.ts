@@ -289,6 +289,13 @@ describe('sales brief signals', () => {
     ).toBe(false);
   });
 
+  it('names each piece of evidence once, even when one rep owns several of the flagged deals', () => {
+    const sameOwner = snapshot({ attention: s.attention.map((a) => ({ ...a, ownerId: U.cap, owner: 'Captain America' })) });
+    for (const x of computeSignals(sameOwner, computeSalesMetrics(sameOwner))) expect(new Set(x.recordIds).size).toBe(x.recordIds.length);
+    const cluster = computeSignals(sameOwner, computeSalesMetrics(sameOwner)).find((x) => x.title.includes('stalled in Discovery'));
+    expect(cluster?.recordIds).toEqual(['deal:d-s1', `user:${U.cap}`, 'deal:d-s2']);
+  });
+
   it('risk: open deals over their stage time limit (not repeated when already in a stalled cluster)', () => {
     const x = find((t) => t.includes('longer than the stage time limit'));
     expect(x).toMatchObject({ kind: 'risk', severity: 'medium', values: { deals: 1 } });
@@ -619,7 +626,7 @@ describe('sales brief outputs: PowerPoint, Excel and the Google Sheets publisher
       '',
       '50.0% of the step before',
       '60.0% of the step before',
-      '200.0% of the step before',
+      '', // 200 % is not a share of the step before (reps also open opportunities directly): nothing is shown
       '33.3% of the step before',
     ]);
     expect(model.attention).toHaveLength(3);

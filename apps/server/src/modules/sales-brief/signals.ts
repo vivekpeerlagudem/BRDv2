@@ -214,11 +214,15 @@ export function computeSignals(s: SalesSnapshot, doc: SalesMetricsDoc): SalesSig
       values: { source: best.source, converted: best.converted, created: best.created },
     });
 
-  return out
-    .map((signal, i) => ({ signal, i }))
-    .sort(
-      (a, b) => SEVERITY[a.signal.severity] - SEVERITY[b.signal.severity] || KIND_ORDER.indexOf(a.signal.kind) - KIND_ORDER.indexOf(b.signal.kind) || a.i - b.i,
-    )
-    .slice(0, THRESHOLDS.maxSignals)
-    .map(({ signal }, i) => ({ id: `signal:${i + 1}`, ...signal }));
+  return (
+    out
+      .map((signal, i) => ({ signal, i }))
+      .sort(
+        (a, b) =>
+          SEVERITY[a.signal.severity] - SEVERITY[b.signal.severity] || KIND_ORDER.indexOf(a.signal.kind) - KIND_ORDER.indexOf(b.signal.kind) || a.i - b.i,
+      )
+      .slice(0, THRESHOLDS.maxSignals)
+      // One owner of several flagged deals is evidence once, not once per deal.
+      .map(({ signal }, i) => ({ id: `signal:${i + 1}`, ...signal, recordIds: [...new Set(signal.recordIds)] }))
+  );
 }

@@ -30,6 +30,7 @@ to run, demo and host it.
 | **E-signature** | Signature requests, multiple signers, webhook-driven status, signed PDF + completion certificate (simulated provider) |
 | **AI assistance** | Draft sections, rewrite text, pre-send review, opportunity summary, follow-up email drafts (simulated provider unless configured) |
 | **Weekly client reports** | One status PowerPoint per client each week, from CRM tasks and activity plus the client’s estimates sheet (CSV upload, or a linked Google Sheet read-only). Figures are computed by code, the text is drafted by AI with sources, a person edits, approves and downloads the final deck. Report list and report page, Monday schedule (Admin setting), in-app notification when a draft is ready |
+| **Weekly sales brief** | For admins only: one company-wide brief per week with overall sales and throughput (leads → deals won), findings computed by code (stalled deals, concentration, slipping dates, quiet reps, trends), AI analysis with recommended actions tied to evidence, review and approval, final PowerPoint and Excel. Figures equal the Reports page |
 | **Automation** | Stage moves on send, Closed Won on signing, follow-up checks, stalled / overdue flags, task reminders |
 | **Admin** | Users (including renaming), teams, pipeline stages, lost reasons, organization settings and branding, import, audit log, AI settings |
 
@@ -130,6 +131,7 @@ signatures cannot be completed until a real provider is connected. See KNOWN-ISS
 | `db:reset:dev --demo`, Marvel seed and demo specs | `apps/server/src/cli/reset-dev.ts`, `e2e/` |
 | Hosting: Dockerfile, Render Blueprint, Vercel config, `bootstrap:admin`, in-process jobs, Cloudflare tunnel script | `Dockerfile`, `render.yaml`, `apps/web/vercel.json`, `scripts/tunnel.ps1`, `DEPLOY.md` |
 | Weekly client reports (branch `feature/weekly-report-agents`): estimates import, metrics, AI narrative with checks, PowerPoint, edit / regenerate / approve, report pages, schedule setting, read-only Google Sheets reader | `apps/server/src/modules/weekly-reports*`, `platform/google-sheets.ts`, `apps/web/src/pages/weekly-report*.tsx`, `e2e/weekly-reports.spec.ts` |
+| Weekly sales brief for leadership: collector, metrics S-01…S-17, signals, AI insights with checks, PowerPoint, Excel, Google Sheets publisher behind a switch, screens, demo data | `apps/server/src/modules/sales-brief*`, `platform/sales-brief-sheets.ts`, `apps/web/src/pages/sales-brief-pages.tsx`, `e2e/sales-brief-preview.spec.ts` |
 
 ## Project records
 

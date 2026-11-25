@@ -129,3 +129,15 @@ pnpm weekly:demo --company "Daily Bugle"  # a company by name
 It imports `e2e/fixtures/estimates-sample.csv` as the company owner (skipped when the latest import is identical), creates the tasks `[S-001] …` (completed last week) and `[S-002] …` (open) if they are missing, generates the report with the AI simulator, writes the draft PowerPoint to `.data/weekly-demo/` and prints the run id, status, health, % complete, the file path and the report URL. Running it again creates a new version of the report, never duplicate tasks or imports. It refuses to run with `NODE_ENV=production`. The dev servers do not need to be running; start them to open the printed URL.
 
 The slides use the template "Default (mock)" (`WEEKLY_TEMPLATES.default` in `modules/weekly-reports/deck.ts`): two slide masters with the brand colour, a header bar, the Kensium logo, footer text and slide number. Settings → Weekly reports shows the template in use.
+
+## 11. Weekly sales brief — demo steps (admins only)
+`pnpm db:seed:avengers` loads two weeks of sales activity and one brief. With both dev servers running:
+1. Sign in as Tony Stark (admin). The **Dashboard** shows the card "Latest sales brief".
+2. Sidebar → **Sales brief** → open the week, or click **Generate now** for a new version.
+3. The brief page shows five key figures, the throughput funnel, **Findings (computed by code)** and the AI **Key insights** and **Recommended actions**. Each sentence lists its evidence; a deal name opens the deal.
+4. **Edit** a sentence → **Save**. **Approve** → **Approve brief**.
+5. **Download PowerPoint** and **Download Excel**.
+6. **Settings → Sales brief**: on/off, day, time, the admin it runs for, spreadsheet mode.
+7. Sign in as Spider-Man: there is no "Sales brief" in the sidebar.
+
+Checks: `pnpm exec playwright test e2e/sales-brief-preview.spec.ts` (files go to `demo-preview/sales-brief/`), `scripts/export-slides.ps1` (slides to PNG with PowerPoint), `scripts/check-xlsx.ps1` (opens the workbook in Excel). Google Sheets publishing: set `SALES_BRIEF_SHEETS=google`, `SALES_BRIEF_SPREADSHEET_ID` and `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64`, and share the sheet with the service-account email as an Editor. Not tried against Google in this build.
