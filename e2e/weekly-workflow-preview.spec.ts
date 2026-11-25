@@ -376,8 +376,13 @@ test('error path: with the AI feature off the report falls back to placeholders,
     expect(count).toBeGreaterThan(0);
     for (let i = 0; i < count; i++) {
       await write.first().click();
-      await page.getByLabel(/^Edit sentence in /).fill(`Written by hand, sentence ${i + 1}: work is progressing as planned.`);
+      const sentence = `Written by hand, sentence ${i + 1}: work is progressing as planned.`;
+      await page.getByLabel(/^Edit sentence in /).fill(sentence);
       await page.getByRole('button', { name: 'Save', exact: true }).click();
+      // Wait for the save itself (the editor closes and the sentence is shown): the "Write this sentence" button is
+      // already gone while its editor is open, so its count alone does not prove the save finished.
+      await expect(page.getByLabel(/^Edit sentence in /)).toHaveCount(0);
+      await expect(page.getByText(sentence)).toBeVisible();
       await expect(write).toHaveCount(count - i - 1);
     }
     log(`AI off → ${count} placeholder sentence(s) replaced by hand`);

@@ -142,5 +142,5 @@ text, chart readable, numbers equal to the report page, no "DRAFT" on the final 
 
 ## Test results (2026-11-25)
 - `pnpm verify`: exit 0 — Biome 153 files (3 older warnings), **267 tests in 22 files passed**, web and server build done. The run before it failed to load one unrelated test file (`imports.integration.test.ts`: "EBUSY: resource busy or locked" on a file in `node_modules`, the OneDrive folder issue K-26); the rerun passed.
-- `e2e/weekly-workflow-preview.spec.ts`: 2 passed. `e2e/weekly-reports.spec.ts`: 1 passed. (`3 passed (1.3m)` when run together.)
+- `e2e/weekly-workflow-preview.spec.ts`: 2 passed. `e2e/weekly-reports.spec.ts`: 1 passed (`3 passed`, run twice in a row at the end). One earlier run failed in the error-path test: the test moved on before a save had finished (a race in the test, fixed by waiting for the saved sentence).
 - The full `pnpm test:e2e` was not run again (see K-51).
