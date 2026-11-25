@@ -67,3 +67,4 @@ Last updated: 2026-11-18. Scope gaps per requirement are in REQUIREMENT-TRACEABI
 | K-48 | Each Google sync and each CSV upload stores a full new import; old imports are kept and never cleaned up |
 | K-49 | A linked Google Sheet cannot be unlinked in the UI (link a different sheet, or switch `ESTIMATES_SOURCE` back to `csv`) |
 | K-50 | The weekly-report browser test switches the weekly-report AI feature on in the development database and restores the previous AI settings afterwards; if a run is killed midway the settings can be left changed (same as K-39) |
+| K-51 | Older e2e specs expect the standard `pnpm db:seed` data; run them on a freshly seeded database, not the Marvel demo. On the Marvel demo database 10 of them fail (renamed users, no "Services proposal" template); `e2e/weekly-reports.spec.ts` passes on both |
