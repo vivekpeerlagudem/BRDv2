@@ -81,7 +81,7 @@ function cover() {
     line('Version 1.0', { run: { bold: true, size: 24, color: INK }, after: 40 }),
     line('Status: Draft for Business Review', { run: { size: 22, color: MUT }, after: 40 }),
     line('Date: 18 November 2026', { run: { size: 22, color: MUT }, after: 600 }),
-    line('Prepared for business review by Aakash', { run: { size: 22, color: INK }, after: 40 }),
+    line('Prepared for business review', { run: { size: 22, color: INK }, after: 40 }),
     line('Audience: Business Stakeholders · Product Owner · Solution Architect · Development Team', { run: { size: 20, color: MUT }, after: 1000 }),
     new Paragraph({ alignment: AlignmentType.CENTER, border: { top: { style: BorderStyle.SINGLE, size: 6, color: LINE, space: 10 } }, children: [t('Confidential — Internal Business Document', { italics: true, size: 18, color: MUT })] }),
     new Paragraph({ children: [new PageBreak()] }),
@@ -97,7 +97,7 @@ function docControl() {
     ['Status', 'Draft for Business Review'],
     ['Classification', 'Confidential — Internal'],
     ['Author', 'Business Analysis & Solution Architecture'],
-    ['Reviewer', 'Aakash (Product Owner / Solution Architect)'],
+    ['Reviewer', 'Product Owner / Solution Architect'],
     ['Scope basis', 'Original BRD v2.0 (single-company deployment per Scope Reconciliation) and the current implemented application'],
     ['Evidence basis', 'Repository source code, automated test suite (198 unit/integration, 24 browser tests), QA report, implementation-status and requirement-traceability records'],
   ]));
@@ -110,7 +110,7 @@ function docControl() {
   out.push(spacer());
   out.push(h2('Approval'));
   out.push(dataTable([3360, 3360, 3360], ['Role', 'Name', 'Decision / Date'], [
-    ['Product Owner', 'Aakash', '____________________'],
+    ['Product Owner', '____________________', '____________________'],
     ['Solution Architect', '', '____________________'],
     ['Delivery Lead', '', '____________________'],
   ]));
