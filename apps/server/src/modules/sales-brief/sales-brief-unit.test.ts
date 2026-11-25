@@ -345,6 +345,15 @@ describe('sales brief signals', () => {
     );
   });
 
+  it('bottleneck: a step above 100 % is not a conversion step and is never reported', () => {
+    // Last week 1 lead converted but 5 opportunities were opened (500 %); this week 3 converted and 6 opened (200 %).
+    const calm = { attention: [], openDeals: [], leadSources: [], pipelineByOwner: [] };
+    const direct = snapshot({ ...calm, lastWeek: win({ ...s.week, leadsConverted: 1, dealsCreated: 5 }) });
+    const found = computeSignals(direct, computeSalesMetrics(direct)).filter((y) => y.kind === 'bottleneck');
+    for (const b of found) expect(b.metricIds).not.toEqual(['S-03', 'S-05']); // "converted → new opportunities" is not a conversion step
+    expect(found.some((b) => String(b.title).includes('New opportunities converted'))).toBe(false);
+  });
+
   it('trend: a headline figure moved 20 % or more against its baseline; smaller moves are ignored; the 3 largest are kept', () => {
     const calm = { attention: [], openDeals: [], leadSources: [], pipelineByOwner: [] };
     const base = snapshot({ ...calm, lastWeek: win({ ...s.week, leadsCreated: 8, wonValue: '30000.00', winRate: 100 }) });

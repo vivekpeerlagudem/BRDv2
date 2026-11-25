@@ -78,7 +78,10 @@ export function computeSignals(s: SalesSnapshot, doc: SalesMetricsDoc): SalesSig
   out.push(...trends.sort((a, b) => size(b) - size(a)).slice(0, THRESHOLDS.maxTrends));
 
   // ── bottleneck: the funnel step furthest behind its baseline, else the weakest step ────────────────────────────
-  const stepsWithPct = doc.funnel.filter((f) => f.stepPct !== null);
+  // Only real conversion steps count: a step above 100 % (for example more new opportunities than converted leads,
+  // because reps also open opportunities directly) is not a share of the step before and cannot be a bottleneck.
+  const isShare = (v: string | null) => v === null || new Decimal(v).lte(100);
+  const stepsWithPct = doc.funnel.filter((f) => f.stepPct !== null && isShare(f.stepPct) && isShare(f.baselineStepPct));
   const drops = stepsWithPct
     .filter((f) => f.baselineStepPct !== null)
     .map((f) => ({ f, drop: new Decimal(f.baselineStepPct as string).minus(f.stepPct as string) }))

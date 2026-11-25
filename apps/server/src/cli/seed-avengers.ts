@@ -24,12 +24,29 @@ import { eq, inArray } from 'drizzle-orm';
 import pg from 'pg';
 import { buildContext } from '../composition.ts';
 import { loadConfig } from '../config/env.ts';
+import { salesBriefRun } from '../db/schema-sales-brief.ts';
 import { weeklyReportRun } from '../db/schema-weekly-reports.ts';
 import { addTeamMember, createTeam, renameTeam } from '../modules/admin.ts';
 import { updateSettings as updateAiSettings } from '../modules/ai.ts';
-import { completeTask, createCompany, createContact, createDeal, createLead, createTask, logActivity, qualifyLead } from '../modules/crm.ts';
+import {
+  closeDealLost,
+  closeDealWon,
+  completeTask,
+  convertLead,
+  createCompany,
+  createContact,
+  createDeal,
+  createLead,
+  createTask,
+  disqualifyLead,
+  logActivity,
+  moveDealStage,
+  qualifyLead,
+} from '../modules/crm.ts';
+import { hasOpenSignature, voidOpenSignature } from '../modules/esign.ts';
 import { deactivateUser, patchUser } from '../modules/identity.ts';
 import { createProduct, createTemplate, getTemplate, publishTemplate, saveTemplateDraft } from '../modules/proposals.ts';
+import { requestSalesBrief } from '../modules/sales-brief.ts';
 import { importEstimatesCsv } from '../modules/weekly-reports/estimates.ts';
 import { metricValue } from '../modules/weekly-reports/metrics.ts';
 import { lastFullWeek, periodInstants } from '../modules/weekly-reports/period.ts';
@@ -300,7 +317,7 @@ try {
   const { startInstant, endInstant } = periodInstants(week.periodStart, week.periodEnd, timeZone);
   const inWeek = (day: number, hour: number) => new Date(startInstant.getTime() + (day * 24 + hour) * 3_600_000);
   const owners: Record<string, string> = { 'Spider-Man': spidey.userId, 'Black Widow': widow.userId, 'Captain America': cap.userId };
-  const created: { client: Client; companyId: string; ownerA: UserActor }[] = [];
+  const created: { client: Client; companyId: string; dealId: string; ownerA: UserActor }[] = [];
   for (const c of CLIENTS) {
     const ownerA = await actor(owners[c.owner] as string);
     const company = await createCompany(ctx, ownerA, { name: c.company, domain: c.domain, industry: c.industry });
@@ -315,15 +332,17 @@ try {
       contactIds,
     });
     await importEstimatesCsv(ctx, ownerA, company.id, { fileName: c.csv, text: readFileSync(join(root, 'e2e', 'fixtures', c.csv), 'utf8') });
+    // For one client the admin holds and logs the work, so that rep shows "open deals, no logged activity" in the sales brief.
+    const logger = c.owner === 'Black Widow' ? tonyA : ownerA;
     const add = (title: string, dueAt: Date) =>
-      createTask(ctx, ownerA, { title, relatedType: 'deal', relatedId: deal.id, assigneeId: ownerA.userId, dueAt: dueAt.toISOString() });
+      createTask(ctx, ownerA, { title, relatedType: 'deal', relatedId: deal.id, assigneeId: logger.userId, dueAt: dueAt.toISOString() });
     const t1 = await add(c.tasks.s1, inWeek(1, 17));
     const t2 = await add(c.tasks.s2, inWeek(3, 17));
     await add(c.tasks.s3, new Date(endInstant.getTime() + 4 * DAY)); // due in the coming week
     await add(c.tasks.s4, inWeek(4, 17)); // due last week and still open: overdue
     await add(c.tasks.plain, new Date(ctx.now().getTime() + 2 * DAY));
-    await completeTask(ctx, ownerA, t1.id);
-    await completeTask(ctx, ownerA, t2.id);
+    await completeTask(ctx, logger, t1.id);
+    await completeTask(ctx, logger, t2.id);
     // The CRM stamps "now" on completion; the weekly report covers last week, so move both completions into it.
     await ctx.db
       .update(task)
@@ -333,7 +352,7 @@ try {
       .update(task)
       .set({ completedAt: inWeek(3, 11) })
       .where(eq(task.id, t2.id));
-    await logActivity(ctx, ownerA, {
+    await logActivity(ctx, logger, {
       kind: 'meeting',
       occurredAt: inWeek(2, 15).toISOString(),
       durationMinutes: 45,
@@ -341,28 +360,176 @@ try {
       relatedType: 'deal',
       relatedId: deal.id,
     });
-    created.push({ client: c, companyId: company.id, ownerA });
+    created.push({ client: c, companyId: company.id, dealId: deal.id, ownerA });
   }
 
-  // ── h. Leads ────────────────────────────────────────────────────────────────────────────────────────────────────
+  // ── h. Leads and two weeks of sales activity (for the weekly sales brief) ──────────────────────────────────────
+  // The CRM stamps "now" on creation, conversion and closing, and the audit log uses the database clock. The brief
+  // covers LAST week and compares it with the week before, so those times are moved with the migrator role.
   const spideyA = await actor(spidey.userId);
-  await createLead(ctx, spideyA, {
-    name: 'Peter Quill',
-    companyName: 'Guardians Logistics',
-    email: 'peter.quill@guardianslogistics.example',
-    jobTitle: 'Founder',
-    source: 'referral',
-    notes: 'Needs shipment tracking for a small fleet. Asked for a call next week.',
-  });
-  const carol = await createLead(ctx, spideyA, {
-    name: 'Carol Danvers',
-    companyName: 'Danvers Aerospace',
-    email: 'carol.danvers@danversaerospace.example',
-    jobTitle: 'Programme Director',
-    source: 'web form',
-    notes: 'Budget approved for a supplier portal in Q1. Ready to convert.',
-  });
-  await qualifyLead(ctx, spideyA, carol.id);
+  const widowA = await actor(widow.userId);
+  const capA = await actor(cap.userId);
+  const raw = new pg.Client({ connectionString: migratorUrl });
+  await raw.connect();
+  const briefDemo = { leads: 0, deals: 0 };
+  try {
+    const W = (day: number, hour = 10) => inWeek(day, hour); // last full week
+    const P = (day: number, hour = 10) => new Date(inWeek(day, hour).getTime() - 7 * DAY); // the week before
+    const lostReasons = await ctx.db.select().from(schema.lostReason);
+    const lostReason = lostReasons.find((r) => /price|budget/i.test(r.name)) ?? lostReasons[0];
+    if (!lostReason) throw new Error('No lost reason is configured.');
+
+    // The three client opportunities were opened a few weeks ago.
+    await raw.query("update deal set created_at = $1, stage_entered_at = $2 where status = 'open'", [
+      new Date(startInstant.getTime() - 21 * DAY),
+      new Date(endInstant.getTime() - 4 * DAY),
+    ]);
+
+    const LEADS: {
+      name: string;
+      company: string;
+      title: string;
+      source: string;
+      at: Date;
+      qualify?: Date;
+      disqualify?: Date;
+      convert?: { at: Date; amount: string };
+    }[] = [
+      { name: 'Peter Quill', company: 'Guardians Logistics', title: 'Founder', source: 'referral', at: W(0) },
+      { name: 'Carol Danvers', company: 'Danvers Aerospace', title: 'Programme Director', source: 'web form', at: W(1), qualify: W(2) },
+      {
+        name: 'Stephen Strange',
+        company: 'Sanctum Clinics',
+        title: 'Medical Director',
+        source: 'referral',
+        at: W(1),
+        qualify: W(2),
+        convert: { at: W(3), amount: '18000' },
+      },
+      { name: 'Nick Fury', company: 'Fury Security', title: 'Director', source: 'referral', at: W(2), qualify: W(3), convert: { at: W(4), amount: '24000' } },
+      { name: 'Scott Lang', company: 'Lang Electronics', title: 'Owner', source: 'event', at: W(3), disqualify: W(4) },
+      {
+        name: 'Wanda Maximoff',
+        company: 'Maximoff Studios',
+        title: 'Managing Partner',
+        source: 'web form',
+        at: P(0),
+        qualify: P(1),
+        convert: { at: P(2), amount: '15000' },
+      },
+      { name: 'Sam Wilson', company: 'Wilson Air Charter', title: 'Operations Lead', source: 'event', at: P(1), qualify: P(3) },
+      { name: 'Bruce Banner', company: 'Banner Labs', title: 'Head of Research', source: 'referral', at: P(2) },
+      { name: 'Thor Odinson', company: 'Asgard Brewing', title: 'Owner', source: 'web form', at: P(3) },
+      { name: 'Clint Barton', company: 'Barton Outdoor', title: 'Founder', source: 'event', at: P(4) },
+    ];
+    const converted: Record<string, string> = {};
+    for (const l of LEADS) {
+      const row = await createLead(ctx, spideyA, {
+        name: l.name,
+        companyName: l.company,
+        email: `${l.name.toLowerCase().replace(/[^a-z]+/g, '.')}@${l.company.toLowerCase().replace(/[^a-z]+/g, '')}.example`,
+        jobTitle: l.title,
+        source: l.source,
+      });
+      briefDemo.leads++;
+      await raw.query('update lead set created_at = $1 where id = $2', [l.at, row.id]);
+      if (l.qualify) {
+        await qualifyLead(ctx, spideyA, row.id);
+        await raw.query("update audit_log set occurred_at = $1 where action = 'lead.qualified' and target_id = $2", [l.qualify, row.id]);
+      }
+      if (l.disqualify) {
+        await disqualifyLead(ctx, spideyA, row.id, { reason: 'No budget this year' });
+        await raw.query("update audit_log set occurred_at = $1 where action = 'lead.disqualified' and target_id = $2", [l.disqualify, row.id]);
+      }
+      if (l.convert) {
+        const done = await convertLead(ctx, spideyA, row.id, {
+          createDeal: true,
+          dealName: `${l.company} – ${l.source === 'web form' ? 'Client portal' : 'Booking system'}`,
+          amount: l.convert.amount,
+        });
+        await raw.query('update lead set converted_at = $1 where id = $2', [l.convert.at, row.id]);
+        if (done.dealId) {
+          await raw.query('update deal set created_at = $1, stage_entered_at = $1 where id = $2', [l.convert.at, done.dealId]);
+          converted[l.name] = done.dealId;
+          briefDemo.deals++;
+        }
+      }
+    }
+
+    // Opportunities opened directly by the reps.
+    const direct = async (a: UserActor, company: string, name: string, stage: string, amount: string, createdAt: Date) => {
+      const co = await createCompany(ctx, a, { name: company, domain: `${company.toLowerCase().replace(/[^a-z]+/g, '')}.example` });
+      const d = await createDeal(ctx, a, {
+        name,
+        companyId: co.id,
+        stageId: stageId(stage),
+        amount,
+        closeDate: new Date(ctx.now().getTime() + 30 * DAY).toISOString().slice(0, 10),
+      });
+      await raw.query('update deal set created_at = $1, stage_entered_at = $1 where id = $2', [createdAt, d.id]);
+      briefDemo.deals++;
+      return d.id;
+    };
+    const pym = await direct(spideyA, 'Pym Technologies', 'Pym Technologies – Sensor hub', 'Qualification', '30000', W(1));
+    const oscorp = await direct(capA, 'Oscorp', 'Oscorp – Lab portal', 'Proposal sent', '22000', P(1));
+    const bugle = await direct(widowA, 'Daily Bugle', 'Daily Bugle – Archive search', 'Discovery', '9000', P(2));
+    const hydra = await direct(capA, 'Hydra Freight', 'Hydra Freight – Shipment tracking', 'Discovery', '28000', new Date(startInstant.getTime() - 35 * DAY));
+
+    // Stage moves last week: two opportunities advanced.
+    const advance = async (a: UserActor, dealId: string, to: string, when: Date) => {
+      const [d] = await ctx.db.select({ rowVersion: schema.deal.rowVersion }).from(schema.deal).where(eq(schema.deal.id, dealId));
+      await moveDealStage(ctx, a, dealId, stageId(to), d?.rowVersion ?? 1);
+      await raw.query('update deal_stage_history set changed_at = $1 where deal_id = $2 and from_stage_id is not null', [when, dealId]);
+      await raw.query('update deal set stage_entered_at = $1 where id = $2', [when, dealId]);
+    };
+    await advance(spideyA, pym, 'Discovery', W(3));
+    if (converted['Stephen Strange']) await advance(spideyA, converted['Stephen Strange'], 'Discovery', W(4));
+
+    // Two deals won and one lost last week.
+    const closeAt = (dealId: string, when: Date) => raw.query('update deal set closed_at = $1 where id = $2', [when, dealId]);
+    await closeDealWon(ctx, capA, oscorp);
+    await closeAt(oscorp, W(2, 16));
+    if (converted['Wanda Maximoff']) {
+      await closeDealWon(ctx, spideyA, converted['Wanda Maximoff']);
+      await closeAt(converted['Wanda Maximoff'], W(4, 11));
+    }
+    await closeDealLost(ctx, widowA, bugle, { lostReasonId: lostReason.id, note: 'Chose a cheaper off-the-shelf tool' }, voidOpenSignature, hasOpenSignature);
+    await closeAt(bugle, W(3, 15));
+
+    // The week before was busier on the phone: a few calls, so week-over-week activity differs.
+    for (const [a, dealId] of [
+      [spideyA, pym],
+      [spideyA, pym],
+      [capA, hydra],
+      [capA, hydra],
+      [capA, oscorp],
+    ] as const)
+      await logActivity(ctx, a, {
+        kind: 'call',
+        occurredAt: P(2, 14).toISOString(),
+        durationMinutes: 20,
+        outcome: 'Follow-up call',
+        relatedType: 'deal',
+        relatedId: dealId,
+      });
+
+    // Two deals stalled in the same stage, and one past its expected close date. This comes last: logging an
+    // activity on a deal clears its "stalled" flag.
+    const shield = created.find((c) => c.client.company === 'S.H.I.E.L.D.');
+    const wakanda = created.find((c) => c.client.company === 'Wakanda Design Group');
+    const quiet = new Date(startInstant.getTime() - 16 * DAY);
+    const stalledIds = [hydra, ...(shield ? [shield.dealId] : [])];
+    for (const dealId of stalledIds) {
+      await raw.query('update deal set last_activity_at = $1, stage_entered_at = $1 where id = $2', [quiet, dealId]);
+      await raw.query("insert into deal_flag (deal_id, kind, raised_at) values ($1, 'stalled', $2) on conflict do nothing", [dealId, W(5, 8)]);
+    }
+    if (wakanda) {
+      await raw.query('update deal set close_date = $1 where id = $2', [week.periodStart, wakanda.dealId]);
+      await raw.query("insert into deal_flag (deal_id, kind, raised_at) values ($1, 'past_close_date', $2) on conflict do nothing", [wakanda.dealId, W(2, 8)]);
+    }
+  } finally {
+    await raw.end();
+  }
 
   // ── i. One weekly report per client ────────────────────────────────────────────────────────────────────────────
   const reports: { client: Client; id: string; status: string; health: string; reasons: string[]; pct: string; hours: string }[] = [];
@@ -389,6 +556,16 @@ try {
     });
   }
 
+  // ── i2. The weekly sales brief for leadership (runs for the admin) ─────────────────────────────────────────────
+  const briefRequest = await requestSalesBrief(ctx, tonyA);
+  let brief = (await ctx.db.select().from(salesBriefRun).where(eq(salesBriefRun.id, briefRequest.id)))[0];
+  for (let i = 0; i < 40 && brief && (brief.status === 'queued' || brief.status === 'running'); i++) {
+    await runDueJobs(ctx);
+    brief = (await ctx.db.select().from(salesBriefRun).where(eq(salesBriefRun.id, briefRequest.id)))[0];
+  }
+  if (!brief || (brief.status !== 'ready' && brief.status !== 'needs_attention'))
+    throw new Error(`The sales brief did not finish (status ${brief?.status ?? 'missing'}${brief?.failureReason ? `, ${brief.failureReason}` : ''}).`);
+
   // ── j. Summary ──────────────────────────────────────────────────────────────────────────────────────────────────
   const origin = config.APP_ORIGIN.replace(/\/$/, '');
   const HEALTH_WORDS: Record<string, string> = { green: 'on track', amber: 'needs attention', red: 'at risk' };
@@ -399,7 +576,7 @@ try {
       'Users: Tony Stark (admin) · Captain America (sales manager, team Avengers) · Spider-Man, Black Widow (salespeople, team Avengers)' +
         (deactivated ? ` · ${deactivated} other user(s) deactivated` : ''),
       'Catalogue: Implementation package, Platform subscription, Support plan · Template: Kensium services proposal (published)',
-      'Leads (Spider-Man): Peter Quill – Guardians Logistics (new), Carol Danvers – Danvers Aerospace (qualified)',
+      `Sales activity (last two weeks): ${briefDemo.leads} leads (5 qualified, 3 converted, 1 disqualified), ${briefDemo.deals} more opportunities, 2 won, 1 lost`,
       '',
       ...reports.flatMap((r) => [
         `${r.client.company} — owner ${r.client.owner}`,
@@ -409,6 +586,13 @@ try {
         `  Report       ${origin}/weekly-reports/${r.id} [${r.status}]`,
         '',
       ]),
+      `Weekly sales brief — ${brief.status}, ${brief.signals.length} findings`,
+      ...(brief.metrics?.metrics ?? []).map(
+        (m) =>
+          `  ${m.id}  ${m.label.padEnd(30)} ${String(m.value ?? '–').padStart(12)}   last week ${m.lastWeek ?? '–'}${m.mtd !== undefined ? ` · MTD ${m.mtd ?? '–'} · QTD ${m.qtd ?? '–'}` : ''}`,
+      ),
+      ...brief.signals.map((x) => `  [${x.severity}/${x.kind}] ${x.title}`),
+      `  Brief        ${origin}/sales-brief/${brief.id}`,
     ].join('\n'),
   );
 } finally {
