@@ -1,0 +1,1576 @@
+{
+ "reqs": [
+  {
+   "id": "BR-AIA-001",
+   "module": "AI Assistance",
+   "mod": "AIA",
+   "priority": "Must",
+   "short": "AI shall draft proposal content, such as the introduction, summary of the customer's needs and scope summary, from the deal record, notes, linked emails and the template. The salesperson reviews and edits before use.",
+   "status": "Done \u00b7 mock-tested",
+   "statusRaw": "Done \u00b7 mock-tested",
+   "statusNorm": "Implemented & tested (mock AI)",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-AIA-002",
+   "module": "AI Assistance",
+   "mod": "AIA",
+   "priority": "Must",
+   "short": "Before sending, AI shall check for wrong or mismatched names, figures inconsistent with the pricing table or deal, empty placeholders, missing required sections and outdated dates.",
+   "status": "Done \u00b7 mock-tested",
+   "statusRaw": "Done \u00b7 mock-tested",
+   "statusNorm": "Implemented & tested (mock AI)",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-AIA-003",
+   "module": "AI Assistance",
+   "mod": "AIA",
+   "priority": "Must",
+   "short": "Users shall be able to request an AI summary of a deal's email thread and history.",
+   "status": "Done \u00b7 mock-tested",
+   "statusRaw": "Done \u00b7 mock-tested",
+   "statusNorm": "Implemented & tested (mock AI)",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-AIA-004",
+   "module": "AI Assistance",
+   "mod": "AIA",
+   "priority": "Should",
+   "short": "Users shall be able to rewrite selected text with AI, for example to shorten it or change its tone.",
+   "status": "Done \u00b7 mock-tested",
+   "statusRaw": "Done \u00b7 mock-tested",
+   "statusNorm": "Implemented & tested (mock AI)",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-AIA-005",
+   "module": "AI Assistance",
+   "mod": "AIA",
+   "priority": "Should",
+   "short": "AI shall be able to draft a follow-up email after a proposal is sent, for the salesperson to review.",
+   "status": "Done \u00b7 mock-tested",
+   "statusRaw": "Done \u00b7 mock-tested",
+   "statusNorm": "Implemented & tested (mock AI)",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-AIA-006",
+   "module": "AI Assistance",
+   "mod": "AIA",
+   "priority": "Must",
+   "short": "AI shall never send anything to an external party without a user's explicit action.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-AIA-007",
+   "module": "AI Assistance",
+   "mod": "AIA",
+   "priority": "Must",
+   "short": "AI-generated content shall be marked as such until a user accepts it, and AI usage shall be logged.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-AIA-008",
+   "module": "AI Assistance",
+   "mod": "AIA",
+   "priority": "Must",
+   "short": "Admins shall be able to turn AI features on or off for their organization.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-AIA-009",
+   "module": "AI Assistance",
+   "mod": "AIA",
+   "priority": "Must",
+   "short": "Customer data shall not be used to train AI models, and AI processing shall keep each organization's data separate.",
+   "status": "Blocked \u00b7 decision",
+   "statusRaw": "Blocked \u00b7 decision",
+   "statusNorm": "Blocked (external decision)",
+   "evidence": ""
+  },
+  {
+   "id": "BR-AUT-001",
+   "module": "Automation",
+   "mod": "AUT",
+   "priority": "Must",
+   "short": "When a proposal is sent, the deal shall move to a configured stage, if it is at an earlier stage.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-AUT-002",
+   "module": "Automation",
+   "mod": "AUT",
+   "priority": "Must",
+   "short": "When all signers have signed, the deal shall be marked Closed Won, with the amount taken from the proposal and the close date set to the signing date.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-AUT-003",
+   "module": "Automation",
+   "mod": "AUT",
+   "priority": "Must",
+   "short": "When a proposal is declined, a task shall be created for the owner to record the outcome. The deal is not closed automatically.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-AUT-004",
+   "module": "Automation",
+   "mod": "AUT",
+   "priority": "Must",
+   "short": "A follow-up task shall be created a configurable number of days after sending if the proposal has not been viewed or answered.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-AUT-005",
+   "module": "Automation",
+   "mod": "AUT",
+   "priority": "Must",
+   "short": "Deals with no activity for a configurable number of days (set per stage) shall be flagged.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-AUT-006",
+   "module": "Automation",
+   "mod": "AUT",
+   "priority": "Should",
+   "short": "Deals past their expected close date shall be flagged.",
+   "status": "Done \u00b7 UI untested",
+   "statusRaw": "Done \u00b7 UI untested",
+   "statusNorm": "Implemented, UI not fully tested",
+   "evidence": ""
+  },
+  {
+   "id": "BR-AUT-007",
+   "module": "Automation",
+   "mod": "AUT",
+   "priority": "Could",
+   "short": "Admins shall be able to configure simple rules (trigger, condition, action) from a predefined list.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-AUT-008",
+   "module": "Automation",
+   "mod": "AUT",
+   "priority": "Must",
+   "short": "Every automated change shall appear on the timeline labeled as automated, and users can reverse it.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-CRM-001",
+   "module": "CRM Records",
+   "mod": "CRM",
+   "priority": "Must",
+   "short": "Users shall be able to create, view, update and archive company records.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Implemented & tested",
+   "evidence": "crm-edit.integration.test (17), e2e/crm-edit.spec"
+  },
+  {
+   "id": "BR-CRM-002",
+   "module": "CRM Records",
+   "mod": "CRM",
+   "priority": "Must",
+   "short": "Users shall be able to manage contacts and associate them with companies.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Implemented & tested",
+   "evidence": "crm-edit.integration.test (17), e2e/crm-edit.spec"
+  },
+  {
+   "id": "BR-CRM-003",
+   "module": "CRM Records",
+   "mod": "CRM",
+   "priority": "Must",
+   "short": "Users shall be able to manage deals with name, amount, expected close date, stage, owner, company and one or more contacts with roles (for example decision-maker, signer, influencer).",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-CRM-004",
+   "module": "CRM Records",
+   "mod": "CRM",
+   "priority": "Must",
+   "short": "Each deal shall have one owner; authorized users can reassign it.",
+   "status": "Done \u00b7 UI untested",
+   "statusRaw": "Done \u00b7 UI untested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "crm-edit.integration.test (17), e2e/crm-edit.spec"
+  },
+  {
+   "id": "BR-CRM-005",
+   "module": "CRM Records",
+   "mod": "CRM",
+   "priority": "Must",
+   "short": "Admins shall be able to configure a pipeline's stages and a win probability for each stage.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Implemented & tested",
+   "evidence": "crm-edit.integration.test (17), e2e/crm-edit.spec"
+  },
+  {
+   "id": "BR-CRM-006",
+   "module": "CRM Records",
+   "mod": "CRM",
+   "priority": "Should",
+   "short": "Admins shall be able to create multiple pipelines.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-CRM-007",
+   "module": "CRM Records",
+   "mod": "CRM",
+   "priority": "Must",
+   "short": "Admins shall be able to create custom fields for companies, contacts and deals (text, number, currency, date, dropdown, multi-select, checkbox). Custom fields shall be usable in filters, reports and proposal templates.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-CRM-008",
+   "module": "CRM Records",
+   "mod": "CRM",
+   "priority": "Must",
+   "short": "Users shall be able to create tasks with due dates and reminders, linked to records.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-CRM-009",
+   "module": "CRM Records",
+   "mod": "CRM",
+   "priority": "Must",
+   "short": "Each user shall have a ",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Partially implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-CRM-010",
+   "module": "CRM Records",
+   "mod": "CRM",
+   "priority": "Must",
+   "short": "Users shall be able to add notes and manually log calls and meetings.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-CRM-011",
+   "module": "CRM Records",
+   "mod": "CRM",
+   "priority": "Must",
+   "short": "Users shall be able to filter, sort and save list views, and view deals on a board grouped by stage.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Partially implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-CRM-012",
+   "module": "CRM Records",
+   "mod": "CRM",
+   "priority": "Must",
+   "short": "The platform shall provide search across companies, contacts, deals and proposals.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Partially implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-CRM-013",
+   "module": "CRM Records",
+   "mod": "CRM",
+   "priority": "Should",
+   "short": "Users shall be able to edit and reassign records in bulk, within their permissions.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-CRM-014",
+   "module": "CRM Records",
+   "mod": "CRM",
+   "priority": "Must",
+   "short": "Closing a deal as lost shall require a lost reason from an admin-defined list.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-EML-001",
+   "module": "Email & Calendar",
+   "mod": "EML",
+   "priority": "Must",
+   "short": "Each user shall be able to connect a Gmail or Outlook mailbox.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-EML-002",
+   "module": "Email & Calendar",
+   "mod": "EML",
+   "priority": "Must",
+   "short": "The platform shall automatically link sent and received emails to matching contacts, companies and deals, and users can correct the links.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-EML-003",
+   "module": "Email & Calendar",
+   "mod": "EML",
+   "priority": "Must",
+   "short": "Users shall be able to exclude domains or contacts from syncing and mark emails as private.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-EML-004",
+   "module": "Email & Calendar",
+   "mod": "EML",
+   "priority": "Must",
+   "short": "Users shall be able to send emails from the CRM through their own mailbox, using email templates with placeholders.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-EML-005",
+   "module": "Email & Calendar",
+   "mod": "EML",
+   "priority": "Must",
+   "short": "The platform shall provide a Gmail and Outlook add-in that shows the related CRM record and lets the user create records and send proposals from the inbox.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-EML-006",
+   "module": "Email & Calendar",
+   "mod": "EML",
+   "priority": "Must",
+   "short": "The platform shall sync calendars and log meetings with known contacts to the relevant timelines.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-EML-007",
+   "module": "Email & Calendar",
+   "mod": "EML",
+   "priority": "Should",
+   "short": "Users shall be able to turn on open tracking for emails sent from the CRM.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-LED-001",
+   "module": "Leads",
+   "mod": "LED",
+   "priority": "Must",
+   "short": "Admins shall be able to build web forms and embed them on their website. Submissions create or update contacts and companies, and optionally create deals.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Partially implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-LED-002",
+   "module": "Leads",
+   "mod": "LED",
+   "priority": "Must",
+   "short": "Admins shall be able to define assignment rules: round-robin, or by field value such as region or product.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Partially implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-LED-003",
+   "module": "Leads",
+   "mod": "LED",
+   "priority": "Must",
+   "short": "The assigned salesperson shall be notified of a new lead immediately.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-LED-004",
+   "module": "Leads",
+   "mod": "LED",
+   "priority": "Must",
+   "short": "Submissions shall be checked against existing records to avoid duplicates.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-LED-005",
+   "module": "Leads",
+   "mod": "LED",
+   "priority": "Should",
+   "short": "The platform shall record lead source information (campaign tags, page) on the record.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-LED-006",
+   "module": "Leads",
+   "mod": "LED",
+   "priority": "Should",
+   "short": "Forms shall include spam protection.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-LED-007",
+   "module": "Leads",
+   "mod": "LED",
+   "priority": "Could",
+   "short": "The platform shall accept leads from existing website forms through a webhook.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Partially implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-MIG-001",
+   "module": "Data Import / Migration",
+   "mod": "MIG",
+   "priority": "Must",
+   "short": "Admins shall be able to import companies, contacts and deals from CSV or Excel, mapping columns to standard and custom fields.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Implemented & tested",
+   "evidence": "imports.integration.test, e2e/import.spec"
+  },
+  {
+   "id": "BR-MIG-002",
+   "module": "Data Import / Migration",
+   "mod": "MIG",
+   "priority": "Should",
+   "short": "The platform shall provide guided import from HubSpot and Pipedrive exports.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-MIG-003",
+   "module": "Data Import / Migration",
+   "mod": "MIG",
+   "priority": "Must",
+   "short": "The import shall detect duplicates and let the admin skip, merge or create new records.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Implemented & tested",
+   "evidence": "imports.integration.test, e2e/import.spec"
+  },
+  {
+   "id": "BR-MIG-004",
+   "module": "Data Import / Migration",
+   "mod": "MIG",
+   "priority": "Must",
+   "short": "The import shall validate data and show an error report before saving.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Implemented & tested",
+   "evidence": "imports.integration.test, e2e/import.spec"
+  },
+  {
+   "id": "BR-MIG-005",
+   "module": "Data Import / Migration",
+   "mod": "MIG",
+   "priority": "Must",
+   "short": "Admins shall be able to undo an import batch.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Implemented & tested",
+   "evidence": "imports.integration.test, e2e/import.spec"
+  },
+  {
+   "id": "BR-MIG-006",
+   "module": "Data Import / Migration",
+   "mod": "MIG",
+   "priority": "Should",
+   "short": "Admins shall be able to upload existing DOCX proposals as starting points for templates.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-MIG-007",
+   "module": "Data Import / Migration",
+   "mod": "MIG",
+   "priority": "Could",
+   "short": "The platform shall import directly from HubSpot and Pipedrive through their APIs.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-NTF-001",
+   "module": "Notifications",
+   "mod": "NTF",
+   "priority": "Must",
+   "short": "The deal owner shall receive real-time in-app and email notifications when a proposal is opened for the first time, reopened, forwarded to a new viewer, downloaded, signed or declined, and when a link is about to expire.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Partially implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-NTF-002",
+   "module": "Notifications",
+   "mod": "NTF",
+   "priority": "Must",
+   "short": "Users shall be able to configure which notifications they receive and how.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-NTF-003",
+   "module": "Notifications",
+   "mod": "NTF",
+   "priority": "Should",
+   "short": "Users shall be able to receive a daily summary of activity on their deals.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-NTF-004",
+   "module": "Notifications",
+   "mod": "NTF",
+   "priority": "Could",
+   "short": "The platform shall support browser push notifications.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-PLT-001",
+   "module": "Platform & Accounts",
+   "mod": "PLT",
+   "priority": "Must",
+   "short": "The platform shall support many customer organizations, keeping each organization's data completely separate.",
+   "status": "N/A",
+   "statusRaw": "N/A",
+   "statusNorm": "Not applicable (single-tenant)",
+   "evidence": ""
+  },
+  {
+   "id": "BR-PLT-002",
+   "module": "Platform & Accounts",
+   "mod": "PLT",
+   "priority": "Must",
+   "short": "A new organization shall be able to sign up, create a workspace, start a trial and invite users.",
+   "status": "N/A",
+   "statusRaw": "N/A",
+   "statusNorm": "Not applicable (single-tenant)",
+   "evidence": ""
+  },
+  {
+   "id": "BR-PLT-003",
+   "module": "Platform & Accounts",
+   "mod": "PLT",
+   "priority": "Must",
+   "short": "Each user shall have individual credentials, with sign-in by email and password or Google or Microsoft account.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Partially implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-PLT-004",
+   "module": "Platform & Accounts",
+   "mod": "PLT",
+   "priority": "Should",
+   "short": "The platform shall support multi-factor authentication, which admins can require.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-PLT-005",
+   "module": "Platform & Accounts",
+   "mod": "PLT",
+   "priority": "Must",
+   "short": "The platform shall support Admin, Sales Manager and Salesperson roles with the permissions in Section 9.17.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-PLT-006",
+   "module": "Platform & Accounts",
+   "mod": "PLT",
+   "priority": "Must",
+   "short": "Admins shall be able to define teams and assign managers; managers see records owned by their team.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Implemented & tested",
+   "evidence": "admin.integration.test, e2e/admin-settings.spec"
+  },
+  {
+   "id": "BR-PLT-007",
+   "module": "Platform & Accounts",
+   "mod": "PLT",
+   "priority": "Must",
+   "short": "The platform shall provide subscription billing: plan selection, seat management, payment, invoices and trial conversion.",
+   "status": "N/A",
+   "statusRaw": "N/A",
+   "statusNorm": "Not applicable (single-tenant)",
+   "evidence": ""
+  },
+  {
+   "id": "BR-PLT-008",
+   "module": "Platform & Accounts",
+   "mod": "PLT",
+   "priority": "Must",
+   "short": "The platform shall provide a guided onboarding checklist: import data, connect email, configure pipeline, create first template, send first proposal.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-PLT-009",
+   "module": "Platform & Accounts",
+   "mod": "PLT",
+   "priority": "Must",
+   "short": "The platform shall keep an audit log of key user, admin and system actions.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Implemented & tested",
+   "evidence": "admin.integration.test, e2e/admin-settings.spec"
+  },
+  {
+   "id": "BR-PLT-010",
+   "module": "Platform & Accounts",
+   "mod": "PLT",
+   "priority": "Must",
+   "short": "Admins shall be able to export all organization data in standard formats.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-PLT-011",
+   "module": "Platform & Accounts",
+   "mod": "PLT",
+   "priority": "Must",
+   "short": "Admins shall be able to deactivate users and reassign their records.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-PLT-012",
+   "module": "Platform & Accounts",
+   "mod": "PLT",
+   "priority": "Must",
+   "short": "Admins shall be able to manage organization settings, including name, branding, currency, time zone and fiscal year.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Implemented & tested",
+   "evidence": "admin.integration.test, e2e/admin-settings.spec"
+  },
+  {
+   "id": "BR-PRC-001",
+   "module": "Pricing",
+   "mod": "PRC",
+   "priority": "Must",
+   "short": "Admins shall be able to maintain a product and service catalog with name, description, unit, unit price and tax category.",
+   "status": "Done \u00b7 UI untested",
+   "statusRaw": "Done \u00b7 UI untested",
+   "statusNorm": "Implemented, UI not fully tested",
+   "evidence": ""
+  },
+  {
+   "id": "BR-PRC-002",
+   "module": "Pricing",
+   "mod": "PRC",
+   "priority": "Must",
+   "short": "Proposals shall include pricing tables with line items, quantities, unit prices, discounts (per line or overall), taxes, subtotals and totals.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-PRC-003",
+   "module": "Pricing",
+   "mod": "PRC",
+   "priority": "Must",
+   "short": "Pricing tables shall separate one-time and recurring items, with separate totals.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-PRC-004",
+   "module": "Pricing",
+   "mod": "PRC",
+   "priority": "Must",
+   "short": "When the proposal total differs from the deal amount, the user shall be prompted to update the deal amount.",
+   "status": "Done \u00b7 UI untested",
+   "statusRaw": "Done \u00b7 UI untested",
+   "statusNorm": "Implemented, UI not fully tested",
+   "evidence": ""
+  },
+  {
+   "id": "BR-PRC-005",
+   "module": "Pricing",
+   "mod": "PRC",
+   "priority": "Must",
+   "short": "Each organization shall have a default currency.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-PRC-006",
+   "module": "Pricing",
+   "mod": "PRC",
+   "priority": "Should",
+   "short": "Deals and proposals shall support a currency other than the organization's default.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-PRC-007",
+   "module": "Pricing",
+   "mod": "PRC",
+   "priority": "Should",
+   "short": "The platform shall warn when a discount exceeds a limit set for the user's role. Approval workflows are Phase 2.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-PRP-001",
+   "module": "Proposals",
+   "mod": "PRP",
+   "priority": "Must",
+   "short": "Salespeople shall be able to create a proposal from a deal by selecting a template.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-PRP-002",
+   "module": "Proposals",
+   "mod": "PRP",
+   "priority": "Must",
+   "short": "The proposal shall be populated automatically with CRM data and pricing.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-PRP-003",
+   "module": "Proposals",
+   "mod": "PRP",
+   "priority": "Must",
+   "short": "Salespeople shall be able to edit content in sections marked editable.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-PRP-004",
+   "module": "Proposals",
+   "mod": "PRP",
+   "priority": "Must",
+   "short": "Users shall be able to preview the proposal exactly as the buyer will see it.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-PRP-005",
+   "module": "Proposals",
+   "mod": "PRP",
+   "priority": "Must",
+   "short": "The platform shall generate PDF and DOCX files with the same content.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Implemented & tested",
+   "evidence": "proposals-ext.integration.test, e2e/proposal-ext.spec"
+  },
+  {
+   "id": "BR-PRP-006",
+   "module": "Proposals",
+   "mod": "PRP",
+   "priority": "Must",
+   "short": "Every sent version shall be kept, and users shall be able to compare versions.",
+   "status": "Done \u00b7 UI untested",
+   "statusRaw": "Done \u00b7 UI untested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "proposals-ext.integration.test, e2e/proposal-ext.spec"
+  },
+  {
+   "id": "BR-PRP-007",
+   "module": "Proposals",
+   "mod": "PRP",
+   "priority": "Must",
+   "short": "Proposals shall have the statuses Draft, Sent, Viewed, Signed, Declined, Expired and Void.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-PRP-008",
+   "module": "Proposals",
+   "mod": "PRP",
+   "priority": "Must",
+   "short": "Each proposal shall be linked to its deal, company and contacts.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-PRP-009",
+   "module": "Proposals",
+   "mod": "PRP",
+   "priority": "Should",
+   "short": "Users shall be able to set a validity or expiry date on a proposal.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Implemented & tested",
+   "evidence": "proposals-ext.integration.test, e2e/proposal-ext.spec"
+  },
+  {
+   "id": "BR-PRP-010",
+   "module": "Proposals",
+   "mod": "PRP",
+   "priority": "Should",
+   "short": "Users shall be able to copy an existing proposal to another deal.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Implemented & tested",
+   "evidence": "proposals-ext.integration.test, e2e/proposal-ext.spec"
+  },
+  {
+   "id": "BR-RPT-001",
+   "module": "Reporting & Analytics",
+   "mod": "RPT",
+   "priority": "Must",
+   "short": "A pipeline dashboard shall show deal count and value by stage, owner and pipeline.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-RPT-002",
+   "module": "Reporting & Analytics",
+   "mod": "RPT",
+   "priority": "Must",
+   "short": "Won and lost reporting shall show count, value, win rate and lost reasons.",
+   "status": "Done \u00b7 UI untested",
+   "statusRaw": "Done \u00b7 UI untested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "reports.integration.test (13), e2e/reports.spec"
+  },
+  {
+   "id": "BR-RPT-003",
+   "module": "Reporting & Analytics",
+   "mod": "RPT",
+   "priority": "Must",
+   "short": "Rep performance reporting shall show deals owned, won revenue, win rate, average deal size and average cycle length.",
+   "status": "Done \u00b7 UI untested",
+   "statusRaw": "Done \u00b7 UI untested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "reports.integration.test (13), e2e/reports.spec"
+  },
+  {
+   "id": "BR-RPT-004",
+   "module": "Reporting & Analytics",
+   "mod": "RPT",
+   "priority": "Must",
+   "short": "Proposal reporting shall show time from deal creation to first proposal, proposals sent, view rate, time to first view, time to sign and proposal win rate.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Implemented & tested",
+   "evidence": "reports.integration.test (13), e2e/reports.spec"
+  },
+  {
+   "id": "BR-RPT-005",
+   "module": "Reporting & Analytics",
+   "mod": "RPT",
+   "priority": "Must",
+   "short": "A ",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-RPT-006",
+   "module": "Reporting & Analytics",
+   "mod": "RPT",
+   "priority": "Should",
+   "short": "The platform shall show a weighted pipeline using stage probabilities.",
+   "status": "Done \u00b7 UI untested",
+   "statusRaw": "Done \u00b7 UI untested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "reports.integration.test (13), e2e/reports.spec"
+  },
+  {
+   "id": "BR-RPT-007",
+   "module": "Reporting & Analytics",
+   "mod": "RPT",
+   "priority": "Must",
+   "short": "Dashboards shall be filterable by date range, team, owner and pipeline.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Implemented & tested",
+   "evidence": "reports.integration.test (13), e2e/reports.spec"
+  },
+  {
+   "id": "BR-RPT-008",
+   "module": "Reporting & Analytics",
+   "mod": "RPT",
+   "priority": "Must",
+   "short": "Dashboards shall respect each user's permissions.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-RPT-009",
+   "module": "Reporting & Analytics",
+   "mod": "RPT",
+   "priority": "Should",
+   "short": "Users shall be able to export report data to CSV.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Implemented & tested",
+   "evidence": "reports.integration.test (13), e2e/reports.spec"
+  },
+  {
+   "id": "BR-RPT-010",
+   "module": "Reporting & Analytics",
+   "mod": "RPT",
+   "priority": "Should",
+   "short": "Activity reporting shall show emails, meetings and completed tasks per rep.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Implemented & tested",
+   "evidence": "reports.integration.test (13), e2e/reports.spec"
+  },
+  {
+   "id": "BR-SHR-001",
+   "module": "Sharing & Engagement",
+   "mod": "SHR",
+   "priority": "Must",
+   "short": "The platform shall create a unique, secure link for each proposal version.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-SHR-002",
+   "module": "Sharing & Engagement",
+   "mod": "SHR",
+   "priority": "Must",
+   "short": "Users shall be able to send the link through their own mailbox, from the CRM or the inbox add-in.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-SHR-003",
+   "module": "Sharing & Engagement",
+   "mod": "SHR",
+   "priority": "Must",
+   "short": "The salesperson shall be able to specify the intended recipients.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-SHR-004",
+   "module": "Sharing & Engagement",
+   "mod": "SHR",
+   "priority": "Must",
+   "short": "The platform shall record each view (who, when, how long) and each download.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-SHR-005",
+   "module": "Sharing & Engagement",
+   "mod": "SHR",
+   "priority": "Must",
+   "short": "Recipients shall be able to forward the proposal. New viewers identify themselves by name and email before viewing and are recorded as new stakeholders on the deal.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-SHR-006",
+   "module": "Sharing & Engagement",
+   "mod": "SHR",
+   "priority": "Should",
+   "short": "Users shall be able to require email verification before a proposal can be viewed.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-SHR-007",
+   "module": "Sharing & Engagement",
+   "mod": "SHR",
+   "priority": "Must",
+   "short": "Authorized users shall be able to revoke links and set link expiry.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Implemented & tested",
+   "evidence": "proposals-ext.integration.test"
+  },
+  {
+   "id": "BR-SHR-008",
+   "module": "Sharing & Engagement",
+   "mod": "SHR",
+   "priority": "Must",
+   "short": "Authorized users shall be able to view each proposal's access history.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-SHR-009",
+   "module": "Sharing & Engagement",
+   "mod": "SHR",
+   "priority": "Must",
+   "short": "The buyer-facing proposal view shall be branded and work well on mobile.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Partially implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-SHR-010",
+   "module": "Sharing & Engagement",
+   "mod": "SHR",
+   "priority": "Should",
+   "short": "Where a signature is not required, the buyer shall be able to accept or decline, giving a reason when declining.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-SIG-001",
+   "module": "E-Signature",
+   "mod": "SIG",
+   "priority": "Must",
+   "short": "Users shall be able to request signatures on a specific proposal version.",
+   "status": "Simulated",
+   "statusRaw": "Simulated",
+   "statusNorm": "Simulated",
+   "evidence": ""
+  },
+  {
+   "id": "BR-SIG-002",
+   "module": "E-Signature",
+   "mod": "SIG",
+   "priority": "Must",
+   "short": "Users shall be able to add multiple signers and set a signing order (one after another, or all at once).",
+   "status": "Simulated",
+   "statusRaw": "Simulated",
+   "statusNorm": "Simulated",
+   "evidence": ""
+  },
+  {
+   "id": "BR-SIG-003",
+   "module": "E-Signature",
+   "mod": "SIG",
+   "priority": "Must",
+   "short": "Signatures shall be legally valid in the target markets, for example under the ESIGN Act and UETA in the US and as standard electronic signatures under eIDAS in the EU. Whether to build or partner is an open decision (Section 16).",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-SIG-004",
+   "module": "E-Signature",
+   "mod": "SIG",
+   "priority": "Must",
+   "short": "Each signer's identity shall be verified by email at minimum.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-SIG-005",
+   "module": "E-Signature",
+   "mod": "SIG",
+   "priority": "Should",
+   "short": "Signers shall be able to verify their identity with an SMS code.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-SIG-006",
+   "module": "E-Signature",
+   "mod": "SIG",
+   "priority": "Must",
+   "short": "Each signer's consent to sign electronically shall be captured.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-SIG-007",
+   "module": "E-Signature",
+   "mod": "SIG",
+   "priority": "Must",
+   "short": "Signature requests shall have the statuses Pending, Sent, Viewed, Signed, Declined, Expired and Voided.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-SIG-008",
+   "module": "E-Signature",
+   "mod": "SIG",
+   "priority": "Must",
+   "short": "The platform shall send automatic reminders on a configurable schedule, and users can resend manually.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-SIG-009",
+   "module": "E-Signature",
+   "mod": "SIG",
+   "priority": "Must",
+   "short": "The platform shall produce a completion certificate recording signer names, emails, timestamps, IP addresses, signing events and a digital fingerprint of the document.",
+   "status": "Simulated",
+   "statusRaw": "Simulated",
+   "statusNorm": "Simulated",
+   "evidence": ""
+  },
+  {
+   "id": "BR-SIG-010",
+   "module": "E-Signature",
+   "mod": "SIG",
+   "priority": "Must",
+   "short": "The final signed PDF shall be tamper-evident, stored securely and sent to all parties.",
+   "status": "Simulated",
+   "statusRaw": "Simulated",
+   "statusNorm": "Simulated",
+   "evidence": ""
+  },
+  {
+   "id": "BR-SIG-011",
+   "module": "E-Signature",
+   "mod": "SIG",
+   "priority": "Must",
+   "short": "A signed document shall be locked to the exact version signed; any change requires a new version and new signatures.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-SIG-012",
+   "module": "E-Signature",
+   "mod": "SIG",
+   "priority": "Should",
+   "short": "Signers shall be able to decline and give a reason.",
+   "status": "Simulated",
+   "statusRaw": "Simulated",
+   "statusNorm": "Simulated",
+   "evidence": ""
+  },
+  {
+   "id": "BR-SIG-013",
+   "module": "E-Signature",
+   "mod": "SIG",
+   "priority": "Must",
+   "short": "Users shall be able to cancel (void) a pending signature request.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-TIM-001",
+   "module": "Timeline",
+   "mod": "TIM",
+   "priority": "Must",
+   "short": "Each deal shall have a single chronological timeline of emails, meetings, notes, tasks, stage changes, proposal events, signing events and automated actions.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-TIM-002",
+   "module": "Timeline",
+   "mod": "TIM",
+   "priority": "Must",
+   "short": "Users shall be able to filter the timeline by event type.",
+   "status": "Done \u00b7 UI untested",
+   "statusRaw": "Done \u00b7 UI untested",
+   "statusNorm": "Implemented, UI not fully tested",
+   "evidence": ""
+  },
+  {
+   "id": "BR-TIM-003",
+   "module": "Timeline",
+   "mod": "TIM",
+   "priority": "Must",
+   "short": "Company and contact timelines shall combine their related events.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Implemented & tested",
+   "evidence": "e2e/crm-edit.spec (contact timeline)"
+  },
+  {
+   "id": "BR-TIM-004",
+   "module": "Timeline",
+   "mod": "TIM",
+   "priority": "Must",
+   "short": "Each event shall show who performed it (user, buyer, system or AI) and when.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-TPL-001",
+   "module": "Templates",
+   "mod": "TPL",
+   "priority": "Must",
+   "short": "Authorized users shall be able to create and edit proposal templates with sections, text, images and tables.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Partially implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-TPL-002",
+   "module": "Templates",
+   "mod": "TPL",
+   "priority": "Must",
+   "short": "Templates shall support placeholders from standard and custom fields of companies, contacts, deals, owners and the organization.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Partially implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-TPL-003",
+   "module": "Templates",
+   "mod": "TPL",
+   "priority": "Must",
+   "short": "Admins shall be able to mark template sections as locked or editable by salespeople.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-TPL-004",
+   "module": "Templates",
+   "mod": "TPL",
+   "priority": "Must",
+   "short": "The platform shall keep template versions and record which version each proposal used.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  },
+  {
+   "id": "BR-TPL-005",
+   "module": "Templates",
+   "mod": "TPL",
+   "priority": "Should",
+   "short": "The platform shall provide a library of reusable content blocks (case studies, team bios, terms) for insertion into proposals.",
+   "status": "Not built",
+   "statusRaw": "Not built",
+   "statusNorm": "Not implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-TPL-006",
+   "module": "Templates",
+   "mod": "TPL",
+   "priority": "Must",
+   "short": "Organization branding (logo, colors, fonts) shall be applied to templates and the buyer-facing view.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Partially implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-TPL-007",
+   "module": "Templates",
+   "mod": "TPL",
+   "priority": "Should",
+   "short": "The platform shall provide starter templates for the priority industries.",
+   "status": "Partial",
+   "statusRaw": "Partial",
+   "statusNorm": "Partially implemented",
+   "evidence": ""
+  },
+  {
+   "id": "BR-TPL-008",
+   "module": "Templates",
+   "mod": "TPL",
+   "priority": "Must",
+   "short": "The platform shall flag missing placeholder values before a proposal is generated.",
+   "status": "Done \u00b7 tested",
+   "statusRaw": "Done \u00b7 tested",
+   "statusNorm": "Implemented & tested",
+   "evidence": "lifecycle/ai integration + e2e suite"
+  }
+ ],
+ "summary": {
+  "total": 130,
+  "priority": {
+   "Must": 101,
+   "Should": 25,
+   "Could": 4
+  },
+  "status": {
+   "Implemented & tested (mock AI)": 5,
+   "Implemented & tested": 69,
+   "Blocked (external decision)": 1,
+   "Implemented, UI not fully tested": 4,
+   "Not implemented": 30,
+   "Partially implemented": 13,
+   "Not applicable (single-tenant)": 3,
+   "Simulated": 5
+  },
+  "must": {
+   "Implemented & tested (mock AI)": 3,
+   "Implemented & tested": 61,
+   "Blocked (external decision)": 1,
+   "Not implemented": 15,
+   "Partially implemented": 11,
+   "Not applicable (single-tenant)": 3,
+   "Implemented, UI not fully tested": 3,
+   "Simulated": 4
+  },
+  "modules": {
+   "Platform & Accounts": {
+    "count": 12,
+    "status": {
+     "Not applicable (single-tenant)": 3,
+     "Partially implemented": 1,
+     "Not implemented": 3,
+     "Implemented & tested": 5
+    }
+   },
+   "Data Import / Migration": {
+    "count": 7,
+    "status": {
+     "Implemented & tested": 4,
+     "Not implemented": 3
+    }
+   },
+   "CRM Records": {
+    "count": 14,
+    "status": {
+     "Implemented & tested": 8,
+     "Not implemented": 3,
+     "Partially implemented": 3
+    }
+   },
+   "Email & Calendar": {
+    "count": 7,
+    "status": {
+     "Not implemented": 7
+    }
+   },
+   "Leads": {
+    "count": 7,
+    "status": {
+     "Partially implemented": 3,
+     "Implemented & tested": 3,
+     "Not implemented": 1
+    }
+   },
+   "Templates": {
+    "count": 8,
+    "status": {
+     "Partially implemented": 4,
+     "Implemented & tested": 3,
+     "Not implemented": 1
+    }
+   },
+   "Pricing": {
+    "count": 7,
+    "status": {
+     "Implemented, UI not fully tested": 2,
+     "Implemented & tested": 4,
+     "Not implemented": 1
+    }
+   },
+   "Proposals": {
+    "count": 10,
+    "status": {
+     "Implemented & tested": 10
+    }
+   },
+   "AI Assistance": {
+    "count": 9,
+    "status": {
+     "Implemented & tested (mock AI)": 5,
+     "Implemented & tested": 3,
+     "Blocked (external decision)": 1
+    }
+   },
+   "Sharing & Engagement": {
+    "count": 10,
+    "status": {
+     "Implemented & tested": 7,
+     "Not implemented": 2,
+     "Partially implemented": 1
+    }
+   },
+   "Notifications": {
+    "count": 4,
+    "status": {
+     "Partially implemented": 1,
+     "Not implemented": 3
+    }
+   },
+   "E-Signature": {
+    "count": 13,
+    "status": {
+     "Simulated": 5,
+     "Not implemented": 5,
+     "Implemented & tested": 3
+    }
+   },
+   "Automation": {
+    "count": 8,
+    "status": {
+     "Implemented & tested": 6,
+     "Implemented, UI not fully tested": 1,
+     "Not implemented": 1
+    }
+   },
+   "Reporting & Analytics": {
+    "count": 10,
+    "status": {
+     "Implemented & tested": 10
+    }
+   },
+   "Timeline": {
+    "count": 4,
+    "status": {
+     "Implemented & tested": 3,
+     "Implemented, UI not fully tested": 1
+    }
+   }
+  }
+ }
+}

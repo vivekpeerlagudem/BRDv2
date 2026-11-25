@@ -1,0 +1,179 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1180" viewBox="0 0 1400 1180" font-family="Segoe UI, Arial, sans-serif">
+<rect width="1400" height="1180" fill="#ffffff"/>
+<text x="30" y="34" font-size="21" fill="#1f4e79" font-weight="700" text-anchor="start">Sales CRM Platform — High-Level Solution Architecture</text>
+<text x="30" y="54" font-size="12" fill="#4a5a6e" font-weight="400" text-anchor="start">Single-company (single-tenant) internal deployment  ·  Modular monolith  ·  Human-in-the-loop AI  ·  Ports &amp; adapters for all external services</text>
+<rect x="30" y="70" width="1090" height="70" rx="9" fill="#eef4fb" stroke="#4f7cb3" stroke-width="1.5"/>
+<text x="42" y="88" font-size="12" fill="#1f4e79" font-weight="700" text-anchor="start">1 · USER EXPERIENCE LAYER</text>
+<rect x="42" y="98" width="528.0" height="32" rx="7" fill="#f4f8fd" stroke="#4f7cb3" stroke-width="1.2"/>
+<text x="52" y="116" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">Internal Web Application</text>
+<rect x="221.8" y="106" width="37.6" height="15" rx="4" fill="#d8f0df" stroke="#d8f0df" stroke-width="0"/>
+<text x="227.8" y="117" font-size="9.5" fill="#1f7a42" font-weight="700" text-anchor="start">LIVE</text>
+<text x="52" y="132" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">React SPA · Admin, Sales Manager, Salesperson · dashboard, pipeline, records, proposal</text>
+<text x="52" y="145" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">editor, reports, administration</text>
+<rect x="580.0" y="98" width="528.0" height="32" rx="7" fill="#f4f8fd" stroke="#4f7cb3" stroke-width="1.2"/>
+<text x="590.0" y="116" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">Buyer Portal</text>
+<rect x="679.4" y="106" width="37.6" height="15" rx="4" fill="#d8f0df" stroke="#d8f0df" stroke-width="0"/>
+<text x="685.4" y="117" font-size="9.5" fill="#1f7a42" font-weight="700" text-anchor="start">LIVE</text>
+<text x="590.0" y="132" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">External, separate origin · secure tokenised link · view / download / accept / decline ·</text>
+<text x="590.0" y="145" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">identity gate</text>
+<text x="575.0" y="153" font-size="13" fill="#8aa0b8" text-anchor="middle">&#9650;&#160;&#160;HTTPS / JSON&#160;&#160;&#9660;</text>
+<rect x="30" y="160" width="1090" height="68" rx="9" fill="#f7fafd" stroke="#c9d6e5" stroke-width="1.5"/>
+<text x="42" y="178" font-size="12" fill="#1f4e79" font-weight="700" text-anchor="start">2 · APPLICATION &amp; API LAYER</text>
+<rect x="42" y="188" width="348.6666666666667" height="30" rx="7" fill="#ffffff" stroke="#9fb6d1" stroke-width="1.2"/>
+<text x="52" y="206" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">API Services</text>
+<rect x="141.4" y="196" width="37.6" height="15" rx="4" fill="#d8f0df" stroke="#d8f0df" stroke-width="0"/>
+<text x="147.4" y="207" font-size="9.5" fill="#1f7a42" font-weight="700" text-anchor="start">LIVE</text>
+<text x="52" y="222" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">Hono REST API · /api/v1, /public, /webhooks · request</text>
+<text x="52" y="235" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">validation</text>
+<rect x="400.6666666666667" y="188" width="348.6666666666667" height="30" rx="7" fill="#ffffff" stroke="#9fb6d1" stroke-width="1.2"/>
+<text x="410.6666666666667" y="206" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">Authentication &amp; Authorization</text>
+<rect x="620.6666666666667" y="196" width="37.6" height="15" rx="4" fill="#d8f0df" stroke="#d8f0df" stroke-width="0"/>
+<text x="626.6666666666667" y="207" font-size="9.5" fill="#1f7a42" font-weight="700" text-anchor="start">LIVE</text>
+<text x="410.6666666666667" y="222" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">Email + password · role &amp; record-level access · sessions</text>
+<rect x="759.3333333333334" y="188" width="348.6666666666667" height="30" rx="7" fill="#ffffff" stroke="#9fb6d1" stroke-width="1.2"/>
+<text x="769.3333333333334" y="206" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">Automation &amp; Jobs</text>
+<rect x="892.2333333333333" y="196" width="37.6" height="15" rx="4" fill="#d8f0df" stroke="#d8f0df" stroke-width="0"/>
+<text x="898.2333333333333" y="207" font-size="9.5" fill="#1f7a42" font-weight="700" text-anchor="start">LIVE</text>
+<text x="769.3333333333334" y="222" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">Rule engine · transactional job outbox · background worker</text>
+<rect x="30" y="236" width="1090" height="66" rx="9" fill="#f7fafd" stroke="#c9d6e5" stroke-width="1.5"/>
+<text x="42" y="254" font-size="12" fill="#1f4e79" font-weight="700" text-anchor="start">3 · CORE CRM PLATFORM</text>
+<rect x="42" y="264" width="169.33333333333334" height="28" rx="7" fill="#ffffff" stroke="#9fb6d1" stroke-width="1.2"/>
+<text x="52" y="282" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">Companies &amp; Contacts</text>
+<text x="52" y="298" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">Records, relationships,</text>
+<text x="52" y="311" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">timelines</text>
+<rect x="221.33333333333334" y="264" width="169.33333333333334" height="28" rx="7" fill="#ffffff" stroke="#9fb6d1" stroke-width="1.2"/>
+<text x="231.33333333333334" y="282" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">Leads</text>
+<text x="231.33333333333334" y="298" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">Web form, round-robin,</text>
+<text x="231.33333333333334" y="311" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">dedupe</text>
+<rect x="400.6666666666667" y="264" width="169.33333333333334" height="28" rx="7" fill="#ffffff" stroke="#9fb6d1" stroke-width="1.2"/>
+<text x="410.6666666666667" y="282" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">Deals &amp; Pipeline</text>
+<text x="410.6666666666667" y="298" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">Stages, probabilities,</text>
+<text x="410.6666666666667" y="311" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">Kanban</text>
+<rect x="580.0" y="264" width="169.33333333333334" height="28" rx="7" fill="#ffffff" stroke="#9fb6d1" stroke-width="1.2"/>
+<text x="590.0" y="282" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">Activities &amp; Timeline</text>
+<text x="590.0" y="298" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">Notes, calls, meetings,</text>
+<text x="590.0" y="311" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">tasks</text>
+<rect x="759.3333333333334" y="264" width="169.33333333333334" height="28" rx="7" fill="#ffffff" stroke="#9fb6d1" stroke-width="1.2"/>
+<text x="769.3333333333334" y="282" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">Reporting &amp; Analytics</text>
+<text x="769.3333333333334" y="298" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">Filters, CSV export, KPIs</text>
+<rect x="938.6666666666667" y="264" width="169.33333333333334" height="28" rx="7" fill="#ffffff" stroke="#9fb6d1" stroke-width="1.2"/>
+<text x="948.6666666666667" y="282" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">Administration</text>
+<text x="948.6666666666667" y="298" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">Settings, teams, audit log</text>
+<rect x="30" y="310" width="1090" height="66" rx="9" fill="#f7fafd" stroke="#c9d6e5" stroke-width="1.5"/>
+<text x="42" y="328" font-size="12" fill="#1f4e79" font-weight="700" text-anchor="start">4 · PROPOSAL &amp; DOCUMENT WORKFLOWS</text>
+<rect x="42" y="338" width="259.0" height="28" rx="7" fill="#ffffff" stroke="#9fb6d1" stroke-width="1.2"/>
+<text x="52" y="356" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">Templates &amp; Pricing</text>
+<text x="52" y="372" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">Versioned templates, catalogue, discounts,</text>
+<text x="52" y="385" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">totals</text>
+<rect x="311.0" y="338" width="259.0" height="28" rx="7" fill="#ffffff" stroke="#9fb6d1" stroke-width="1.2"/>
+<text x="321.0" y="356" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">Proposal Generation</text>
+<text x="321.0" y="372" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">CRM-populated · PDF + DOCX · immutable</text>
+<text x="321.0" y="385" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">sent versions</text>
+<rect x="580.0" y="338" width="259.0" height="28" rx="7" fill="#ffffff" stroke="#9fb6d1" stroke-width="1.2"/>
+<text x="590.0" y="356" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">Sharing &amp; Buyer Engagement</text>
+<text x="590.0" y="372" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">Per-link tracking, expiry, revoke</text>
+<rect x="849.0" y="338" width="259.0" height="28" rx="7" fill="#ffffff" stroke="#9fb6d1" stroke-width="1.2"/>
+<text x="859.0" y="356" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">E-Signature</text>
+<rect x="941.7" y="346" width="69.6" height="15" rx="4" fill="#fdecc8" stroke="#fdecc8" stroke-width="0"/>
+<text x="947.7" y="357" font-size="9.5" fill="#8a6d1a" font-weight="700" text-anchor="start">SIMULATED</text>
+<text x="859.0" y="372" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">Provider abstraction · ordered signers ·</text>
+<text x="859.0" y="385" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">certificate</text>
+<rect x="30" y="384" width="1090" height="66" rx="9" fill="#eef7f0" stroke="#4a9d68" stroke-width="1.5"/>
+<text x="42" y="402" font-size="12" fill="#1f4e79" font-weight="700" text-anchor="start">5 · AI INTELLIGENCE LAYER  (human-in-the-loop)</text>
+<rect x="42" y="412" width="259.0" height="28" rx="7" fill="#f3faf5" stroke="#4a9d68" stroke-width="1.2"/>
+<text x="52" y="430" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">Context Engine</text>
+<text x="52" y="446" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">Permission-scoped CRM context · data</text>
+<text x="52" y="459" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">minimisation</text>
+<rect x="311.0" y="412" width="259.0" height="28" rx="7" fill="#f3faf5" stroke="#4a9d68" stroke-width="1.2"/>
+<text x="321.0" y="430" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">Prompt Registry</text>
+<text x="321.0" y="446" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">Versioned prompts · structured output</text>
+<text x="321.0" y="459" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">(Zod)</text>
+<rect x="580.0" y="412" width="259.0" height="28" rx="7" fill="#f3faf5" stroke="#4a9d68" stroke-width="1.2"/>
+<text x="590.0" y="430" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">Provider Abstraction</text>
+<rect x="733.0" y="420" width="37.6" height="15" rx="4" fill="#fdecc8" stroke="#fdecc8" stroke-width="0"/>
+<text x="739.0" y="431" font-size="9.5" fill="#8a6d1a" font-weight="700" text-anchor="start">MOCK</text>
+<text x="590.0" y="446" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">Deterministic mock · Anthropic driver (not</text>
+<text x="590.0" y="459" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">live)</text>
+<rect x="849.0" y="412" width="259.0" height="28" rx="7" fill="#f3faf5" stroke="#4a9d68" stroke-width="1.2"/>
+<text x="859.0" y="430" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">Approval &amp; Governance</text>
+<text x="859.0" y="446" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">Human accept/reject · usage &amp; cost log ·</text>
+<text x="859.0" y="459" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">admin on/off</text>
+<rect x="30" y="458" width="1090" height="70" rx="9" fill="#f7fafd" stroke="#c9d6e5" stroke-width="1.5"/>
+<text x="42" y="476" font-size="12" fill="#1f4e79" font-weight="700" text-anchor="start">6 · INTEGRATION &amp; SERVICES LAYER  (ports &amp; adapters)</text>
+<rect x="42" y="486" width="205.2" height="32" rx="7" fill="#ffffff" stroke="#9fb6d1" stroke-width="1.2"/>
+<text x="52" y="504" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">Email &amp; Calendar</text>
+<rect x="168.2" y="494" width="56.800000000000004" height="15" rx="4" fill="#e7e9ee" stroke="#e7e9ee" stroke-width="0"/>
+<text x="174.2" y="505" font-size="9.5" fill="#55607a" font-weight="700" text-anchor="start">PLANNED</text>
+<text x="52" y="520" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">Gmail / Outlook sync &amp; send</text>
+<rect x="257.2" y="486" width="205.2" height="32" rx="7" fill="#ffffff" stroke="#9fb6d1" stroke-width="1.2"/>
+<text x="267.2" y="504" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">Transactional Email</text>
+<rect x="403.5" y="494" width="31.200000000000003" height="15" rx="4" fill="#fdecc8" stroke="#fdecc8" stroke-width="0"/>
+<text x="409.5" y="505" font-size="9.5" fill="#8a6d1a" font-weight="700" text-anchor="start">LOG</text>
+<text x="267.2" y="520" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">Notifications written to log</text>
+<rect x="472.4" y="486" width="205.2" height="32" rx="7" fill="#ffffff" stroke="#9fb6d1" stroke-width="1.2"/>
+<text x="482.4" y="504" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">E-Signature Provider</text>
+<rect x="625.4" y="494" width="31.200000000000003" height="15" rx="4" fill="#fdecc8" stroke="#fdecc8" stroke-width="0"/>
+<text x="631.4" y="505" font-size="9.5" fill="#8a6d1a" font-weight="700" text-anchor="start">SIM</text>
+<text x="482.4" y="520" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">Webhook inbox, signed docs</text>
+<rect x="687.5999999999999" y="486" width="205.2" height="32" rx="7" fill="#ffffff" stroke="#9fb6d1" stroke-width="1.2"/>
+<text x="697.5999999999999" y="504" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">Object Storage</text>
+<rect x="800.3999999999999" y="494" width="37.6" height="15" rx="4" fill="#d8f0df" stroke="#d8f0df" stroke-width="0"/>
+<text x="806.3999999999999" y="505" font-size="9.5" fill="#1f7a42" font-weight="700" text-anchor="start">LIVE</text>
+<text x="697.5999999999999" y="520" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">Documents, PDFs, signed files</text>
+<rect x="902.8" y="486" width="205.2" height="32" rx="7" fill="#ffffff" stroke="#9fb6d1" stroke-width="1.2"/>
+<text x="912.8" y="504" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">Notifications</text>
+<rect x="1008.9" y="494" width="37.6" height="15" rx="4" fill="#d8f0df" stroke="#d8f0df" stroke-width="0"/>
+<text x="1014.9" y="505" font-size="9.5" fill="#1f7a42" font-weight="700" text-anchor="start">LIVE</text>
+<text x="912.8" y="520" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">In-app (polled) alerts</text>
+<text x="575.0" y="541" font-size="13" fill="#8aa0b8" text-anchor="middle">&#9650;&#160;&#160;persist / retrieve&#160;&#160;&#9660;</text>
+<rect x="30" y="548" width="1090" height="74" rx="9" fill="#fbf4ee" stroke="#c08a4a" stroke-width="1.5"/>
+<text x="42" y="566" font-size="12" fill="#1f4e79" font-weight="700" text-anchor="start">7 · DATA &amp; STORAGE LAYER</text>
+<rect x="42" y="576" width="528.0" height="36" rx="7" fill="#fdf8f2" stroke="#c08a4a" stroke-width="1.2"/>
+<text x="52" y="594" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">PostgreSQL 18</text>
+<rect x="148.10000000000002" y="584" width="37.6" height="15" rx="4" fill="#d8f0df" stroke="#d8f0df" stroke-width="0"/>
+<text x="154.10000000000002" y="595" font-size="9.5" fill="#1f7a42" font-weight="700" text-anchor="start">LIVE</text>
+<text x="52" y="610" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">CRM data · append-only audit log &amp; timeline · AI usage · least-privilege application &amp;</text>
+<text x="52" y="623" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">migration roles</text>
+<rect x="580.0" y="576" width="528.0" height="36" rx="7" fill="#fdf8f2" stroke="#c08a4a" stroke-width="1.2"/>
+<text x="590.0" y="594" font-size="12.5" fill="#16325c" font-weight="700" text-anchor="start">File Storage</text>
+<rect x="679.4" y="584" width="37.6" height="15" rx="4" fill="#d8f0df" stroke="#d8f0df" stroke-width="0"/>
+<text x="685.4" y="595" font-size="9.5" fill="#1f7a42" font-weight="700" text-anchor="start">LIVE</text>
+<text x="590.0" y="610" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">Proposal documents, generated PDFs / DOCX, signed documents (local filesystem; cloud</text>
+<text x="590.0" y="623" font-size="10.8" fill="#4a5a6e" font-weight="400" text-anchor="start">storage planned)</text>
+<rect x="1130" y="70" width="240" height="552" rx="9" fill="#16325c" stroke="#16325c" stroke-width="0"/>
+<text x="1144" y="92" font-size="11.5" fill="#cfe0f3" font-weight="700" text-anchor="start">8 · SECURITY &amp; GOVERNANCE</text>
+<text x="1144" y="108" font-size="10.5" fill="#9db8d8" font-weight="400" text-anchor="start">Cross-cutting — every layer</text>
+<text x="1144" y="132" font-size="11" fill="#eaf1fa" font-weight="400" text-anchor="start">Role &amp; record-level authorization (no</text>
+<text x="1144" y="146" font-size="11" fill="#eaf1fa" font-weight="400" text-anchor="start">cross-user access)</text>
+<line x1="1144" y1="156" x2="1356" y2="156" stroke="#2b476f" stroke-width="1"/>
+<text x="1144" y="166" font-size="11" fill="#eaf1fa" font-weight="400" text-anchor="start">Append-only audit log of every change</text>
+<line x1="1144" y1="176" x2="1356" y2="176" stroke="#2b476f" stroke-width="1"/>
+<text x="1144" y="186" font-size="11" fill="#eaf1fa" font-weight="400" text-anchor="start">Immutable sent proposal versions</text>
+<text x="1144" y="200" font-size="11" fill="#eaf1fa" font-weight="400" text-anchor="start">(DB-enforced)</text>
+<line x1="1144" y1="210" x2="1356" y2="210" stroke="#2b476f" stroke-width="1"/>
+<text x="1144" y="220" font-size="11" fill="#eaf1fa" font-weight="400" text-anchor="start">Secure buyer links (hashed token in</text>
+<text x="1144" y="234" font-size="11" fill="#eaf1fa" font-weight="400" text-anchor="start">URL fragment)</text>
+<line x1="1144" y1="244" x2="1356" y2="244" stroke="#2b476f" stroke-width="1"/>
+<text x="1144" y="254" font-size="11" fill="#eaf1fa" font-weight="400" text-anchor="start">Human approval for all external</text>
+<text x="1144" y="268" font-size="11" fill="#eaf1fa" font-weight="400" text-anchor="start">actions</text>
+<line x1="1144" y1="278" x2="1356" y2="278" stroke="#2b476f" stroke-width="1"/>
+<text x="1144" y="288" font-size="11" fill="#eaf1fa" font-weight="400" text-anchor="start">AI usage governance &amp; per-feature</text>
+<text x="1144" y="302" font-size="11" fill="#eaf1fa" font-weight="400" text-anchor="start">controls</text>
+<line x1="1144" y1="312" x2="1356" y2="312" stroke="#2b476f" stroke-width="1"/>
+<text x="1144" y="322" font-size="11" fill="#eaf1fa" font-weight="400" text-anchor="start">Secrets never exposed to frontend or</text>
+<text x="1144" y="336" font-size="11" fill="#eaf1fa" font-weight="400" text-anchor="start">logs</text>
+<line x1="1144" y1="346" x2="1356" y2="346" stroke="#2b476f" stroke-width="1"/>
+<text x="1144" y="356" font-size="11" fill="#eaf1fa" font-weight="400" text-anchor="start">Production refuses to start on</text>
+<text x="1144" y="370" font-size="11" fill="#eaf1fa" font-weight="400" text-anchor="start">simulated providers</text>
+<line x1="1144" y1="380" x2="1356" y2="380" stroke="#2b476f" stroke-width="1"/>
+<rect x="1144" y="386" width="37.6" height="15" rx="4" fill="#d8f0df" stroke="#d8f0df" stroke-width="0"/>
+<text x="1150" y="397" font-size="9.5" fill="#1f7a42" font-weight="700" text-anchor="start">LIVE</text>
+<text x="1144" y="412" font-size="10" fill="#cfe0f3" font-weight="400" text-anchor="start">built &amp; tested</text>
+<rect x="1144" y="420" width="114.4" height="15" rx="4" fill="#fdecc8" stroke="#fdecc8" stroke-width="0"/>
+<text x="1150" y="431" font-size="9.5" fill="#8a6d1a" font-weight="700" text-anchor="start">SIMULATED / MOCK</text>
+<text x="1144" y="446" font-size="10" fill="#cfe0f3" font-weight="400" text-anchor="start">stand-in, not production</text>
+<rect x="1144" y="454" width="56.800000000000004" height="15" rx="4" fill="#e7e9ee" stroke="#e7e9ee" stroke-width="0"/>
+<text x="1150" y="465" font-size="9.5" fill="#55607a" font-weight="700" text-anchor="start">PLANNED</text>
+<text x="1144" y="480" font-size="10" fill="#cfe0f3" font-weight="400" text-anchor="start">not yet built</text>
+<text x="30" y="1164" font-size="10" fill="#8aa0b8" font-weight="400" text-anchor="start">Business Requirements Document v1.0 — High-Level Solution Architecture · Sales CRM Platform</text>
+</svg>

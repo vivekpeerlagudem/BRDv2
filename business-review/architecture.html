@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #ffffff; color: #1b2a41; padding: 28px 30px; width: 1360px; }
+  h1 { font-size: 22px; color: #1f4e79; margin-bottom: 2px; }
+  .sub { font-size: 12.5px; color: #5a6b80; margin-bottom: 16px; }
+  .layer { border: 1.5px solid #c9d6e5; border-radius: 9px; padding: 10px 12px 12px; margin-bottom: 11px; background: #f7fafd; }
+  .layer > .lname { font-size: 12px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: #1f4e79; margin-bottom: 8px; }
+  .row { display: flex; gap: 10px; }
+  .box { flex: 1; background: #fff; border: 1.3px solid #9fb6d1; border-radius: 7px; padding: 9px 11px; }
+  .box b { display: block; font-size: 13px; color: #16325c; margin-bottom: 3px; }
+  .box span { font-size: 11.5px; color: #4a5a6e; line-height: 1.35; }
+  .ux { background: #eef4fb; border-color: #4f7cb3; }
+  .ux .box { border-color: #4f7cb3; background: #f4f8fd; }
+  .ai { background: #eef7f0; border-color: #4a9d68; }
+  .ai .box { border-color: #4a9d68; background: #f3faf5; }
+  .data { background: #fbf4ee; border-color: #c08a4a; }
+  .data .box { border-color: #c08a4a; background: #fdf8f2; }
+  .tag { display:inline-block; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 6px; margin-left: 6px; vertical-align: middle; }
+  .sim { background: #fdecc8; color: #8a6d1a; }
+  .plan { background: #e7e9ee; color: #55607a; }
+  .ok { background: #d8f0df; color: #1f7a42; }
+  .flow { text-align: center; color: #8aa0b8; font-size: 15px; margin: -5px 0 6px; }
+  .wrap { display: flex; gap: 14px; }
+  .main { flex: 1; }
+  .side { width: 230px; background: #16325c; border-radius: 9px; padding: 12px 13px; color: #fff; }
+  .side .lname { color: #cfe0f3; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing:.4px; margin-bottom: 9px; }
+  .side ul { list-style: none; }
+  .side li { font-size: 11.6px; line-height: 1.5; padding: 5px 0; border-bottom: 1px solid #2b476f; }
+  .side li:last-child { border: 0; }
+  .legend { margin-top: 12px; font-size: 11px; color: #5a6b80; }
+  .legend .tag { margin-left: 0; margin-right: 4px; }
+</style>
+</head>
+<body>
+  <h1>Sales CRM Platform — High-Level Solution Architecture</h1>
+  <div class="sub">Single-company (single-tenant) internal deployment · Modular monolith · Human-in-the-loop AI · Ports &amp; adapters for all external services</div>
+  <div class="wrap">
+    <div class="main">
+      <div class="layer ux">
+        <div class="lname">1 · User Experience Layer</div>
+        <div class="row">
+          <div class="box"><b>Internal Web Application <span class="tag ok">LIVE</span></b><span>React SPA · Admin, Sales Manager, Salesperson · dashboard, pipeline, records, proposal editor, reports, administration</span></div>
+          <div class="box"><b>Buyer Portal <span class="tag ok">LIVE</span></b><span>External, separate origin · secure tokenised link · view / download / accept / decline · identity gate</span></div>
+        </div>
+      </div>
+      <div class="flow">&#9650;&nbsp;&nbsp;HTTPS / JSON&nbsp;&nbsp;&#9660;</div>
+      <div class="layer">
+        <div class="lname">2 · Application &amp; API Layer</div>
+        <div class="row">
+          <div class="box"><b>API Services <span class="tag ok">LIVE</span></b><span>Hono REST API · /api/v1, /public, /webhooks · request validation</span></div>
+          <div class="box"><b>Authentication &amp; Authorization <span class="tag ok">LIVE</span></b><span>Email + password · role &amp; record-level access · session management</span></div>
+          <div class="box"><b>Automation &amp; Jobs <span class="tag ok">LIVE</span></b><span>Rule engine · transactional job outbox · background worker</span></div>
+        </div>
+      </div>
+      <div class="layer">
+        <div class="lname">3 · Core CRM Platform</div>
+        <div class="row">
+          <div class="box"><b>Companies &amp; Contacts</b><span>Records, relationships, timelines</span></div>
+          <div class="box"><b>Leads</b><span>Web form, round-robin, dedupe</span></div>
+          <div class="box"><b>Deals &amp; Pipeline</b><span>Stages, probabilities, Kanban</span></div>
+          <div class="box"><b>Activities &amp; Timeline</b><span>Notes, calls, meetings, tasks</span></div>
+          <div class="box"><b>Reporting &amp; Analytics</b><span>Filters, CSV export, KPIs</span></div>
+          <div class="box"><b>Administration</b><span>Settings, teams, audit log</span></div>
+        </div>
+      </div>
+      <div class="layer">
+        <div class="lname">4 · Proposal &amp; Document Workflows</div>
+        <div class="row">
+          <div class="box"><b>Templates &amp; Pricing</b><span>Versioned templates, catalogue, discounts, totals</span></div>
+          <div class="box"><b>Proposal Generation</b><span>CRM-populated · PDF + DOCX · immutable sent versions</span></div>
+          <div class="box"><b>Sharing &amp; Buyer Engagement</b><span>Per-link tracking, expiry, revoke</span></div>
+          <div class="box"><b>E-Signature <span class="tag sim">SIMULATED</span></b><span>Provider abstraction · ordered signers · certificate</span></div>
+        </div>
+      </div>
+      <div class="layer ai">
+        <div class="lname">5 · AI Intelligence Layer (human-in-the-loop)</div>
+        <div class="row">
+          <div class="box"><b>Context Engine</b><span>Permission-scoped CRM context · data minimisation</span></div>
+          <div class="box"><b>Prompt Registry</b><span>Versioned prompts · structured output (Zod)</span></div>
+          <div class="box"><b>Provider Abstraction <span class="tag sim">MOCK</span></b><span>Deterministic mock · Anthropic driver (not live)</span></div>
+          <div class="box"><b>Approval &amp; Governance</b><span>Human accept/reject · usage &amp; cost log · admin on/off</span></div>
+        </div>
+      </div>
+      <div class="layer">
+        <div class="lname">6 · Integration &amp; Services Layer (ports &amp; adapters)</div>
+        <div class="row">
+          <div class="box"><b>Email &amp; Calendar <span class="tag plan">PLANNED</span></b><span>Gmail / Outlook sync &amp; send</span></div>
+          <div class="box"><b>Transactional Email <span class="tag sim">LOG ONLY</span></b><span>Notifications written to log</span></div>
+          <div class="box"><b>E-Signature Provider <span class="tag sim">SIMULATED</span></b><span>Webhook inbox, signed docs</span></div>
+          <div class="box"><b>Object Storage <span class="tag ok">LIVE</span></b><span>Documents, PDFs, signed files</span></div>
+          <div class="box"><b>Notifications <span class="tag ok">LIVE</span></b><span>In-app (polled) alerts</span></div>
+        </div>
+      </div>
+      <div class="flow">&#9650;&nbsp;&nbsp;persist / retrieve&nbsp;&nbsp;&#9660;</div>
+      <div class="layer data">
+        <div class="lname">7 · Data &amp; Storage Layer</div>
+        <div class="row">
+          <div class="box"><b>PostgreSQL 18 <span class="tag ok">LIVE</span></b><span>CRM data · append-only audit log &amp; timeline · AI usage · least-privilege application &amp; migration roles</span></div>
+          <div class="box"><b>File Storage <span class="tag ok">LIVE</span></b><span>Proposal documents, generated PDFs/DOCX, signed documents (local filesystem; cloud storage planned)</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="side">
+      <div class="lname">8 · Security &amp; Governance</div>
+      <div class="sub" style="color:#9db8d8;font-size:10.5px;margin-bottom:8px;">Cross-cutting, applies to every layer</div>
+      <ul>
+        <li>Role-based &amp; record-level authorization (no cross-user access)</li>
+        <li>Append-only audit log of every change</li>
+        <li>Immutable sent proposal versions (DB-enforced)</li>
+        <li>Secure buyer links (token in URL fragment, stored hashed)</li>
+        <li>Human approval required for all external actions</li>
+        <li>AI usage governance &amp; per-feature controls</li>
+        <li>Secrets never exposed to frontend or logs</li>
+        <li>Production refuses to start on simulated providers</li>
+      </ul>
+      <div class="legend">
+        <div class="tag ok">LIVE</div> built &amp; tested<br/>
+        <div class="tag sim">SIMULATED / MOCK</div> stand-in, not production<br/>
+        <div class="tag plan">PLANNED</div> not yet built
+      </div>
+    </div>
+  </div>
+</body>
+</html>
