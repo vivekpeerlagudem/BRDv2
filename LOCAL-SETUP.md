@@ -50,7 +50,7 @@ Demo sign-ins (all use `SEED_PASSWORD`):
 | admin@northwind.example | Admin |
 | morgan@northwind.example | Sales Manager (may manage templates and catalogue) |
 | riley@northwind.example | Salesperson |
-| jordan@northwind.example | Salesperson |
+| jordan@northwind.example | Salesperson (shown as Black Widow after `pnpm db:seed:avengers`) |
 
 ## 6. Run
 Two terminals:
@@ -98,6 +98,13 @@ The browser tests run against the **development** database. They only add record
 
 ## 10. Weekly reports — demo steps
 Needs the migrations up to `0008` (`pnpm db:migrate`) and both dev servers running. Everything uses the AI simulator.
+
+**Quickest start:** `pnpm db:seed:avengers`. It replaces the old Marvel steps for this demo: it **wipes all business
+data in `crm_dev` only** (users, settings and pipeline are kept; it refuses production and any database not ending in
+`_dev`) and creates three clients — Stark Industries, Wakanda Design Group and S.H.I.E.L.D. — each with an estimates
+sheet, tasks, a meeting last week and a weekly report that is ready to review. Sign in as Tony Stark and open
+**Weekly reports**, then continue at step 6 below. To try the steps from the beginning, use one of the clients and the
+file `e2e/fixtures/estimates-sample.csv`.
 
 1. Sign in as the admin. **AI settings** → AI must be on and the **Weekly client report** feature switched on (otherwise the text is placeholders you write yourself).
 2. **Companies** → open a company you own (or any company as admin).

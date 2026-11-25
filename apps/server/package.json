@@ -16,7 +16,8 @@
     "worker": "tsx src/worker.ts",
     "serve": "tsx src/main.ts",
     "bootstrap:admin": "tsx src/cli/bootstrap-admin.ts",
-    "weekly:demo": "tsx src/cli/weekly-demo.ts"
+    "weekly:demo": "tsx src/cli/weekly-demo.ts",
+    "db:seed:avengers": "tsx src/cli/seed-avengers.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.9.0",

@@ -1,0 +1,7 @@
+Scope ID,Task,Phase,Estimate hours,Status,% Done,Actual hours
+S-001,Field reporting requirements with S.H.I.E.L.D. agents,Discovery,20,Done,100,20
+S-002,Offline-first app design for field teams,Discovery,28,Done,100,27
+S-003,Mobile report capture and photo upload,Build,64,In progress,35,
+S-004,Secure sync to the S.H.I.E.L.D. reporting hub,Build,56,In progress,10,
+S-005,Field trial with two S.H.I.E.L.D. units,Test,36,Not started,,
+S-006,Roll-out and support for all field offices,Launch,26,Not started,,

@@ -1,0 +1,7 @@
+Scope ID,Task,Phase,Estimate hours,Status,% Done,Actual hours
+S-001,Discovery sessions with Wakanda warehouse leads,Discovery,12,Done,100,12
+S-002,Inventory portal wireframes and sign-off,Discovery,20,Done,100,19
+S-003,Inventory sync for Wakanda warehouses,Build,48,In progress,30,
+S-004,Stock alerts and reorder screens,Build,40,In progress,10,
+S-005,User acceptance testing with Okoye's team,Test,28,Not started,,
+S-006,Portal launch and staff training,Launch,22,Not started,,

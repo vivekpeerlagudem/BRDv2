@@ -65,30 +65,34 @@ Follow [LOCAL-SETUP.md](LOCAL-SETUP.md) once (database roles, `.env.local`, migr
 | `pnpm dev:server` | API on http://localhost:3000 (also runs background jobs in development) |
 | `pnpm dev:web` | Web app on http://localhost:5273 (buyer links on http://proposals.localhost:5273) |
 | `pnpm db:migrate` / `pnpm db:seed` | Create tables / load demo data (seed only on an empty database) |
+| `pnpm db:seed:avengers` | Wipe business data in the `_dev` database and load the small Avengers demo (3 clients, ready weekly reports) |
 | `pnpm weekly:demo` | Run the weekly report demo: imports the sample estimates, creates two demo tasks, generates a report and writes the draft PowerPoint to `.data/weekly-demo/` (development only) |
 | `pnpm verify` | Typecheck, lint, unit + integration tests, build |
 | `pnpm test:e2e` | Browser tests through the real UI (Microsoft Edge) |
 
-## Demo data (Marvel)
+## Demo data (Avengers, company Kensium)
 
-A clean demo dataset you can rebuild at any time. **This deletes all business data** in the local `_dev` database
-(users, settings and pipeline are kept):
+One command rebuilds a small, clean demo for the weekly reports. **It wipes all business data in the local `_dev`
+database** (companies, people, opportunities, leads, tasks, proposals, estimates, reports, audit history, catalogue
+and templates); users, organization settings and the pipeline are kept. It refuses to run in production or on a
+database whose name does not end in `_dev`.
 
 ```powershell
-pnpm db:reset:dev --demo
-pnpm exec playwright test e2e/marvel-seed.spec.ts
-pnpm exec playwright test e2e/marvel-proposal-demo.spec.ts
+pnpm db:seed:avengers
 ```
 
-- **Data**: 7 companies (Stark Industries, S.H.I.E.L.D., Wakanda Design Group, Pym Technologies, Oscorp, Daily Bugle,
-  Hydra), 12 people, 7 opportunities, Marvel products, the "Avengers services proposal" template and a proposal sent
-  to Tony Stark.
-- **Users**: Tony Stark (admin, `admin@northwind.example`), Captain America (sales manager, `morgan@northwind.example`),
-  Spider-Man (salesperson, `riley@northwind.example`), Jordan Patel (salesperson). The demo password is in
+- **Users**: Tony Stark (admin, `admin@northwind.example`), Captain America (sales manager of team Avengers,
+  `morgan@northwind.example`), Spider-Man (`riley@northwind.example`) and Black Widow (`jordan@northwind.example`),
+  salespeople in Avengers. Other users are deactivated. Passwords are not changed; the demo password is in
   `.env.local` (`SEED_PASSWORD`), never in the code.
-- `marvel-proposal-demo.spec.ts` walks the whole flow through the UI (template → proposal → preview → send → seller
-  and buyer PDF) and saves screenshots to `demo-preview/` (ignored by git).
-- `leads-workflow.spec.ts` and `people-company.spec.ts` cover the lead workflow and the person + company form.
+- **Clients**: Stark Industries (Spider-Man), Wakanda Design Group (Black Widow), S.H.I.E.L.D. (Captain America), each
+  with contacts, one opportunity, an estimates sheet (`e2e/fixtures/estimates-stark.csv`, `-wakanda`, `-shield`),
+  scope tasks, a meeting last week and a ready weekly report.
+- **Also**: 3 products, the published template "Kensium services proposal", and 2 leads for Spider-Man.
+- The seed prints a summary with each client's % complete, health and report link.
+
+The older Marvel demo (`pnpm db:reset:dev --demo` + `e2e/marvel-seed.spec.ts`) still works but is replaced by this
+seed for the weekly-report demo.
 
 ## Put it online
 

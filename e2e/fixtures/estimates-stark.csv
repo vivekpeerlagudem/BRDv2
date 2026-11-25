@@ -1,0 +1,7 @@
+Scope ID,Task,Phase,Estimate hours,Status,% Done,Actual hours
+S-001,Requirements workshop with the Stark operations team,Discovery,16,Done,100,15
+S-002,Integration design for Stark ERP orders,Discovery,24,Done,100,24
+S-003,ERP connector for Stark orders,Build,56,In progress,40,
+S-004,Order status dashboard for Stark sales,Build,48,In progress,10,
+S-005,Integration test cycle with Stark finance,Test,32,Not started,,
+S-006,Go-live and two weeks of hypercare,Launch,24,Not started,,
