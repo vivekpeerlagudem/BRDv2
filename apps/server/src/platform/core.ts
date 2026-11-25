@@ -12,7 +12,7 @@ import type { Config } from '../config/env.ts';
 import * as schema from '../db/schema.ts';
 import { DomainError } from './errors/domain-error.ts';
 import type { Logger } from './logging/logger.ts';
-import type { AiProvider, ESignatureProvider, EstimatesSource, ObjectStorage, PdfRenderer, TransactionalEmail } from './ports.ts';
+import type { AiProvider, ESignatureProvider, EstimatesSource, ObjectStorage, PdfRenderer, SpreadsheetPublisher, TransactionalEmail } from './ports.ts';
 
 export { schema };
 export type Db = NodePgDatabase<typeof schema>;
@@ -125,6 +125,8 @@ export interface AppContext {
   ai: AiProvider;
   email: TransactionalEmail;
   estimates: EstimatesSource;
+  /** Where the approved weekly sales brief is published besides the file download. */
+  sheets: SpreadsheetPublisher;
   pdf: PdfRenderer;
   now: () => Date;
 }

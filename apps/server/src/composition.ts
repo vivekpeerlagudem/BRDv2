@@ -7,12 +7,16 @@ import { type AppContext, createDb } from './platform/core.ts';
 import { CsvOnlyEstimatesSource, GoogleSheetsEstimatesSource } from './platform/google-sheets.ts';
 import { createLogger } from './platform/logging/logger.ts';
 import { MockAiProvider } from './platform/mock-ai.ts';
+import { FileOnlyPublisher, GoogleSheetsPublisher } from './platform/sales-brief-sheets.ts';
 
 /**
  * Composition root (ADR-001): the only place where concrete drivers are chosen. Every runtime role
  * (server, worker, CLI, tests) builds its context here, so all of them share the same services.
  */
-export function buildContext(config: Config, overrides: Partial<Pick<AppContext, 'pdf' | 'now' | 'ai' | 'estimates'>> & { databaseUrl?: string } = {}) {
+export function buildContext(
+  config: Config,
+  overrides: Partial<Pick<AppContext, 'pdf' | 'now' | 'ai' | 'estimates' | 'sheets'>> & { databaseUrl?: string } = {},
+) {
   const logger = createLogger(config.LOG_LEVEL);
   const pool = new pg.Pool({
     connectionString: overrides.databaseUrl ?? config.DATABASE_URL,
@@ -38,6 +42,11 @@ export function buildContext(config: Config, overrides: Partial<Pick<AppContext,
       (config.ESTIMATES_SOURCE === 'google'
         ? new GoogleSheetsEstimatesSource({ credentialsBase64: config.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64 })
         : new CsvOnlyEstimatesSource()),
+    sheets:
+      overrides.sheets ??
+      (config.SALES_BRIEF_SHEETS === 'google'
+        ? new GoogleSheetsPublisher({ credentialsBase64: config.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64, spreadsheetId: config.SALES_BRIEF_SPREADSHEET_ID })
+        : new FileOnlyPublisher()),
     pdf: overrides.pdf ?? (config.NODE_ENV === 'test' ? new StubPdfRenderer() : new BrowserPdfRenderer(config.PDF_BROWSER_CHANNEL)),
     now: overrides.now ?? (() => new Date()),
   };

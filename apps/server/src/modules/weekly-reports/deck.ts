@@ -13,7 +13,7 @@ import { periodLabel } from './period.ts';
 type PptxClass = (typeof PptxGenJS)['default'];
 
 export const PPTX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-const DRAFT_LABEL = 'DRAFT – not approved';
+export const DRAFT_LABEL = 'DRAFT – not approved';
 const NO_RISKS = 'No significant risks this week';
 const MAX_LIST = 8;
 const MAX_PHASE_ROWS = 10;
@@ -139,8 +139,9 @@ export function buildDeckModel(input: {
 }
 
 // ───────────── templates and rendering (layout only) ─────────────
-const W = 13.33;
-type Box = { x: number; y: number; w: number; h: number };
+export const SLIDE_WIDTH = 13.33;
+const W = SLIDE_WIDTH;
+export type Box = { x: number; y: number; w: number; h: number };
 
 /**
  * A template = fonts and colours, the logo, two slide masters and the fixed position of every element.
@@ -217,27 +218,33 @@ export const DEFAULT_TEMPLATE_KEY: WeeklyTemplateKey = 'default';
 export const resolveTemplateKey = (key: string | null | undefined): WeeklyTemplateKey =>
   key && Object.hasOwn(WEEKLY_TEMPLATES, key) ? (key as WeeklyTemplateKey) : DEFAULT_TEMPLATE_KEY;
 
-export async function renderWeeklyPptx(model: DeckModel, templateKey?: string | null): Promise<Uint8Array> {
+export type WeeklyPptx = InstanceType<PptxClass>;
+/**
+ * A new presentation with the template's two slide masters defined: everything that is the same on every slide
+ * (brand colour, header bar, logo, footer text, slide number). Shared by every deck built on a WEEKLY_TEMPLATES
+ * template (the weekly client report and the weekly sales brief).
+ */
+export function startDeck(
+  templateKey: string | null | undefined,
+  brand: { brandColor: string; footerText: string; orgName: string; title: string },
+): { pptx: WeeklyPptx; template: WeeklyTemplate } {
   const t: WeeklyTemplate = WEEKLY_TEMPLATES[resolveTemplateKey(templateKey)];
   const FONT = t.font;
   // The package is CommonJS: depending on the loader the class is the default export or sits under `.default`.
   const Pptx = ((PptxGenJS as unknown as { default?: PptxClass }).default ?? PptxGenJS) as PptxClass;
   const pptx = new Pptx();
   pptx.layout = 'LAYOUT_WIDE';
-  pptx.title = `${model.clientName} — Weekly status report ${model.periodLabel}`;
-  pptx.company = model.orgName;
+  pptx.title = brand.title;
+  pptx.company = brand.orgName;
   pptx.theme = { headFontFace: FONT, bodyFontFace: FONT };
-  type Slide = ReturnType<typeof pptx.addSlide>;
-
-  // Slide masters: everything that is the same on every slide (brand colour, header bar, logo, footer, slide number).
   const logo = (box: Box, fontSize: number) =>
     t.logo
       ? { image: { ...box, data: t.logo } }
-      : { text: { text: model.orgName, options: { ...box, fontFace: FONT, fontSize, bold: true, color: 'FFFFFF', valign: 'middle' as const } } };
-  const footer = (color: string) => ({ text: { text: model.footerText, options: { ...t.footer, fontFace: FONT, fontSize: 10, color } } });
+      : { text: { text: brand.orgName, options: { ...box, fontFace: FONT, fontSize, bold: true, color: 'FFFFFF', valign: 'middle' as const } } };
+  const footer = (color: string) => ({ text: { text: brand.footerText, options: { ...t.footer, fontFace: FONT, fontSize: 10, color } } });
   pptx.defineSlideMaster({
     title: t.masters.title,
-    background: { color: model.brandColor },
+    background: { color: brand.brandColor },
     objects: [logo(t.logoOnTitle, 24), footer('FFFFFF')],
     slideNumber: { ...t.slideNumber, fontFace: FONT, fontSize: 10, color: 'FFFFFF' },
   });
@@ -245,7 +252,7 @@ export async function renderWeeklyPptx(model: DeckModel, templateKey?: string | 
     title: t.masters.content,
     background: { color: 'FFFFFF' },
     objects: [
-      { rect: { x: 0, y: 0, w: W, h: t.headerHeight, fill: { color: model.brandColor } } },
+      { rect: { x: 0, y: 0, w: W, h: t.headerHeight, fill: { color: brand.brandColor } } },
       logo(t.logoOnContent, 14),
       footer(t.muted),
       {
@@ -257,6 +264,18 @@ export async function renderWeeklyPptx(model: DeckModel, templateKey?: string | 
     ],
     slideNumber: { ...t.slideNumber, fontFace: FONT, fontSize: 10, color: t.muted },
   });
+  return { pptx, template: t };
+}
+
+export async function renderWeeklyPptx(model: DeckModel, templateKey?: string | null): Promise<Uint8Array> {
+  const { pptx, template: t } = startDeck(templateKey, {
+    brandColor: model.brandColor,
+    footerText: model.footerText,
+    orgName: model.orgName,
+    title: `${model.clientName} — Weekly status report ${model.periodLabel}`,
+  });
+  const FONT = t.font;
+  type Slide = ReturnType<typeof pptx.addSlide>;
 
   /** The draft label is written on the slide itself so it is in every slide file of a draft. */
   const draftLabel = (slide: Slide, dark = false) => {

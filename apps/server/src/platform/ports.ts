@@ -115,6 +115,28 @@ export interface AiProvider {
   status(): AiProviderStatus;
 }
 
+/** One cell of a spreadsheet tab: text, a number, or empty. */
+export type SheetCell = string | number | null;
+/** One tab of the sales brief spreadsheet: the same structure feeds the .xlsx file and the Google Sheets publisher. */
+export interface SheetTab {
+  name: string;
+  columns: { header: string; width: number; format?: string }[];
+  rows: SheetCell[][];
+}
+export interface SpreadsheetPublisherStatus {
+  provider: string;
+  configured: boolean;
+  detail: string;
+}
+/** Optional destination for the approved sales brief besides the .xlsx download (SALES_BRIEF_SHEETS). */
+export interface SpreadsheetPublisher {
+  readonly name: string;
+  /** False for the default file-only publisher: nothing is published and the brief's sheet status stays "disabled". */
+  readonly enabled: boolean;
+  publish(tabs: SheetTab[]): Promise<{ url: string | null }>;
+  status(): SpreadsheetPublisherStatus;
+}
+
 /** Where a client's estimates (scope) sheet can be read from, besides CSV upload. Read-only by contract. */
 export interface EstimatesSourceStatus {
   provider: string;

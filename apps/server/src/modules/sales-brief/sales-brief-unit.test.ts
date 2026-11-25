@@ -1,15 +1,21 @@
 /** Weekly Sales Brief — metrics, signals and the facts pack. Pure functions, no database. */
+import { createVerify, generateKeyPairSync } from 'node:crypto';
+import ExcelJS from 'exceljs';
+import JSZip from 'jszip';
 import { describe, expect, it } from 'vitest';
 import type { SalesBriefNarrative, SalesBriefStatement } from '../../db/schema-sales-brief.ts';
 import { MockAiProvider } from '../../platform/mock-ai.ts';
+import { FileOnlyPublisher, GoogleSheetsPublisher } from '../../platform/sales-brief-sheets.ts';
 import { jsonSchemaOf, PROMPTS, renderUserMessage, salesBriefOutput } from '../ai/prompts.ts';
 import { FALLBACK_TEXT } from '../weekly-reports/checks.ts';
 import { allowedSourceIds } from '../weekly-reports/facts.ts';
 import { BRIEF_LIMITS, checkBrief, composeBriefFlags } from './checks.ts';
 import { monthAndQuarterStart, type SalesSnapshot, type SalesWindow } from './collect.ts';
+import { briefFileName, buildBriefDeck, formatAmount, formatChange, formatMetric, renderBriefPptx } from './deck.ts';
 import { buildSalesFacts } from './facts.ts';
 import { changePct, computeSalesMetrics, metricOf } from './metrics.ts';
 import { briefFallbackMessage, fallbackBrief } from './narrative.ts';
+import { BRIEF_TABS, buildBriefTabs, renderBriefXlsx, safeText } from './sheet.ts';
 import { computeSignals, THRESHOLDS } from './signals.ts';
 
 const U = { cap: 'u-cap', spidey: 'u-spidey', widow: 'u-widow' };
@@ -515,5 +521,246 @@ describe('sales brief checks and simulator', () => {
     );
     for (const code of ['AI_DISABLED', 'AI_QUOTA_EXCEEDED', 'AI_PROVIDER_UNAVAILABLE', 'CHECKS_FAILED', 'NEW_CODE'])
       expect(briefFallbackMessage(code)).not.toMatch(/[A-Z]{2,}_[A-Z]/);
+  });
+});
+
+describe('sales brief outputs: PowerPoint, Excel and the Google Sheets publisher', () => {
+  const s = snapshot({
+    wonDeals: [
+      {
+        dealId: 'd-w1',
+        name: '=HYPERLINK("http://evil.example","Stark – ERP integration")',
+        owner: 'Captain America',
+        ownerId: U.cap,
+        amount: '52000.00',
+        cycleDays: 30,
+      },
+      { dealId: 'd-w2', name: 'Wakanda – Inventory portal', owner: 'Spider-Man', ownerId: U.spidey, amount: '22000.00', cycleDays: 21 },
+    ],
+  });
+  const doc = computeSalesMetrics(s);
+  const signals = computeSignals(s, doc);
+  const ai = (text: string, extra: Partial<SalesBriefStatement> = {}): SalesBriefStatement => ({
+    id: `o${text.length}`,
+    text,
+    sources: ['metric:S-07'],
+    origin: 'ai',
+    ...extra,
+  });
+  const narrative: SalesBriefNarrative = {
+    headline: [ai('This week the team won 2 deals worth 74000.00 USD and opened 6 new opportunities.')],
+    insights: [ai('2 deals are stalled in Discovery. This puts revenue at risk if nothing changes.', { signalIds: ['signal:1'], kind: 'risk' })],
+    actions: [ai('Review the stalled deals with their owners and agree one next step for each.', { signalIds: ['signal:1'] })],
+    throughput: [ai('10 new leads came in, 5 were qualified and 3 converted.')],
+    wins: [ai('Captain America won the largest deal of the week.')],
+    pipeline: [ai('Open pipeline is 200000.00 USD.')],
+    risks: [ai('3 open deals need attention.')],
+    team: [ai('The team logged 15 activities.')],
+  };
+  const deck = (draft: boolean) =>
+    buildBriefDeck({
+      draft,
+      attempt: 2,
+      periodStart: '2026-11-16',
+      periodEnd: '2026-11-22',
+      orgName: 'Kensium',
+      branding: { primaryColor: '#1f4e79', footerText: 'Kensium — Confidential' },
+      metrics: doc,
+      narrative,
+      approverName: draft ? null : 'Tony Stark',
+    });
+  async function unzip(bytes: Uint8Array) {
+    const zip = await JSZip.loadAsync(bytes);
+    const names = Object.keys(zip.files);
+    const read = (name: string) => (zip.file(name) as JSZip.JSZipObject).async('string');
+    const slides = names.filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a, b) => Number(a.match(/\d+/)?.[0]) - Number(b.match(/\d+/)?.[0]));
+    const xml = await Promise.all(slides.map(read));
+    const everything = (await Promise.all(names.filter((n) => n.startsWith('ppt/') && n.endsWith('.xml')).map(read))).join('\n');
+    return { slides, xml, everything };
+  }
+
+  it('formats figures and file names', () => {
+    expect(formatAmount('74000.00')).toBe('74,000');
+    expect(formatAmount('1250.50')).toBe('1,250.50');
+    expect(formatAmount(null)).toBe('–');
+    expect(formatMetric({ unit: 'money', value: '200000.00' }, 'USD')).toBe('USD 200,000');
+    expect(formatMetric({ unit: 'percent', value: '66.7' }, 'USD')).toBe('66.7%');
+    expect(formatChange({ value: '10', lastWeek: '8', changePct: '25.0' })).toBe('▲ 25.0% vs last week');
+    expect(formatChange({ value: '66.7', lastWeek: '100.0', changePct: '-33.3' })).toBe('▼ 33.3% vs last week');
+    expect(formatChange({ value: '2', lastWeek: '0', changePct: null })).toBe('▲ up from 0 last week');
+    expect(formatChange({ value: '5', lastWeek: null, changePct: null })).toBe('');
+    expect(briefFileName('Kensium', '2026-11-22', 2, true, 'pptx')).toBe('Kensium_Sales_Brief_2026-11-22_v2_DRAFT.pptx');
+    expect(briefFileName('Kensium Inc.', '2026-11-22', 1, false, 'xlsx')).toBe('Kensium_Inc_Sales_Brief_2026-11-22_v1.xlsx');
+  });
+
+  it('the deck model holds the five key figures, the analysis and the to-date table', () => {
+    const model = deck(true);
+    expect(model.kpis.map((k) => [k.label, k.value])).toEqual([
+      ['New leads', '10'],
+      ['New opportunities', '6'],
+      ['Revenue won', 'USD 74,000'],
+      ['Win rate', '66.7%'],
+      ['Open pipeline', 'USD 200,000'],
+    ]);
+    expect(model.kpis[0]?.change).toBe('▲ 25.0% vs last week');
+    expect(model.analysisLabel).toBe('AI analysis — draft, not yet reviewed');
+    expect(deck(false).analysisLabel).toBe('AI analysis — reviewed by Tony Stark');
+    expect(model.toDate[4]).toEqual(['Revenue won', 'USD 74,000', 'USD 104,000', 'USD 180,000']);
+    expect(model.funnel.map((f) => f.step)).toEqual([
+      '',
+      '50.0% of the step before',
+      '60.0% of the step before',
+      '200.0% of the step before',
+      '33.3% of the step before',
+    ]);
+    expect(model.attention).toHaveLength(3);
+    expect(model.footerText).toBe('Kensium — Confidential · Internal');
+  });
+
+  it('PowerPoint: 9 slides on the shared masters, no ids or codes, DRAFT only in the draft', async () => {
+    const draft = await unzip(await renderBriefPptx(deck(true)));
+    expect(draft.slides).toHaveLength(9);
+    for (const slide of draft.xml) expect(slide).toContain('DRAFT');
+    expect(draft.xml[0]).toContain('Weekly sales brief');
+    expect(draft.xml[1]).toContain('USD 74,000');
+    expect(draft.xml[2]).toContain('Review the stalled deals with their owners');
+    expect(draft.xml[2]).toContain('AI analysis — draft, not yet reviewed');
+    expect(draft.xml[6]).toContain('Captain America');
+    expect(draft.xml[8]).toContain('Quarter to date');
+    expect(draft.everything).toContain('name="WR_CONTENT"');
+    expect(draft.everything).toContain('typeface="Arial"');
+    for (const internal of ['signal:', 'metric:', 'deal:', 'user:', 'S-01', 'S-17', 'd-w1', U.cap, 'unviewed_proposal'])
+      expect(draft.everything).not.toContain(internal);
+
+    const final = await unzip(await renderBriefPptx(deck(false)));
+    expect(final.slides).toHaveLength(9);
+    expect(final.everything).not.toContain('DRAFT');
+    expect(final.xml[2]).toContain('AI analysis — reviewed by Tony Stark');
+  });
+
+  it('Excel: nine tabs, values equal to the metrics, frozen brand header, formula-injection guard', async () => {
+    const tabs = buildBriefTabs({
+      metrics: doc,
+      signals,
+      narrative,
+      history: [{ periodStart: '2026-11-16', periodEnd: '2026-11-22', attempt: 2, approvedAt: '2026-11-23T14:00:00.000Z', metrics: doc }],
+    });
+    expect(tabs.map((t) => t.name)).toEqual([...BRIEF_TABS]);
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(Buffer.from(await renderBriefXlsx(tabs, { brandColor: '1F4E79', orgName: 'Kensium', title: 'Weekly sales brief' })) as never);
+    expect(book.worksheets.map((w) => w.name)).toEqual([...BRIEF_TABS]);
+
+    const summary = book.getWorksheet('Summary') as ExcelJS.Worksheet;
+    expect(summary.views[0]).toMatchObject({ state: 'frozen', ySplit: 1 });
+    expect((summary.getCell('A1').fill as ExcelJS.FillPattern).fgColor?.argb).toBe('FF1F4E79');
+    const rows = new Map<string, ExcelJS.Row>();
+    summary.eachRow((row, i) => {
+      if (i > 1) rows.set(String(row.getCell(1).value), row);
+    });
+    for (const m of doc.metrics) {
+      const row = rows.get(m.id) as ExcelJS.Row;
+      expect(row.getCell(2).value).toBe(m.label);
+      expect(row.getCell(4).value).toBe(m.value === null ? null : Number(m.value));
+      expect(row.getCell(5).value).toBe(m.lastWeek === null ? null : Number(m.lastWeek));
+    }
+    expect(rows.get('S-08')?.getCell(7).value).toBe(104000);
+    expect(rows.get('S-08')?.getCell(8).value).toBe(180000);
+
+    const insights = book.getWorksheet('Insights') as ExcelJS.Worksheet;
+    expect(insights.getCell('A2').value).toBe('2 deals are stalled in Discovery. This puts revenue at risk if nothing changes.');
+    expect([insights.getCell('B2').value, insights.getCell('C2').value]).toEqual(['risk', 'high']);
+    expect(String(insights.getCell('D2').value)).toContain('stalled in Discovery');
+    expect(insights.getCell('E2').value).toBe('Review the stalled deals with their owners and agree one next step for each.');
+    expect(insights.rowCount).toBe(1 + signals.length); // every finding appears, with or without an insight
+
+    // A deal name that looks like a formula is stored as text with a leading apostrophe, never as a formula.
+    const won = book.getWorksheet('Deals won') as ExcelJS.Worksheet;
+    expect(won.getCell('A2').value).toBe('\'=HYPERLINK("http://evil.example","Stark – ERP integration")');
+    expect(won.getCell('A2').type).toBe(ExcelJS.ValueType.String);
+    expect(won.getCell('C2').value).toBe(52000);
+    expect(safeText('+1 555 0100')).toBe("'+1 555 0100");
+    expect(safeText('@handle')).toBe("'@handle");
+    expect(safeText('-12.50')).toBe('-12.50');
+    expect(safeText('Stark Industries')).toBe('Stark Industries');
+
+    const history = book.getWorksheet('Brief history') as ExcelJS.Worksheet;
+    expect([2, 3, 4, 5, 7, 8].map((c) => history.getRow(2).getCell(c).value)).toEqual(['2026-11-16', 2, '2026-11-23', 10, 2, 74000]);
+    expect((book.getWorksheet('Team') as ExcelJS.Worksheet).rowCount).toBe(1 + doc.reps.length);
+    expect((book.getWorksheet('Pipeline by stage') as ExcelJS.Worksheet).getCell('A5').value).toBe('Total');
+  });
+
+  it('Google Sheets publisher: adds missing tabs, clears and writes RAW values; errors never leak a secret; off by default', async () => {
+    const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const pem = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+    const email = 'crm-writer@example-project.iam.gserviceaccount.com';
+    const credentialsBase64 = Buffer.from(JSON.stringify({ client_email: email, private_key: pem })).toString('base64');
+    const calls: { url: string; method?: string; headers: Record<string, string>; body?: string }[] = [];
+    const fake =
+      (sheetStatus = 200) =>
+      async (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) => {
+        calls.push({ url, ...(init?.method ? { method: init.method } : {}), headers: init?.headers ?? {}, ...(init?.body ? { body: init.body } : {}) });
+        if (url.startsWith('https://oauth2.googleapis.com/')) return Response.json({ access_token: 'ya29.test-token', expires_in: 3600 });
+        if (sheetStatus !== 200) return new Response('{}', { status: sheetStatus });
+        if (url.includes('?fields=')) return Response.json({ sheets: [{ properties: { title: 'Summary' } }, { properties: { title: 'Sheet1' } }] });
+        return Response.json({});
+      };
+    const tabs = buildBriefTabs({ metrics: doc, signals, narrative, history: [] });
+    const publisher = new GoogleSheetsPublisher({
+      credentialsBase64,
+      spreadsheetId: 'sheet-123',
+      fetch: fake(),
+      now: () => Date.parse('2026-11-23T14:00:00Z'),
+    });
+    expect(publisher.status()).toEqual({ provider: 'google', configured: true, detail: `Writes the approved brief to a sheet shared with ${email}` });
+    expect(await publisher.publish(tabs)).toEqual({ url: 'https://docs.google.com/spreadsheets/d/sheet-123' });
+
+    expect(calls.map((c) => `${c.method} ${c.url.replace('https://sheets.googleapis.com/v4/spreadsheets/sheet-123', '')}`)).toEqual([
+      'POST https://oauth2.googleapis.com/token',
+      'GET ?fields=sheets.properties.title',
+      'POST :batchUpdate',
+      'POST /values:batchClear',
+      'POST /values:batchUpdate',
+    ]);
+    const [header, claims, signature] = (new URLSearchParams(calls[0]?.body).get('assertion') as string).split('.') as [string, string, string];
+    expect(JSON.parse(Buffer.from(claims, 'base64url').toString())).toMatchObject({ iss: email, scope: 'https://www.googleapis.com/auth/spreadsheets' });
+    expect(createVerify('RSA-SHA256').update(`${header}.${claims}`).verify(publicKey, Buffer.from(signature, 'base64url'))).toBe(true);
+    const added = JSON.parse(calls[2]?.body as string).requests.map((r: { addSheet: { properties: { title: string } } }) => r.addSheet.properties.title);
+    expect(added).toEqual(BRIEF_TABS.filter((t) => t !== 'Summary')); // "Summary" was already there
+    const written = JSON.parse(calls[4]?.body as string);
+    expect(written.valueInputOption).toBe('RAW'); // nothing is evaluated as a formula
+    expect(written.data).toHaveLength(BRIEF_TABS.length);
+    expect(written.data[0].range).toBe("'Summary'!A1");
+    expect(written.data[0].values[0]).toEqual(['Ref', 'Metric', 'Unit', 'This week', 'Last week', 'Change %', 'Month to date', 'Quarter to date', 'Detail']);
+    expect(written.data[0].values[1].slice(0, 4)).toEqual(['S-01', 'New leads', 'count', 10]);
+    for (const call of calls.slice(1)) expect(call.headers.authorization).toBe('Bearer ya29.test-token');
+
+    const failure = async (p: Promise<unknown>) =>
+      p.then(
+        () => null,
+        (e: unknown) => e as { code: string; message: string },
+      );
+    const denied = await failure(new GoogleSheetsPublisher({ credentialsBase64, spreadsheetId: 'sheet-123', fetch: fake(403) }).publish(tabs));
+    expect(denied?.code).toBe('SALES_BRIEF_SHEET_NOT_SHARED');
+    expect(denied?.message).toContain(email);
+    expect((await failure(new GoogleSheetsPublisher({ credentialsBase64, spreadsheetId: 'sheet-123', fetch: fake(404) }).publish(tabs)))?.code).toBe(
+      'SALES_BRIEF_SHEET_NOT_FOUND',
+    );
+    for (const e of [denied]) expect(`${e?.message} ${JSON.stringify(e)}`).not.toMatch(/PRIVATE KEY|ya29/);
+    const offline = new GoogleSheetsPublisher({
+      credentialsBase64,
+      spreadsheetId: 'sheet-123',
+      fetch: async () => {
+        throw new Error(`network down ${pem}`);
+      },
+    });
+    const net = await failure(offline.publish(tabs));
+    expect(net?.code).toBe('SALES_BRIEF_SHEETS_UNAVAILABLE');
+    expect(net?.message).not.toContain('PRIVATE KEY');
+
+    expect(new GoogleSheetsPublisher({ credentialsBase64 }).status().configured).toBe(false); // no sheet id
+    expect(new GoogleSheetsPublisher({ spreadsheetId: 'x' }).status().configured).toBe(false); // no key
+    const file = new FileOnlyPublisher();
+    expect([file.enabled, file.status().provider]).toEqual([false, 'file']);
+    expect((await failure(file.publish()))?.code).toBe('SALES_BRIEF_SHEETS_NOT_CONFIGURED');
   });
 });

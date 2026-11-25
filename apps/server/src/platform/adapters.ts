@@ -185,4 +185,9 @@ export const storageKeys = {
   weeklyReportSnapshot: (runId: string) => `weekly-reports/${runId}/snapshot.json`,
   weeklyReportDraftPptx: (runId: string) => `weekly-reports/${runId}/draft.pptx`,
   weeklyReportFinalPptx: (runId: string) => `weekly-reports/${runId}/final.pptx`,
+  salesBriefSnapshot: (runId: string) => `sales-briefs/${runId}/snapshot.json`,
+  salesBriefDraftPptx: (runId: string) => `sales-briefs/${runId}/draft.pptx`,
+  salesBriefDraftXlsx: (runId: string) => `sales-briefs/${runId}/draft.xlsx`,
+  salesBriefFinalPptx: (runId: string) => `sales-briefs/${runId}/final.pptx`,
+  salesBriefFinalXlsx: (runId: string) => `sales-briefs/${runId}/final.xlsx`,
 };

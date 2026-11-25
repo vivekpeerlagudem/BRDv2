@@ -40,6 +40,10 @@ const envSchema = z.object({
   ESTIMATES_SOURCE: z.enum(['csv', 'google']).default('csv'),
   /** Service-account key file (JSON), base64-encoded. Secret: needed only when ESTIMATES_SOURCE=google. */
   GOOGLE_SERVICE_ACCOUNT_JSON_BASE64: z.string().optional(),
+  /** Where the approved weekly sales brief spreadsheet goes: a file download only, or also one Google Sheet. */
+  SALES_BRIEF_SHEETS: z.enum(['file', 'google']).default('file'),
+  /** The Google Sheet the sales brief is written to (shared with the service account as an Editor). */
+  SALES_BRIEF_SPREADSHEET_ID: z.string().optional(),
   PDF_BROWSER_CHANNEL: z.string().default('msedge'),
   /** Explicit, logged opt-in to run production with stand-in providers (never appropriate for real customers). */
   ALLOW_SIMULATED_PROVIDERS: z.enum(['true', 'false']).default('false'),
@@ -84,6 +88,10 @@ export function productionProviderIssues(config: Config): string[] {
   if (config.AI_PROVIDER === 'anthropic' && !config.ANTHROPIC_API_KEY) issues.push('ANTHROPIC_API_KEY: required when AI_PROVIDER=anthropic');
   if (config.ESTIMATES_SOURCE === 'google' && !config.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64)
     issues.push('GOOGLE_SERVICE_ACCOUNT_JSON_BASE64: required when ESTIMATES_SOURCE=google');
+  if (config.SALES_BRIEF_SHEETS === 'google' && !config.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64)
+    issues.push('GOOGLE_SERVICE_ACCOUNT_JSON_BASE64: required when SALES_BRIEF_SHEETS=google');
+  if (config.SALES_BRIEF_SHEETS === 'google' && !config.SALES_BRIEF_SPREADSHEET_ID)
+    issues.push('SALES_BRIEF_SPREADSHEET_ID: required when SALES_BRIEF_SHEETS=google');
   if (config.NODE_ENV !== 'production' || config.ALLOW_SIMULATED_PROVIDERS === 'true') return issues;
   if (config.ESIGN_PROVIDER === 'fake') issues.push('ESIGN_PROVIDER: the e-signature simulator is not legally valid and cannot be used in production (OD-03)');
   if (config.TXEMAIL_PROVIDER === 'log') issues.push('TXEMAIL_PROVIDER: "log" does not send email and cannot be used in production (OD-14)');
