@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { get, money } from '../lib/api.ts';
 import { useMe } from '../lib/me.ts';
 import { Badge, Card, EmptyState, PageHeader, Query, Table } from '../lib/ui.tsx';
+import { LatestSalesBriefCard } from './sales-brief-pages.tsx';
 
 interface Dashboard {
   scope: string;
@@ -56,6 +57,7 @@ export function DashboardPage() {
             : undefined
         }
       />
+      <LatestSalesBriefCard />
       <Query q={q} rows={6}>
         {(d) => {
           const max = Math.max(1, ...d.pipeline.map((p) => Number(p.value)));

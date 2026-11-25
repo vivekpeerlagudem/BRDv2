@@ -22,6 +22,7 @@ import {
   Settings,
   ShieldAlert,
   Sparkles,
+  TrendingUp,
   Upload,
   UserCog,
   UserPlus,
@@ -43,6 +44,7 @@ import { ImportPage } from './pages/import.tsx';
 import { LeadsPage } from './pages/leads.tsx';
 import { ProposalPage } from './pages/proposal.tsx';
 import { ReportsPage } from './pages/reports.tsx';
+import { SalesBriefPage, SalesBriefsPage } from './pages/sales-brief-pages.tsx';
 import { AuditLogPage, SettingsPage } from './pages/settings.tsx';
 import { WeeklyReportPage, WeeklyReportsPage } from './pages/weekly-report-pages.tsx';
 import '@fontsource-variable/inter'; // self-hosted Inter (OFL) — Twenty-style typography
@@ -371,6 +373,7 @@ function Shell() {
         { to: '/tasks', label: 'Tasks', icon: ListChecks, show: true },
         { to: '/reports', label: 'Reports', icon: ChartColumn, show: Boolean(p['report.view']) },
         { to: '/weekly-reports', label: 'Weekly reports', icon: Presentation, show: Boolean(p['weekly_report.view']) },
+        { to: '/sales-brief', label: 'Sales brief', icon: TrendingUp, show: Boolean(p['sales_brief.view']) },
       ],
     },
     {
@@ -535,6 +538,8 @@ const routeTree = rootRoute.addChildren([
     r('/reports', ReportsPage),
     r('/weekly-reports', WeeklyReportsPage),
     r('/weekly-reports/$id', WeeklyReportPage),
+    r('/sales-brief', SalesBriefsPage),
+    r('/sales-brief/$id', SalesBriefPage),
     r('/admin/settings', SettingsPage),
     r('/admin/import', ImportPage),
     r('/admin/audit', AuditLogPage),

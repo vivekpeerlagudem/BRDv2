@@ -24,6 +24,7 @@ import {
   Table,
   useAction,
 } from '../lib/ui.tsx';
+import { SalesBriefSettingsSection } from './sales-brief-pages.tsx';
 
 const del = <T,>(path: string) => api<T>('DELETE', `/api/v1${path}`);
 type Values = Record<string, string | undefined>;
@@ -35,6 +36,7 @@ const TABS = [
   ['lost-reasons', 'Lost reasons'],
   ['teams', 'Teams'],
   ['weekly-reports', 'Weekly reports'],
+  ['sales-brief', 'Sales brief'],
 ] as const;
 type TabKey = (typeof TABS)[number][0];
 
@@ -67,6 +69,7 @@ export function SettingsPage() {
         {tab === 'lost-reasons' && <LostReasonsSection />}
         {tab === 'teams' && <TeamsSection />}
         {tab === 'weekly-reports' && <WeeklyReportsSection />}
+        {tab === 'sales-brief' && <SalesBriefSettingsSection />}
       </div>
     </>
   );
