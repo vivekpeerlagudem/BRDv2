@@ -16,3 +16,5 @@ demo-preview/
 
 # Page images rendered only to check the document layout (built by scripts/build-weekly-doc.ts)
 deliverables/*.png
+deliverables/*.docx
+deliverables/*.pdf
