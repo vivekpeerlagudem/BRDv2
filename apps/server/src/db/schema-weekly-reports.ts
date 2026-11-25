@@ -77,6 +77,8 @@ export interface WeeklyReportSettings {
   runWeekday: number;
   /** Local time (organization time zone), "HH:MM". */
   runTime: string;
+  /** Key of the PowerPoint template in WEEKLY_TEMPLATES (deck.ts). Absent in older rows = the default template. */
+  templateKey?: string;
 }
 
 export const estimateImport = pgTable(

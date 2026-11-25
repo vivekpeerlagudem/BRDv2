@@ -78,6 +78,7 @@ interface WeeklySettings {
   runWeekday: number;
   runTime: string;
   timeZone: string;
+  templateLabel: string;
 }
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -121,6 +122,9 @@ function WeeklyReportsSection() {
                 <Input name="runTime" type="time" required defaultValue={s.runTime} />
               </Field>
             </div>
+            <p className="text-sm text-muted">
+              Template: <span className="font-medium text-ink">{s.templateLabel}</span>
+            </p>
             <div className="flex justify-end">
               <Button type="submit" disabled={save.busy}>
                 Save schedule

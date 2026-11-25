@@ -1,10 +1,11 @@
 /**
  * PPT builder. `buildDeckModel` (pure) decides every word and number on the slides; `renderWeeklyPptx` only lays
- * them out with pptxgenjs. Slides never contain source ids or internal flags — only client-facing text.
+ * them out with pptxgenjs. Layout comes from a named template (WEEKLY_TEMPLATES) built on two slide masters. Slides never contain source ids or internal flags — only client-facing text.
  * A draft carries "DRAFT – not approved" on every slide; the final deck is rendered again without it at approval.
  */
 import PptxGenJS from 'pptxgenjs';
 import type { HealthLevel, WeeklyMetricsDoc, WeeklyNarrative, WeeklyPhaseRow } from '../../db/schema-weekly-reports.ts';
+import { KENSIUM_LOGO_PNG } from './deck-logo.ts';
 import { metricValue } from './metrics.ts';
 import { periodLabel } from './period.ts';
 
@@ -125,13 +126,86 @@ export function buildDeckModel(input: {
   };
 }
 
-// ───────────── rendering (layout only) ─────────────
-const FONT = 'Inter'; // PowerPoint substitutes its default sans-serif (Arial) where Inter is not installed
-const INK = '1B1F22';
-const MUTED = '5F6368';
+// ───────────── templates and rendering (layout only) ─────────────
 const W = 13.33;
+type Box = { x: number; y: number; w: number; h: number };
 
-export async function renderWeeklyPptx(model: DeckModel): Promise<Uint8Array> {
+/**
+ * A template = fonts and colours, the logo, two slide masters and the fixed position of every element.
+ * The brand colour and footer text come from the organization's branding at render time.
+ * A real company template is added later as another key; `weekly_report_settings.templateKey` selects it.
+ */
+export interface WeeklyTemplate {
+  label: string;
+  font: string;
+  ink: string;
+  muted: string;
+  /** PNG data for pptxgenjs ("image/png;base64,…"), or null to write the organization name as a text logo. */
+  logo: string | null;
+  masters: { title: 'WR_TITLE'; content: 'WR_CONTENT' };
+  headerHeight: number;
+  logoOnTitle: Box;
+  logoOnContent: Box;
+  footer: Box;
+  slideNumber: { x: number; y: number };
+  draftLabel: Box;
+  cover: { client: Box; heading: Box; period: Box; org: Box };
+  title: Box;
+  subtitle: Box;
+  healthBadge: Box;
+  healthReason: Box;
+  summary: Box;
+  kpiRow: { x: number; y: number; h: number; gap: number };
+  table: { x: number; y: number; w: number; colW: number[]; rowH: number };
+  chart: Box;
+  statements: Box;
+  sideHeading: Box;
+  sideList: Box;
+  wide: Box;
+}
+export const WEEKLY_TEMPLATES = {
+  default: {
+    label: 'Default (mock)',
+    font: 'Inter', // PowerPoint substitutes its default sans-serif (Arial) where Inter is not installed
+    ink: '1B1F22',
+    muted: '5F6368',
+    logo: KENSIUM_LOGO_PNG,
+    masters: { title: 'WR_TITLE', content: 'WR_CONTENT' },
+    headerHeight: 0.9,
+    logoOnTitle: { x: 0.8, y: 0.7, w: 2.84, h: 0.74 },
+    logoOnContent: { x: W - 2.2, y: 0.24, w: 1.7, h: 0.44 },
+    footer: { x: 0.5, y: 7.0, w: 9, h: 0.3 },
+    slideNumber: { x: W - 1.0, y: 7.0 },
+    draftLabel: { x: W - 3.6, y: 1.0, w: 3.1, h: 0.3 },
+    cover: {
+      client: { x: 0.8, y: 2.3, w: W - 1.6, h: 1.1 },
+      heading: { x: 0.8, y: 3.4, w: W - 1.6, h: 0.6 },
+      period: { x: 0.8, y: 4.05, w: W - 1.6, h: 0.45 },
+      org: { x: 0.8, y: 5.6, w: W - 1.6, h: 0.4 },
+    },
+    title: { x: 0.5, y: 0.15, w: 9, h: 0.6 },
+    subtitle: { x: 0.5, y: 1.0, w: 9, h: 0.3 },
+    healthBadge: { x: 0.5, y: 1.5, w: 2.4, h: 0.45 },
+    healthReason: { x: 3.1, y: 1.5, w: W - 3.6, h: 0.45 },
+    summary: { x: 0.5, y: 2.2, w: W - 1, h: 2.3 },
+    kpiRow: { x: 0.5, y: 4.7, h: 1.9, gap: 0.3 },
+    table: { x: 0.5, y: 1.6, w: 6.2, colW: [2.4, 0.8, 1.0, 0.9, 1.1], rowH: 0.36 },
+    chart: { x: 7.1, y: 1.5, w: 5.7, h: 4.8 },
+    statements: { x: 0.5, y: 1.6, w: 7.2, h: 5 },
+    sideHeading: { x: 8.1, y: 1.6, w: 4.7, h: 0.3 },
+    sideList: { x: 8.1, y: 1.95, w: 4.7, h: 4.6 },
+    wide: { x: 0.5, y: 1.6, w: W - 1, h: 5 },
+  },
+} satisfies Record<string, WeeklyTemplate>;
+export type WeeklyTemplateKey = keyof typeof WEEKLY_TEMPLATES;
+export const DEFAULT_TEMPLATE_KEY: WeeklyTemplateKey = 'default';
+/** The stored key when it names a template, otherwise the default (settings written before templates existed). */
+export const resolveTemplateKey = (key: string | null | undefined): WeeklyTemplateKey =>
+  key && Object.hasOwn(WEEKLY_TEMPLATES, key) ? (key as WeeklyTemplateKey) : DEFAULT_TEMPLATE_KEY;
+
+export async function renderWeeklyPptx(model: DeckModel, templateKey?: string | null): Promise<Uint8Array> {
+  const t: WeeklyTemplate = WEEKLY_TEMPLATES[resolveTemplateKey(templateKey)];
+  const FONT = t.font;
   // The package is CommonJS: depending on the loader the class is the default export or sits under `.default`.
   const Pptx = ((PptxGenJS as unknown as { default?: PptxClass }).default ?? PptxGenJS) as PptxClass;
   const pptx = new Pptx();
@@ -141,88 +215,85 @@ export async function renderWeeklyPptx(model: DeckModel): Promise<Uint8Array> {
   pptx.theme = { headFontFace: FONT, bodyFontFace: FONT };
   type Slide = ReturnType<typeof pptx.addSlide>;
 
-  /** Footer and (for drafts) the draft label, written on the slide itself so they are in every slide file. */
-  const chrome = (slide: Slide, dark = false) => {
-    slide.addText(model.footerText, { x: 0.5, y: 7.0, w: 9, h: 0.3, fontFace: FONT, fontSize: 10, color: dark ? 'FFFFFF' : MUTED });
+  // Slide masters: everything that is the same on every slide (brand colour, header bar, logo, footer, slide number).
+  const logo = (box: Box, fontSize: number) =>
+    t.logo
+      ? { image: { ...box, data: t.logo } }
+      : { text: { text: model.orgName, options: { ...box, fontFace: FONT, fontSize, bold: true, color: 'FFFFFF', valign: 'middle' as const } } };
+  const footer = (color: string) => ({ text: { text: model.footerText, options: { ...t.footer, fontFace: FONT, fontSize: 10, color } } });
+  pptx.defineSlideMaster({
+    title: t.masters.title,
+    background: { color: model.brandColor },
+    objects: [logo(t.logoOnTitle, 24), footer('FFFFFF')],
+    slideNumber: { ...t.slideNumber, fontFace: FONT, fontSize: 10, color: 'FFFFFF' },
+  });
+  pptx.defineSlideMaster({
+    title: t.masters.content,
+    background: { color: 'FFFFFF' },
+    objects: [
+      { rect: { x: 0, y: 0, w: W, h: t.headerHeight, fill: { color: model.brandColor } } },
+      logo(t.logoOnContent, 14),
+      footer(t.muted),
+      {
+        placeholder: {
+          options: { name: 'title', type: 'title', ...t.title, fontFace: FONT, fontSize: 26, bold: true, color: 'FFFFFF', align: 'left', valign: 'middle' },
+          text: '',
+        },
+      },
+    ],
+    slideNumber: { ...t.slideNumber, fontFace: FONT, fontSize: 10, color: t.muted },
+  });
+
+  /** The draft label is written on the slide itself so it is in every slide file of a draft. */
+  const draftLabel = (slide: Slide, dark = false) => {
     if (model.draft)
-      slide.addText(DRAFT_LABEL, {
-        x: W - 3.6,
-        y: 0.2,
-        w: 3.1,
-        h: 0.35,
-        fontFace: FONT,
-        fontSize: 11,
-        bold: true,
-        align: 'right',
-        color: dark ? 'FFFFFF' : 'B45309',
-      });
+      slide.addText(DRAFT_LABEL, { ...t.draftLabel, fontFace: FONT, fontSize: 11, bold: true, align: 'right', color: dark ? 'FFFFFF' : 'B45309' });
   };
   const titled = (title: string): Slide => {
-    const slide = pptx.addSlide();
-    slide.background = { color: 'FFFFFF' };
-    slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: W, h: 0.12, fill: { color: model.brandColor }, line: { color: model.brandColor } });
-    slide.addText(title, { x: 0.5, y: 0.35, w: 9, h: 0.6, fontFace: FONT, fontSize: 26, bold: true, color: INK });
-    slide.addText(`${model.clientName} · ${model.periodLabel}`, { x: 0.5, y: 0.95, w: 9, h: 0.3, fontFace: FONT, fontSize: 12, color: MUTED });
-    chrome(slide);
+    const slide = pptx.addSlide({ masterName: t.masters.content });
+    slide.addText(title, { placeholder: 'title' });
+    slide.addText(`${model.clientName} · ${model.periodLabel}`, { ...t.subtitle, fontFace: FONT, fontSize: 12, color: t.muted });
+    draftLabel(slide);
     return slide;
   };
-  const bullets = (slide: Slide, lines: string[], box: { x: number; y: number; w: number; h: number }, fontSize = 15) => {
+  const bullets = (slide: Slide, lines: string[], box: Box, fontSize = 15) => {
     if (!lines.length) return;
     slide.addText(
       lines.map((text) => ({ text, options: { bullet: true, breakLine: true } })),
-      { ...box, fontFace: FONT, fontSize, color: INK, valign: 'top', paraSpaceAfter: 8 },
+      { ...box, fontFace: FONT, fontSize, color: t.ink, valign: 'top', paraSpaceAfter: 8 },
     );
   };
-  const heading = (slide: Slide, text: string, x: number, y: number, w: number) =>
-    slide.addText(text, { x, y, w, h: 0.3, fontFace: FONT, fontSize: 12, bold: true, color: model.brandColor });
+  const heading = (slide: Slide, text: string) => slide.addText(text, { ...t.sideHeading, fontFace: FONT, fontSize: 12, bold: true, color: model.brandColor });
 
   // 1 — Title
-  const cover = pptx.addSlide();
-  cover.background = { color: model.brandColor };
-  cover.addText(model.clientName, { x: 0.8, y: 2.2, w: W - 1.6, h: 1.1, fontFace: FONT, fontSize: 44, bold: true, color: 'FFFFFF' });
-  cover.addText('Weekly status report', { x: 0.8, y: 3.3, w: W - 1.6, h: 0.6, fontFace: FONT, fontSize: 26, color: 'FFFFFF' });
-  cover.addText(model.periodLabel, { x: 0.8, y: 3.95, w: W - 1.6, h: 0.45, fontFace: FONT, fontSize: 18, color: 'FFFFFF' });
-  cover.addText(model.orgName, { x: 0.8, y: 5.6, w: W - 1.6, h: 0.4, fontFace: FONT, fontSize: 16, bold: true, color: 'FFFFFF' });
-  chrome(cover, true);
+  const cover = pptx.addSlide({ masterName: t.masters.title });
+  cover.addText(model.clientName, { ...t.cover.client, fontFace: FONT, fontSize: 44, bold: true, color: 'FFFFFF' });
+  cover.addText('Weekly status report', { ...t.cover.heading, fontFace: FONT, fontSize: 26, color: 'FFFFFF' });
+  cover.addText(model.periodLabel, { ...t.cover.period, fontFace: FONT, fontSize: 18, color: 'FFFFFF' });
+  cover.addText(model.orgName, { ...t.cover.org, fontFace: FONT, fontSize: 16, bold: true, color: 'FFFFFF' });
+  draftLabel(cover, true);
 
   // 2 — Summary
   const summary = titled('Summary');
-  summary.addShape(pptx.ShapeType.roundRect, {
-    x: 0.5,
-    y: 1.5,
-    w: 2.4,
-    h: 0.45,
-    rectRadius: 0.08,
-    fill: { color: HEALTH_COLOR[model.health.level] },
-    line: { color: HEALTH_COLOR[model.health.level] },
-  });
-  summary.addText(model.health.label, {
-    x: 0.5,
-    y: 1.5,
-    w: 2.4,
-    h: 0.45,
-    fontFace: FONT,
-    fontSize: 14,
-    bold: true,
-    color: 'FFFFFF',
-    align: 'center',
-    valign: 'middle',
-  });
-  summary.addText(model.health.reason, { x: 3.1, y: 1.5, w: W - 3.6, h: 0.45, fontFace: FONT, fontSize: 13, color: MUTED, valign: 'middle' });
-  bullets(summary, model.summary, { x: 0.5, y: 2.2, w: W - 1, h: 2.3 }, 16);
-  const tileW = (W - 1 - 0.3 * 3) / 4;
+  const healthColor = HEALTH_COLOR[model.health.level];
+  summary.addShape(pptx.ShapeType.roundRect, { ...t.healthBadge, rectRadius: 0.08, fill: { color: healthColor }, line: { color: healthColor } });
+  summary.addText(model.health.label, { ...t.healthBadge, fontFace: FONT, fontSize: 14, bold: true, color: 'FFFFFF', align: 'center', valign: 'middle' });
+  summary.addText(model.health.reason, { ...t.healthReason, fontFace: FONT, fontSize: 13, color: t.muted, valign: 'middle' });
+  bullets(summary, model.summary, t.summary, 16);
+  const row = t.kpiRow;
+  const tileW = (W - 2 * row.x - row.gap * (model.kpis.length - 1)) / model.kpis.length;
   model.kpis.forEach((k, i) => {
-    const x = 0.5 + i * (tileW + 0.3);
-    summary.addShape(pptx.ShapeType.roundRect, { x, y: 4.7, w: tileW, h: 1.9, rectRadius: 0.08, fill: { color: 'F4F5F7' }, line: { color: 'E4E7EB' } });
-    summary.addText(k.label, { x: x + 0.2, y: 4.8, w: tileW - 0.4, h: 0.35, fontFace: FONT, fontSize: 11, color: MUTED });
-    summary.addText(k.value, { x: x + 0.2, y: 5.15, w: tileW - 0.4, h: 0.8, fontFace: FONT, fontSize: 30, bold: true, color: INK });
-    if (k.change) summary.addText(k.change, { x: x + 0.2, y: 6.0, w: tileW - 0.4, h: 0.35, fontFace: FONT, fontSize: 11, color: MUTED });
+    const x = row.x + i * (tileW + row.gap);
+    summary.addShape(pptx.ShapeType.roundRect, { x, y: row.y, w: tileW, h: row.h, rectRadius: 0.08, fill: { color: 'F4F5F7' }, line: { color: 'E4E7EB' } });
+    summary.addText(k.label, { x: x + 0.2, y: row.y + 0.1, w: tileW - 0.4, h: 0.35, fontFace: FONT, fontSize: 11, color: t.muted });
+    summary.addText(k.value, { x: x + 0.2, y: row.y + 0.45, w: tileW - 0.4, h: 0.8, fontFace: FONT, fontSize: 30, bold: true, color: t.ink });
+    if (k.change) summary.addText(k.change, { x: x + 0.2, y: row.y + 1.3, w: tileW - 0.4, h: 0.35, fontFace: FONT, fontSize: 11, color: t.muted });
   });
 
   // 3 — Scope progress
   const scope = titled('Scope progress');
   const head = (text: string) => ({ text, options: { bold: true, color: 'FFFFFF', fill: { color: model.brandColor }, fontFace: FONT, fontSize: 11 } });
-  const cell = (text: string, align: 'left' | 'right' = 'left') => ({ text, options: { color: INK, fontFace: FONT, fontSize: 11, align } });
+  const cell = (text: string, align: 'left' | 'right' = 'left') => ({ text, options: { color: t.ink, fontFace: FONT, fontSize: 11, align } });
   scope.addTable(
     [
       [head('Phase'), head('Items'), head('Estimate h'), head('Done h'), head('% complete')],
@@ -235,14 +306,11 @@ export async function renderWeeklyPptx(model: DeckModel): Promise<Uint8Array> {
       ]),
       ...(model.morePhases ? [[cell(`…and ${model.morePhases} more`), cell(''), cell(''), cell(''), cell('')]] : []),
     ],
-    { x: 0.5, y: 1.6, w: 6.2, colW: [2.4, 0.8, 1.0, 0.9, 1.1], border: { type: 'solid', color: 'E4E7EB', pt: 1 }, rowH: 0.36 },
+    { x: t.table.x, y: t.table.y, w: t.table.w, colW: t.table.colW, border: { type: 'solid', color: 'E4E7EB', pt: 1 }, rowH: t.table.rowH },
   );
   if (model.phases.length)
     scope.addChart(pptx.ChartType.bar, [{ name: '% complete', labels: model.phases.map((p) => p.phase), values: model.phases.map((p) => Number(p.pct)) }], {
-      x: 7.1,
-      y: 1.5,
-      w: 5.7,
-      h: 4.8,
+      ...t.chart,
       barDir: 'col',
       chartColors: [model.brandColor],
       valAxisMinVal: 0,
@@ -262,19 +330,19 @@ export async function renderWeeklyPptx(model: DeckModel): Promise<Uint8Array> {
 
   // 4 — Completed this week
   const done = titled('Completed this week');
-  bullets(done, model.completed.statements.length ? model.completed.statements : ['No scope items were completed this week'], { x: 0.5, y: 1.6, w: 7.2, h: 5 });
-  heading(done, 'Completed items', 8.1, 1.6, 4.7);
-  bullets(done, model.completed.items, { x: 8.1, y: 1.95, w: 4.7, h: 4.6 }, 12);
+  bullets(done, model.completed.statements.length ? model.completed.statements : ['No scope items were completed this week'], t.statements);
+  heading(done, 'Completed items');
+  bullets(done, model.completed.items, t.sideList, 12);
 
   // 5 — Next week
   const next = titled('Next week');
-  bullets(next, model.nextWeek.statements, { x: 0.5, y: 1.6, w: 7.2, h: 5 });
-  heading(next, 'In progress and coming up', 8.1, 1.6, 4.7);
-  bullets(next, model.nextWeek.items, { x: 8.1, y: 1.95, w: 4.7, h: 4.6 }, 12);
+  bullets(next, model.nextWeek.statements, t.statements);
+  heading(next, 'In progress and coming up');
+  bullets(next, model.nextWeek.items, t.sideList, 12);
 
   // 6 — Risks
   const risks = titled('Risks & support needed');
-  bullets(risks, model.risks, { x: 0.5, y: 1.6, w: W - 1, h: 5 });
+  bullets(risks, model.risks, t.wide);
 
   return (await pptx.write({ outputType: 'uint8array' })) as Uint8Array;
 }

@@ -657,11 +657,13 @@ describe.skipIf(!testUrl)('weekly report agents (PostgreSQL integration)', () =>
       runWeekday: 1,
       runTime: '09:00',
       timeZone: 'UTC',
+      templateKey: 'default',
+      templateLabel: 'Default (mock)',
     });
     expect((await call('admin', 'PUT', '/api/v1/admin/weekly-report-settings', { enabled: true, runWeekday: 8, runTime: '09:00' })).status).toBe(400);
     expect((await call('admin', 'PUT', '/api/v1/admin/weekly-report-settings', { enabled: true, runWeekday: 3, runTime: '9:00' })).status).toBe(400);
     const saved = await call('admin', 'PUT', '/api/v1/admin/weekly-report-settings', { enabled: true, runWeekday: 3, runTime: '14:30' });
-    expect(saved.json).toEqual({ enabled: true, runWeekday: 3, runTime: '14:30', timeZone: 'UTC' });
+    expect(saved.json).toEqual({ enabled: true, runWeekday: 3, runTime: '14:30', timeZone: 'UTC', templateKey: 'default', templateLabel: 'Default (mock)' });
     const audit = await ctx.db.select().from(auditLog).where(eq(auditLog.action, 'weekly_report_settings.updated'));
     expect(audit).toHaveLength(1);
     expect(audit[0]?.changes).toMatchObject({ before: { runWeekday: 1 }, after: { runWeekday: 3, runTime: '14:30' } });

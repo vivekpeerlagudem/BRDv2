@@ -48,7 +48,7 @@ import { DomainError } from '../platform/errors/domain-error.ts';
 import { sanitizeText } from './ai/context.ts';
 import { checkNarrative, FALLBACK_TEXT, isBlocking, isWarning, SECTION_LABELS, SECTIONS } from './weekly-reports/checks.ts';
 import { collect, type WeeklySnapshot } from './weekly-reports/collect.ts';
-import { buildDeckModel, deckFileName, PPTX_CONTENT_TYPE, renderWeeklyPptx } from './weekly-reports/deck.ts';
+import { buildDeckModel, deckFileName, PPTX_CONTENT_TYPE, renderWeeklyPptx, resolveTemplateKey, WEEKLY_TEMPLATES } from './weekly-reports/deck.ts';
 import { googleEstimatesActive, latestEstimates, linkedSheet, loadCompanyFor, syncLinkedSheet } from './weekly-reports/estimates.ts';
 import { allowedSourceIds, buildWeeklyFacts } from './weekly-reports/facts.ts';
 import { matchItems } from './weekly-reports/match.ts';
@@ -309,8 +309,14 @@ function composeFlags(
 }
 
 const orgOf = async (ctx: AppContext) => {
-  const [org] = await ctx.db.select({ name: organizationSettings.organizationName, branding: organizationSettings.branding }).from(organizationSettings);
-  return { name: org?.name ?? '', branding: org?.branding ?? { primaryColor: '', footerText: '' } };
+  const [org] = await ctx.db
+    .select({ name: organizationSettings.organizationName, branding: organizationSettings.branding, weekly: organizationSettings.weeklyReportSettings })
+    .from(organizationSettings);
+  return {
+    name: org?.name ?? '',
+    branding: org?.branding ?? { primaryColor: '', footerText: '' },
+    templateKey: resolveTemplateKey(org?.weekly?.templateKey),
+  };
 };
 const draftDeck = (
   run: Run,
@@ -332,6 +338,7 @@ const draftDeck = (
       metrics,
       narrative,
     }),
+    org.templateKey,
   );
 
 /** Narrative (AI) → Checks → draft deck → one transaction that records everything. Shared by a run and a redraft. */
@@ -756,11 +763,17 @@ export async function downloadPptx(ctx: AppContext, actor: UserActor, id: string
 }
 
 // ───────────── schedule settings (Admin) ─────────────
+/** The template in use, for display: its key and name. */
+const templateOf = (weekly: { templateKey?: string }) => {
+  const templateKey = resolveTemplateKey(weekly.templateKey);
+  return { templateKey, templateLabel: WEEKLY_TEMPLATES[templateKey].label };
+};
+
 export async function getWeeklyReportSettings(ctx: AppContext, actor: UserActor) {
   requirePerm(actor, 'settings.manage');
   const [row] = await ctx.db.select({ weekly: organizationSettings.weeklyReportSettings, timeZone: organizationSettings.timeZone }).from(organizationSettings);
   if (!row) throw notFound('Organization settings');
-  return { ...row.weekly, timeZone: row.timeZone };
+  return { ...row.weekly, ...templateOf(row.weekly), timeZone: row.timeZone };
 }
 
 export async function updateWeeklyReportSettings(ctx: AppContext, actor: UserActor, input: z.infer<typeof weeklyReportSettingsInput>) {
@@ -768,12 +781,13 @@ export async function updateWeeklyReportSettings(ctx: AppContext, actor: UserAct
   return unitOfWork(ctx, actor, async (u) => {
     const [row] = await u.tx.select().from(organizationSettings).for('update');
     if (!row) throw notFound('Organization settings');
-    const after = { enabled: input.enabled, runWeekday: input.runWeekday, runTime: input.runTime };
+    // The template is not editable yet: keep the stored key (a real company template is added later as another key).
+    const after = { ...row.weeklyReportSettings, enabled: input.enabled, runWeekday: input.runWeekday, runTime: input.runTime };
     await u.tx
       .update(organizationSettings)
       .set({ weeklyReportSettings: after, updatedAt: ctx.now(), updatedBy: actor.userId })
       .where(eq(organizationSettings.id, row.id));
     await u.audit('weekly_report_settings.updated', null, { before: row.weeklyReportSettings, after });
-    return { ...after, timeZone: row.timeZone };
+    return { ...after, ...templateOf(after), timeZone: row.timeZone };
   });
 }

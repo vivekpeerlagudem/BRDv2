@@ -85,7 +85,7 @@ export const organizationSettings = pgTable('organization_settings', {
   leadRoundRobinCursor: uuid('lead_round_robin_cursor'),
   /** Weekly Report Agents: when the weekly run becomes due (organization time zone). */
   weeklyReportSettings: jsonb('weekly_report_settings')
-    .$type<{ enabled: boolean; runWeekday: number; runTime: string }>()
+    .$type<{ enabled: boolean; runWeekday: number; runTime: string; templateKey?: string }>()
     .notNull()
     .default({ enabled: true, runWeekday: 1, runTime: '09:00' }),
   ...audit,
