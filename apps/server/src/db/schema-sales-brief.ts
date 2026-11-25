@@ -67,13 +67,13 @@ export interface SalesMetricsDoc {
   metrics: SalesMetric[];
   funnel: SalesFunnelStep[];
   pipelineByStage: { stage: string; count: number; value: string; weighted: string }[];
+  pipelineTotals: { count: number; value: string; weighted: string };
   wonDeals: { dealId: string; name: string; owner: string; ownerId: string; amount: string | null; cycleDays: number | null }[];
   lostDeals: { dealId: string; name: string; owner: string; ownerId: string; amount: string | null; reason: string }[];
   lostReasons: { reason: string; count: number }[];
   reps: SalesRepRow[];
   attention: SalesAttentionDeal[];
   leadSources: { source: string; created: number; converted: number }[];
-  unviewedProposals: { proposalId: string; title: string; dealId: string; dealName: string; owner: string; ownerId: string; daysSinceSent: number }[];
 }
 export type SalesSignalKind = 'trend' | 'bottleneck' | 'risk' | 'opportunity' | 'concentration' | 'team';
 /** A finding computed by code (never by AI). The AI may only explain and act on these. */
