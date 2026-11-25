@@ -250,7 +250,7 @@ function build(img: { architecture: Buffer; thumbs: Buffer | null }): Block[] {
     }),
     h1('1', 'Purpose and outcome', true),
     h2('The requirement'),
-    p('Aakash Saha (owner) asked for three things, quoted:'),
+    p('The business asked for three things, quoted:'),
     ...bullets([
       '"The PPT and Google Sheets reports are independent of deal."',
       '"This will be for admins and CEO roles to get an understanding of overall sales and throughput."',
