@@ -9,6 +9,7 @@ import { applyClose, todayIso } from './crm.ts';
 import { isStalled, reversalConflicts, shouldMoveToProposalStage } from './domain.ts';
 import * as esign from './esign.ts';
 import { applyProposalEvent, expireProposals } from './proposals.ts';
+import * as salesBrief from './sales-brief.ts';
 import * as weeklyReports from './weekly-reports.ts';
 
 const {
@@ -466,7 +467,9 @@ export async function runScheduledScans(ctx: AppContext) {
   }
   // Weekly Report Agents: queue one run per company with an estimates sheet once the weekly run time has passed.
   const weekly = await weeklyReports.scheduleWeeklyReports(ctx);
-  return { flagged, expired, reconciled, reminders: due.length, weeklyReports: weekly };
+  // Weekly Sales Brief: queue the company-wide brief for leadership once its weekly run time has passed.
+  const briefs = await salesBrief.scheduleSalesBrief(ctx);
+  return { flagged, expired, reconciled, reminders: due.length, weeklyReports: weekly, salesBriefs: briefs };
 }
 
 // ───────────── job runner ─────────────
@@ -502,6 +505,29 @@ async function handle(ctx: AppContext, queue: string, payload: Record<string, un
       });
     case 'weekly_report.redraft':
       return weeklyReports.redraftJob(ctx, payload.runId as string);
+    case 'sales_brief.run':
+      // The brief is for leadership: every active admin is told once that it is ready (deduplicated per brief and person).
+      return salesBrief.runJob(ctx, payload.runId as string, {
+        onDraftReady: async (u, info) => {
+          const admins = await u.tx
+            .select({ userId: appUserProfile.userId })
+            .from(appUserProfile)
+            .where(and(eq(appUserProfile.role, 'admin'), eq(appUserProfile.status, 'active')));
+          for (const admin of admins)
+            await notify(ctx, u, {
+              userId: admin.userId,
+              eventType: 'sales_brief_ready',
+              title: 'Weekly sales brief ready',
+              body: info.status === 'ready' ? 'The draft is ready for your review.' : 'The draft needs your attention before it can be approved.',
+              linkPath: `/sales-brief/${info.run.id}`,
+              dedupeKey: `sales_brief_ready:${info.run.id}:${admin.userId}`,
+            });
+        },
+      });
+    case 'sales_brief.redraft':
+      return salesBrief.redraftJob(ctx, payload.runId as string);
+    case 'sales_brief.sheet':
+      return salesBrief.publishSheetJob(ctx, payload.runId as string);
     case 'esign.void':
       return ctx.esign.voidEnvelope(payload.envelopeId as string, payload.reason as string);
     case 'notify.email': {

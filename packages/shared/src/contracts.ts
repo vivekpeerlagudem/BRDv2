@@ -301,3 +301,34 @@ export const weeklyNarrativeUpdateInput = z
     rowVersion: z.number().int().min(1),
   })
   .refine((v) => Boolean(v.statements?.length || v.added?.length || v.removed?.length), { message: 'Nothing to change', path: ['statements'] });
+
+// ───────────────────────── Weekly Sales Brief (leadership) ─────────────────────────
+export const SALES_BRIEF_SECTIONS = ['headline', 'insights', 'actions', 'throughput', 'wins', 'pipeline', 'risks', 'team'] as const;
+export const salesBriefListQuery = z.object({
+  status: z.enum(WEEKLY_REPORT_STATUSES).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+/** Change, add or remove sentences of a sales brief. An added insight or action cites the findings it is about in `sources`. */
+export const salesBriefNarrativeUpdateInput = z
+  .object({
+    statements: z
+      .array(z.object({ id: z.string().max(20), text: z.string().trim().min(1).max(600) }))
+      .max(60)
+      .optional(),
+    added: z
+      .array(
+        z.object({ section: z.enum(SALES_BRIEF_SECTIONS), text: z.string().trim().min(1).max(600), sources: z.array(z.string().max(80)).max(12).default([]) }),
+      )
+      .max(20)
+      .optional(),
+    removed: z.array(z.string().max(20)).max(60).optional(),
+    rowVersion: z.number().int().min(1),
+  })
+  .refine((v) => Boolean(v.statements?.length || v.added?.length || v.removed?.length), { message: 'Nothing to change', path: ['statements'] });
+/** When the weekly sales brief becomes due (organization time zone) and the admin it runs for (null = the earliest active admin). */
+export const salesBriefSettingsInput = z.object({
+  enabled: z.boolean(),
+  runWeekday: z.number().int().min(1).max(7),
+  runTime: z.string().regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/, 'Use a 24-hour time such as 08:00'),
+  ownerUserId: uuid.nullable().optional(),
+});
