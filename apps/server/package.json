@@ -15,7 +15,8 @@
     "db:reset:dev": "tsx src/cli/reset-dev.ts",
     "worker": "tsx src/worker.ts",
     "serve": "tsx src/main.ts",
-    "bootstrap:admin": "tsx src/cli/bootstrap-admin.ts"
+    "bootstrap:admin": "tsx src/cli/bootstrap-admin.ts",
+    "weekly:demo": "tsx src/cli/weekly-demo.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.9.0",

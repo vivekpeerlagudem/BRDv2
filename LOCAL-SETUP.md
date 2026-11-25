@@ -113,3 +113,12 @@ Needs the migrations up to `0008` (`pnpm db:migrate`) and both dev servers runni
 A salesperson sees only reports of companies they own; a sales manager sees their team's.
 
 Google Sheets instead of CSV (optional, read-only): see DEPLOY.md "Estimates from Google Sheets". Locally set `ESTIMATES_SOURCE=google` and `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64` in `.env.local`, restart the server, then use **Link Google Sheet** and **Sync now** on the company card. This has not been tried against Google in this build.
+
+### Run the weekly report demo in one command
+```
+pnpm weekly:demo                          # first active company that has deals
+pnpm weekly:demo --company "Daily Bugle"  # a company by name
+```
+It imports `e2e/fixtures/estimates-sample.csv` as the company owner (skipped when the latest import is identical), creates the tasks `[S-001] …` (completed last week) and `[S-002] …` (open) if they are missing, generates the report with the AI simulator, writes the draft PowerPoint to `.data/weekly-demo/` and prints the run id, status, health, % complete, the file path and the report URL. Running it again creates a new version of the report, never duplicate tasks or imports. It refuses to run with `NODE_ENV=production`. The dev servers do not need to be running; start them to open the printed URL.
+
+The slides use the template "Default (mock)" (`WEEKLY_TEMPLATES.default` in `modules/weekly-reports/deck.ts`): two slide masters with the brand colour, a header bar, the Kensium logo, footer text and slide number. Settings → Weekly reports shows the template in use.

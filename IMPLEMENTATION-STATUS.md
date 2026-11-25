@@ -111,3 +111,10 @@ Verification (2026-11-25, this machine, branch `feature/weekly-report-agents`):
 | `pnpm verify` (typecheck, lint, test, build) | Pass — **260 tests in 21 files**; Biome 148 files, 3 warnings that existed before this feature |
 | `e2e/weekly-reports.spec.ts` | Pass (1 test) |
 | `pnpm test:e2e` (all specs) | **28 passed, 10 failed.** The 10 failures are in specs written before this feature (`ai`, `crm-edit`, `journey`, `marvel-seed`, `personas-demo`, `personas-sign-demo`, `proposal-ext`, `qa-demo` B, `reports`, `session-isolation`). They expect the original demo data and screens: user names "Riley Chen" / "Avery Admin" / "Jordan Patel" (the users were renamed), a published template named "Services proposal" (not in the Marvel-only database), and the old person form with a plain Company drop-down. They were not changed. |
+
+## Weekly Report Agents — Part 3 (2026-11-25)
+| Piece | Where | Status |
+|---|---|---|
+| Named PowerPoint template `default` ("Default (mock)") on slide masters `WR_TITLE` and `WR_CONTENT`: brand colour, header bar, Kensium logo (PNG generated once from the SVG), footer text, slide number, fixed positions for title, KPI tiles, table, chart and statements | `modules/weekly-reports/deck.ts`, `deck-logo.ts`, `deck-unit.test.ts` | Built — a mock, not the real company template; not opened in PowerPoint |
+| `weekly_report_settings.templateKey` (code default `default`, no migration); shown read-only in Settings → Weekly reports | `modules/weekly-reports.ts`, `apps/web/src/pages/settings.tsx` | Built |
+| `pnpm weekly:demo` | `apps/server/src/cli/weekly-demo.ts` | Built — run twice on `crm_dev` (second run: new version, no duplicate tasks or import) |

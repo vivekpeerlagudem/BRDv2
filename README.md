@@ -65,6 +65,7 @@ Follow [LOCAL-SETUP.md](LOCAL-SETUP.md) once (database roles, `.env.local`, migr
 | `pnpm dev:server` | API on http://localhost:3000 (also runs background jobs in development) |
 | `pnpm dev:web` | Web app on http://localhost:5273 (buyer links on http://proposals.localhost:5273) |
 | `pnpm db:migrate` / `pnpm db:seed` | Create tables / load demo data (seed only on an empty database) |
+| `pnpm weekly:demo` | Run the weekly report demo: imports the sample estimates, creates two demo tasks, generates a report and writes the draft PowerPoint to `.data/weekly-demo/` (development only) |
 | `pnpm verify` | Typecheck, lint, unit + integration tests, build |
 | `pnpm test:e2e` | Browser tests through the real UI (Microsoft Edge) |
 
