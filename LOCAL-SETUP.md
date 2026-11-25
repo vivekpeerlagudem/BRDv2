@@ -95,3 +95,30 @@ The browser tests run against the **development** database. They only add record
 | Sending a proposal fails with a PDF error | Microsoft Edge is missing or blocked; PDFs are rendered by the installed Edge |
 | `pnpm install` is very slow | The project folder is inside OneDrive; pause OneDrive sync during installs |
 | Port already in use | Another program uses 3000 or 5273; stop it or change the port (section 6) |
+
+## 10. Weekly reports — demo steps
+Needs the migrations up to `0008` (`pnpm db:migrate`) and both dev servers running. Everything uses the AI simulator.
+
+1. Sign in as the admin. **AI settings** → AI must be on and the **Weekly client report** feature switched on (otherwise the text is placeholders you write yourself).
+2. **Companies** → open a company you own (or any company as admin).
+3. In the **Weekly reports** card choose `e2e/fixtures/estimates-sample.csv` → **Upload estimates CSV**. The card shows "8 scope items · 220 h".
+4. Optional, to see progress: create tasks on that company whose title contains a scope id from the sheet, for example `[S-003] Data migration`, and complete one.
+5. **Generate now**. The run shows "Queued" or "Generating…" and becomes "Ready for review" or "Needs attention" within a few seconds (the dev API runs jobs itself).
+6. **Open** → the report page: figures, summary, completed, next week, risks, each sentence with its sources.
+7. **Edit** a sentence → **Save** (it gets the "Edited" label). **Add sentence** adds your own. **Regenerate** replaces all text with a new AI draft; the figures stay.
+8. **Approve** → tick "I checked the flagged figures" if the dialog shows warnings → **Approve report**.
+9. **Download final** → `<Client>_Weekly_Status_<week end>_v1.pptx`. Open it in PowerPoint.
+10. **Weekly reports** in the sidebar lists all reports you may see. **Settings → Weekly reports** (admin) sets the weekday and time of the automatic run (default Monday 09:00, organization time zone).
+
+A salesperson sees only reports of companies they own; a sales manager sees their team's.
+
+Google Sheets instead of CSV (optional, read-only): see DEPLOY.md "Estimates from Google Sheets". Locally set `ESTIMATES_SOURCE=google` and `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64` in `.env.local`, restart the server, then use **Link Google Sheet** and **Sync now** on the company card. This has not been tried against Google in this build.
+
+### Run the weekly report demo in one command
+```
+pnpm weekly:demo                          # first active company that has deals
+pnpm weekly:demo --company "Daily Bugle"  # a company by name
+```
+It imports `e2e/fixtures/estimates-sample.csv` as the company owner (skipped when the latest import is identical), creates the tasks `[S-001] …` (completed last week) and `[S-002] …` (open) if they are missing, generates the report with the AI simulator, writes the draft PowerPoint to `.data/weekly-demo/` and prints the run id, status, health, % complete, the file path and the report URL. Running it again creates a new version of the report, never duplicate tasks or imports. It refuses to run with `NODE_ENV=production`. The dev servers do not need to be running; start them to open the printed URL.
+
+The slides use the template "Default (mock)" (`WEEKLY_TEMPLATES.default` in `modules/weekly-reports/deck.ts`): two slide masters with the brand colour, a header bar, the Kensium logo, footer text and slide number. Settings → Weekly reports shows the template in use.

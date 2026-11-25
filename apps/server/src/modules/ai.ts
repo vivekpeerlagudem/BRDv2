@@ -47,7 +47,7 @@ const publicMeta = (m: AiMeta) => ({
   costMicroUsd: m.costMicroUsd,
 });
 
-const numbersIn = (value: unknown, out = new Set<string>()): Set<string> => {
+export const numbersIn = (value: unknown, out = new Set<string>()): Set<string> => {
   if (typeof value === 'string' || typeof value === 'number') {
     for (const m of String(value).matchAll(/\d[\d,]*(?:\.\d+)?/g)) out.add(m[0].replace(/,/g, '').replace(/\.0+$/, ''));
   } else if (value && typeof value === 'object') for (const v of Object.values(value)) numbersIn(v, out);
@@ -481,6 +481,8 @@ export async function decide(ctx: AppContext, actor: UserActor, generationId: st
   return unitOfWork(ctx, actor, async (u) => {
     const [g] = await u.tx.select().from(aiGeneration).where(eq(aiGeneration.id, generationId)).for('update');
     if (!g || g.requestedBy !== actor.userId) throw notFound('AI suggestion');
+    // Weekly report text is decided only by approving the report (modules/weekly-reports.ts), never here.
+    if (g.feature === 'weekly_report') throw rule('WEEKLY_REPORT_DECIDED_BY_APPROVAL', 'This text is accepted by approving the weekly report');
     if (g.status !== 'pending') throw conflict('INVALID_STATE_TRANSITION', 'This suggestion was already decided');
     const output = g.output as { text?: string; subject?: string; body?: string; overview?: string };
     let accepted: Record<string, unknown> | null = null;
@@ -635,12 +637,16 @@ export async function updateSettings(ctx: AppContext, actor: UserActor, input: z
     const [row] = await u.tx.select({ id: organizationSettings.id, ai: organizationSettings.aiSettings }).from(organizationSettings).for('update');
     if (!row) throw forbidden('NOT_CONFIGURED', 'Organization settings are missing');
     const before = resolveAiSettings(row.ai);
+    // Feature switches are merged with the stored ones: a client that does not know a newer switch
+    // (for example weekly_report) must not reset it by leaving it out.
+    const sent = Object.fromEntries(Object.entries(input.features).filter(([, v]) => v !== undefined));
+    const after = { ...input, features: { ...(row.ai.features ?? {}), ...sent } };
     await u.tx
       .update(organizationSettings)
-      .set({ aiSettings: input, updatedAt: ctx.now(), updatedBy: actor.userId })
+      .set({ aiSettings: after, updatedAt: ctx.now(), updatedBy: actor.userId })
       .where(eq(organizationSettings.id, row.id));
-    await u.audit('ai.settings_changed', null, { before, after: input });
-    return { settings: resolveAiSettings(input) };
+    await u.audit('ai.settings_changed', null, { before, after });
+    return { settings: resolveAiSettings(after) };
   });
 }
 

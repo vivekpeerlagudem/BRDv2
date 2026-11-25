@@ -28,6 +28,8 @@ export const PERMISSIONS = {
   'ai.use': { admin: 'all', sales_manager: 'all', salesperson: 'all' }, // PERM-134..139
   'lead.view': { admin: 'all', sales_manager: 'team', salesperson: 'own' }, // PERM-093 (managed leads, owner-scoped)
   'lead.manage': { admin: 'all', sales_manager: 'team', salesperson: 'own' }, // create/edit/assign/qualify/convert managed leads
+  'weekly_report.view': { admin: 'all', sales_manager: 'team', salesperson: 'own' }, // weekly client status reports (scoped by company owner)
+  'weekly_report.manage': { admin: 'all', sales_manager: 'team', salesperson: 'own' }, // import estimates, generate, approve
 } as const satisfies Record<string, Record<Role, Scope>>;
 
 export type PermKey = keyof typeof PERMISSIONS;

@@ -9,6 +9,7 @@ import { applyClose, todayIso } from './crm.ts';
 import { isStalled, reversalConflicts, shouldMoveToProposalStage } from './domain.ts';
 import * as esign from './esign.ts';
 import { applyProposalEvent, expireProposals } from './proposals.ts';
+import * as weeklyReports from './weekly-reports.ts';
 
 const {
   jobOutbox,
@@ -463,7 +464,9 @@ export async function runScheduledScans(ctx: AppContext) {
       });
     });
   }
-  return { flagged, expired, reconciled, reminders: due.length };
+  // Weekly Report Agents: queue one run per company with an estimates sheet once the weekly run time has passed.
+  const weekly = await weeklyReports.scheduleWeeklyReports(ctx);
+  return { flagged, expired, reconciled, reminders: due.length, weeklyReports: weekly };
 }
 
 // ───────────── job runner ─────────────
@@ -482,6 +485,23 @@ async function handle(ctx: AppContext, queue: string, payload: Record<string, un
       return esign.processWebhook(ctx, payload.envelopeId as string, payload.inboxId as string | undefined);
     case 'esign.fetch-signed':
       return esign.fetchSigned(ctx, payload.signatureRequestId as string);
+    case 'weekly_report.run':
+      // A scheduled report nobody asked for by hand: tell the person it ran as (the company owner) that it is ready.
+      return weeklyReports.runJob(ctx, payload.runId as string, {
+        onDraftReady: async (u, info) => {
+          if (info.run.trigger !== 'schedule') return;
+          await notify(ctx, u, {
+            userId: info.run.runAsUserId,
+            eventType: 'weekly_report_ready',
+            title: `Weekly report ready for ${info.clientName}`,
+            body: info.status === 'ready' ? 'The draft is ready for your review.' : 'The draft needs your attention before it can be approved.',
+            linkPath: `/weekly-reports/${info.run.id}`,
+            dedupeKey: `weekly_report_ready:${info.run.id}`,
+          });
+        },
+      });
+    case 'weekly_report.redraft':
+      return weeklyReports.redraftJob(ctx, payload.runId as string);
     case 'esign.void':
       return ctx.esign.voidEnvelope(payload.envelopeId as string, payload.reason as string);
     case 'notify.email': {

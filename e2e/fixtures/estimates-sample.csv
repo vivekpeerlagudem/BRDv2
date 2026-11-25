@@ -1,0 +1,9 @@
+Scope ID,Task,Phase,Estimate hours,Status,% Done,Actual hours
+S-001,Requirements workshop and sign-off,Discovery,16,Done,100,16.5
+S-002,Solution design document,Discovery,24,In progress,50,
+S-003,ERP connector for orders,Build,40,In progress,25,
+S-004,Inventory sync service,Build,32,Not started,0,
+S-005,Customer portal pages,Build,48,Not started,,
+S-006,Integration test cycle,Test,24,Not started,,
+S-007,User acceptance testing support,Test,16,,,
+S-008,Go-live and hypercare,Launch,20,,,

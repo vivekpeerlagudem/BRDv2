@@ -51,7 +51,7 @@ export interface ESignatureProvider {
 }
 
 // ───────────────────────── AI provider port (ADR-014: provider-switchable, no tools, no side effects) ─────────────────────────
-export type AiFeature = 'draft_section' | 'presend_review' | 'deal_summary' | 'rewrite_text' | 'follow_up_email';
+export type AiFeature = 'draft_section' | 'presend_review' | 'deal_summary' | 'rewrite_text' | 'follow_up_email' | 'weekly_report';
 
 /** One structured-output completion. The provider receives text only: it has no tools and cannot act on anything. */
 export interface AiRequest {
@@ -113,6 +113,22 @@ export interface AiProvider {
   complete(req: AiRequest): Promise<AiResult>;
   /** Configuration status only — never makes a (billable) call. */
   status(): AiProviderStatus;
+}
+
+/** Where a client's estimates (scope) sheet can be read from, besides CSV upload. Read-only by contract. */
+export interface EstimatesSourceStatus {
+  provider: string;
+  simulated: boolean;
+  configured: boolean;
+  detail: string;
+}
+export interface EstimatesSource {
+  readonly name: string;
+  readonly simulated: boolean;
+  /** Rows of the range, header first, every cell as text. */
+  fetchRows(ref: { spreadsheetId: string; range: string }): Promise<string[][]>;
+  /** Configuration status only — never makes a network call. */
+  status(): EstimatesSourceStatus;
 }
 
 export interface TransactionalEmail {

@@ -187,6 +187,48 @@ function followUp(task: Json, c: Json): Json {
   };
 }
 
+/** Weekly client report: statements built only from the facts, each citing the ids it used; numbers are copied, never computed. */
+function weeklyReport(c: Json): Json {
+  const metric = (id: string): string | null => (c.metrics ?? []).find((m: Json) => m.id === `metric:${id}`)?.value ?? null;
+  const client = c.client?.name ?? 'your team';
+  const name = (s: Json) => String(s.title ?? '').replace(/[.!?]+$/, '');
+  const summary: Json[] = [];
+  const done = metric('E-06');
+  const pct = metric('E-05');
+  if (done !== null && pct !== null)
+    summary.push({
+      text: `This week we completed ${done} scope ${done === '1' ? 'item' : 'items'} for ${client}, and the project is now ${pct}% complete by estimated hours.`,
+      sources: ['metric:E-06', 'metric:E-05'],
+    });
+  const remaining = metric('E-07');
+  const active = metric('E-08');
+  if (remaining !== null && active !== null)
+    summary.push({
+      text: `${remaining} estimated hours remain, with ${active} scope ${active === '1' ? 'item' : 'items'} currently in progress.`,
+      sources: ['metric:E-07', 'metric:E-08'],
+    });
+  if (!summary.length) summary.push({ text: `This is the weekly status report for ${client}.`, sources: [String(c.client?.id ?? 'period')] });
+  const completed = (c.scopeDone ?? [])
+    .filter((s: Json) => s.completedThisWeek)
+    .slice(0, 5)
+    .map((s: Json) => ({ text: `We completed ${name(s)}.`, sources: [s.id] }));
+  const nextWeek = [
+    ...(c.scopeInProgress ?? []).slice(0, 3).map((s: Json) => ({ text: `We will continue work on ${name(s)}.`, sources: [s.id] })),
+    ...(c.scopeNext ?? []).slice(0, 2).map((s: Json) => ({ text: `We plan to start ${name(s)}.`, sources: [s.id] })),
+  ];
+  const overdue = metric('E-10');
+  const risks =
+    overdue !== null && overdue !== '0'
+      ? [
+          {
+            text: `${overdue} ${overdue === '1' ? 'task is' : 'tasks are'} overdue on scope items and we are prioritising ${overdue === '1' ? 'it' : 'them'}.`,
+            sources: ['metric:E-10'],
+          },
+        ]
+      : [];
+  return { summary, completed, nextWeek, risks };
+}
+
 export class MockAiProvider implements AiProvider {
   readonly name = 'fake';
   readonly simulated = true;
@@ -225,7 +267,9 @@ export class MockAiProvider implements AiProvider {
               ? summary(context)
               : req.feature === 'rewrite_text'
                 ? rewrite(task)
-                : followUp(task, context);
+                : req.feature === 'weekly_report'
+                  ? weeklyReport(context)
+                  : followUp(task, context);
       text = JSON.stringify(answer);
     }
     return {

@@ -43,6 +43,7 @@ import {
   statusTone,
   useAction,
 } from '../lib/ui.tsx';
+import { WeeklyReportsCard } from './weekly-reports.tsx';
 
 type Page<T> = { items: T[]; total: number };
 interface CompanyRow {
@@ -578,6 +579,7 @@ export function CompanyPage() {
                   )}
                 </Card>
               </div>
+              <WeeklyReportsCard companyId={id} canEdit={c.permissions.edit && !c.archivedAt} />
               <Card title="Timeline">
                 <Timeline type="company" id={id} />
               </Card>

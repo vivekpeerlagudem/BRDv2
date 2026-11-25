@@ -29,11 +29,16 @@ const envSchema = z.object({
   AI_MODEL_FOLLOW_UP: z.string().default('claude-sonnet-5-5'),
   AI_MODEL_REWRITE: z.string().default('claude-haiku-5-5'),
   AI_MODEL_REVIEW: z.string().default('claude-opus-5-5'),
+  AI_MODEL_WEEKLY: z.string().default('claude-sonnet-5-5'),
   AI_TIMEOUT_MS: z.coerce.number().int().min(1000).max(600000).default(90000),
   AI_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(4).default(2),
   AI_RETRY_DELAY_MS: z.coerce.number().int().min(0).max(30000).default(1000),
   AI_RATE_PER_MINUTE: z.coerce.number().int().min(1).max(1000).default(20),
   TXEMAIL_PROVIDER: z.enum(['log']).default('log'),
+  /** Where estimates (scope) sheets come from: CSV upload only, or also a read-only Google Sheets reader. */
+  ESTIMATES_SOURCE: z.enum(['csv', 'google']).default('csv'),
+  /** Service-account key file (JSON), base64-encoded. Secret: needed only when ESTIMATES_SOURCE=google. */
+  GOOGLE_SERVICE_ACCOUNT_JSON_BASE64: z.string().optional(),
   PDF_BROWSER_CHANNEL: z.string().default('msedge'),
   /** Explicit, logged opt-in to run production with stand-in providers (never appropriate for real customers). */
   ALLOW_SIMULATED_PROVIDERS: z.enum(['true', 'false']).default('false'),
@@ -76,6 +81,8 @@ export function parseConfig(source: Record<string, string | undefined>): Config 
 export function productionProviderIssues(config: Config): string[] {
   const issues: string[] = [];
   if (config.AI_PROVIDER === 'anthropic' && !config.ANTHROPIC_API_KEY) issues.push('ANTHROPIC_API_KEY: required when AI_PROVIDER=anthropic');
+  if (config.ESTIMATES_SOURCE === 'google' && !config.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64)
+    issues.push('GOOGLE_SERVICE_ACCOUNT_JSON_BASE64: required when ESTIMATES_SOURCE=google');
   if (config.NODE_ENV !== 'production' || config.ALLOW_SIMULATED_PROVIDERS === 'true') return issues;
   if (config.ESIGN_PROVIDER === 'fake') issues.push('ESIGN_PROVIDER: the e-signature simulator is not legally valid and cannot be used in production (OD-03)');
   if (config.TXEMAIL_PROVIDER === 'log') issues.push('TXEMAIL_PROVIDER: "log" does not send email and cannot be used in production (OD-14)');

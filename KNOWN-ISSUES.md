@@ -52,3 +52,19 @@ Last updated: 2026-11-18. Scope gaps per requirement are in REQUIREMENT-TRACEABI
 | K-37 | Linked emails and meetings are not part of AI context because mailbox integration is not built |
 | K-38 | Refusals from the provider are shown to the user as "declined"; the provider's automatic fallback to another model is not enabled |
 | K-39 | The AI browser tests temporarily raise the daily AI limit in the development database and restore the previous AI settings afterwards; if a run is killed midway the settings can be left changed (check **AI settings**) |
+
+## Weekly reports
+| # | Issue |
+|---|---|
+| K-40 | The Google Sheets reader has never called Google. Token exchange, request shape and error mapping are tested with a fake `fetch` and a throw-away key; a first real call may still surface a difference (sharing, API not enabled, range format) |
+| K-41 | Report text comes from the AI simulator. It says nothing about what a real model would write; prompt `weekly_report/v1` has never been read by a real model and there is no evaluation set |
+| K-42 | The AI call for a report counts against the company owner's per-user daily AI limit. An owner with many clients can reach the limit on Monday morning; the remaining reports then fall back to placeholder text that a person must write |
+| K-43 | One schedule (weekday and time) for the whole organization. No per-client or per-owner schedule, and no per-client switch to skip a week |
+| K-44 | Reports are not emailed, by design: a person downloads the approved PowerPoint and sends it. The only message is an in-app notification to the company owner when a scheduled draft is ready |
+| K-45 | The PowerPoint files were checked by reading their contents in tests (slide count, texts, draft label), not by opening them in PowerPoint. Layout, fonts (Inter is named; PowerPoint substitutes where it is not installed) and overflow of long text have not been checked visually |
+| K-46 | The slide design is a plain built-in layout; the real Kensium template is not used |
+| K-47 | Progress comes from CRM tasks matched to scope rows by `[scope id]` in the task title or an identical title. Scope rows without a matching task count as not started; there is no screen to match them by hand |
+| K-48 | Each Google sync and each CSV upload stores a full new import; old imports are kept and never cleaned up |
+| K-49 | A linked Google Sheet cannot be unlinked in the UI (link a different sheet, or switch `ESTIMATES_SOURCE` back to `csv`) |
+| K-50 | The weekly-report browser test switches the weekly-report AI feature on in the development database and restores the previous AI settings afterwards; if a run is killed midway the settings can be left changed (same as K-39) |
+| K-51 | Older e2e specs expect the standard `pnpm db:seed` data; run them on a freshly seeded database, not the Marvel demo. On the Marvel demo database 10 of them fail (renamed users, no "Services proposal" template); `e2e/weekly-reports.spec.ts` passes on both |

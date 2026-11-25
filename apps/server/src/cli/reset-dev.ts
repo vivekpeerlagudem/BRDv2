@@ -39,6 +39,7 @@ const BUSINESS_TABLES = [
   'automation_execution',
   'buyer_response',
   'buyer_session',
+  'client_estimate_source',
   'company',
   'contact',
   'deal',
@@ -47,6 +48,8 @@ const BUSINESS_TABLES = [
   'deal_stage_history',
   'download_event',
   'esign_webhook_inbox',
+  'estimate_import',
+  'estimate_item',
   'file_object',
   'import_batch',
   'import_record_link',
@@ -68,6 +71,7 @@ const BUSINESS_TABLES = [
   'timeline_event_anchor',
   'view_session',
   'viewer_identity',
+  'weekly_report_run',
 ];
 
 // Content kept by default; cleared only with --demo.

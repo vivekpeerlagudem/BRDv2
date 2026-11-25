@@ -198,7 +198,7 @@ export const userPatchInput = z.object({
 });
 export const deactivateInput = z.object({ reassignToUserId: uuid });
 // ───────────────────────── AI assistance (BR-AIA-001..008) ─────────────────────────
-export const AI_FEATURES = ['draft_section', 'presend_review', 'deal_summary', 'rewrite_text', 'follow_up_email'] as const;
+export const AI_FEATURES = ['draft_section', 'presend_review', 'deal_summary', 'rewrite_text', 'follow_up_email', 'weekly_report'] as const;
 export type AiFeatureKey = (typeof AI_FEATURES)[number];
 export const AI_REWRITE_MODES = ['improve', 'professional', 'concise', 'expand', 'friendly', 'formal', 'simplify', 'custom'] as const;
 export const AI_FOLLOW_UP_SCENARIOS = ['initial', 'viewed', 'revisited', 'not_viewed', 'changes_requested', 'gone_quiet'] as const;
@@ -239,5 +239,64 @@ export const aiSettingsInput = z.object({
   enabled: z.boolean(),
   perUserDailyCalls: z.number().int().min(1).max(1000),
   monthlyBudgetUsd: z.number().min(0).max(100000),
-  features: z.object(Object.fromEntries(AI_FEATURES.map((f) => [f, z.boolean()])) as Record<AiFeatureKey, z.ZodBoolean>),
+  // 'weekly_report' was added later: optional, so clients that send only the original switches keep working (default on).
+  features: z
+    .object(
+      Object.fromEntries(AI_FEATURES.filter((f) => f !== 'weekly_report').map((f) => [f, z.boolean()])) as Record<
+        Exclude<AiFeatureKey, 'weekly_report'>,
+        z.ZodBoolean
+      >,
+    )
+    .extend({ weekly_report: z.boolean().optional() }),
 });
+
+// ───────────────────────── Weekly Report Agents (prototype) ─────────────────────────
+/** The client's estimates (scope) sheet, uploaded as CSV text (size and row limits are enforced by the server). */
+export const estimatesUploadInput = z.object({
+  fileName: z.string().trim().min(1).max(255),
+  text: z.string().min(1).max(3_000_000),
+});
+/** Link a company to its estimates sheet in Google Sheets: the sheet URL (or id) and an optional A1 range. */
+export const estimateSourceLinkInput = z.object({
+  url: z.string().trim().min(1).max(500),
+  range: z
+    .string()
+    .trim()
+    .max(100)
+    .regex(/^[A-Za-z0-9 _!:$.-]+$/, 'Use a range such as A1:Z2000 or Estimates!A1:G500')
+    .optional(),
+});
+export const WEEKLY_REPORT_STATUSES = ['queued', 'running', 'ready', 'needs_attention', 'approved', 'failed'] as const;
+export const weeklyReportListQuery = z.object({
+  companyId: uuid.optional(),
+  status: z.enum(WEEKLY_REPORT_STATUSES).optional(),
+  /** Company name contains … */
+  q: z.string().trim().max(120).optional(),
+});
+export const weeklyReportApproveInput = z.object({
+  rowVersion: z.number().int().min(1),
+  /** Required (true) when the report has warnings, for example a figure a person typed that is not in the report data. */
+  acknowledgeWarnings: z.boolean().optional(),
+});
+/** When the weekly run becomes due, in the organization time zone. Weekday: 1 = Monday … 7 = Sunday. */
+export const weeklyReportSettingsInput = z.object({
+  enabled: z.boolean(),
+  runWeekday: z.number().int().min(1).max(7),
+  runTime: z.string().regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/, 'Use a 24-hour time such as 09:00'),
+});
+export const WEEKLY_REPORT_SECTIONS = ['summary', 'completed', 'nextWeek', 'risks'] as const;
+const weeklyStatementText = z.string().trim().min(1).max(600);
+export const weeklyNarrativeUpdateInput = z
+  .object({
+    statements: z
+      .array(z.object({ id: z.string().max(20), text: weeklyStatementText }))
+      .max(40)
+      .optional(),
+    added: z
+      .array(z.object({ section: z.enum(WEEKLY_REPORT_SECTIONS), text: weeklyStatementText, sources: z.array(z.string().max(80)).max(10).default([]) }))
+      .max(20)
+      .optional(),
+    removed: z.array(z.string().max(20)).max(40).optional(),
+    rowVersion: z.number().int().min(1),
+  })
+  .refine((v) => Boolean(v.statements?.length || v.added?.length || v.removed?.length), { message: 'Nothing to change', path: ['statements'] });

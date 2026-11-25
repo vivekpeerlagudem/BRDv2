@@ -34,6 +34,7 @@ export const FEATURE_LABEL: Record<string, string> = {
   deal_summary: 'Opportunity summary',
   rewrite_text: 'Rewrite selected text',
   follow_up_email: 'Follow-up email draft',
+  weekly_report: 'Weekly client report',
 };
 const SCENARIO_LABEL: Record<(typeof AI_FOLLOW_UP_SCENARIOS)[number], string> = {
   initial: 'First follow-up after sending',
