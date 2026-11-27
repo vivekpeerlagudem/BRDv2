@@ -50,7 +50,13 @@ export function sessionBlock(input: {
   open: (RecordRef & { alias: string }) | null;
   summary: string | null;
 }): string {
-  const local = new Intl.DateTimeFormat('en-CA', { timeZone: input.timeZone, year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'long' }).formatToParts(input.now);
+  const local = new Intl.DateTimeFormat('en-CA', {
+    timeZone: input.timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'long',
+  }).formatToParts(input.now);
   const part = (t: string) => local.find((p) => p.type === t)?.value ?? '';
   const scope = input.actor.role === 'admin' ? 'the whole company' : input.actor.role === 'sales_manager' ? 'their own team' : 'their own records';
   return [

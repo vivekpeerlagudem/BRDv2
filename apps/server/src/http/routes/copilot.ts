@@ -13,7 +13,9 @@ export function register(api: Api, kit: RouteKit): void {
   const { ctx } = kit;
 
   api.get('/copilot/conversations', async (c) => c.json(await conversations.listConversations(ctx, kit.actor(c))));
-  api.post('/copilot/conversations', async (c) => c.json(await conversations.createConversation(ctx, kit.actor(c), await kit.body(c, copilotConversationInput)), 201));
+  api.post('/copilot/conversations', async (c) =>
+    c.json(await conversations.createConversation(ctx, kit.actor(c), await kit.body(c, copilotConversationInput)), 201),
+  );
   api.get('/copilot/conversations/:id', async (c) => c.json(await conversations.getConversation(ctx, kit.actor(c), kit.id(c))));
   api.delete('/copilot/conversations/:id', async (c) => c.json(await conversations.deleteConversation(ctx, kit.actor(c), kit.id(c))));
 

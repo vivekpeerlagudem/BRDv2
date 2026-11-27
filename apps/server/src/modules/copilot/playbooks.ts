@@ -74,7 +74,11 @@ export const PLAYBOOKS: Record<PlaybookName, { version: number; text: string }> 
   },
   'weekly-reports': {
     version: 1,
-    text: ['1. weekly_report_status (optionally for one company).', '2. Say which reports are ready, need attention or are approved, and for which week.', 'Approving and sending a report is done by a person in the Weekly reports screen.'].join('\n'),
+    text: [
+      '1. weekly_report_status (optionally for one company).',
+      '2. Say which reports are ready, need attention or are approved, and for which week.',
+      'Approving and sending a report is done by a person in the Weekly reports screen.',
+    ].join('\n'),
   },
   'my-day': {
     version: 1,

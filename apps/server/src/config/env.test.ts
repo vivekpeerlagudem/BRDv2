@@ -52,7 +52,7 @@ describe('parseConfig', () => {
     expect(() => parseConfig({ ...valid, AI_PROVIDER: 'anthropic' })).toThrow(/ANTHROPIC_API_KEY/);
     expect(parseConfig({ ...valid, AI_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'test-key-not-real' }).AI_PROVIDER).toBe('anthropic');
     // OpenAI-compatible provider: base URL, key and main model are all required; the fake provider needs none of them.
-    expect(() => parseConfig({ ...valid, AI_PROVIDER: 'openai' })).toThrow(/AI_BASE_URL[^]*AI_API_KEY[^]*AI_MODEL_MAIN/);
+    expect(() => parseConfig({ ...valid, AI_PROVIDER: 'openai' })).toThrow(/AI_BASE_URL[sS]*AI_API_KEY[sS]*AI_MODEL_MAIN/);
     const openai = parseConfig({
       ...valid,
       AI_PROVIDER: 'openai',

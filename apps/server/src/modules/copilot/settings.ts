@@ -45,7 +45,9 @@ export function resolveCopilotSettings(raw: CopilotSettings | null | undefined):
   };
 }
 
-export async function loadCopilotSettings(ctx: AppContext): Promise<ResolvedCopilotSettings & { timeZone: string; organizationName: string; currency: string }> {
+export async function loadCopilotSettings(
+  ctx: AppContext,
+): Promise<ResolvedCopilotSettings & { timeZone: string; organizationName: string; currency: string }> {
   const [row] = await ctx.db
     .select({
       copilot: schema.organizationSettings.copilotSettings,

@@ -52,7 +52,8 @@ export async function assertBudget(ctx: AppContext, settings: ResolvedCopilotSet
   if (settings.monthlyBudgetUsd <= 0) return; // 0 = no cap
   const spent = await monthSpendMicroUsd(ctx);
   const cap = settings.monthlyBudgetUsd * 1_000_000;
-  if (spent >= cap) throw quota("Your organization has reached this month's AI budget. The Copilot is paused; the rest of the CRM works as usual.", 'organization');
+  if (spent >= cap)
+    throw quota("Your organization has reached this month's AI budget. The Copilot is paused; the rest of the CRM works as usual.", 'organization');
   if (spent >= cap * 0.8) await alertBudgetOnce(ctx, settings, Math.floor((spent / cap) * 100));
 }
 
@@ -102,8 +103,11 @@ export async function assertCopilotAllowed(ctx: AppContext, actor: UserActor, se
       return row?.n ?? 0;
     };
     if ((await turnsSince(new Date(now.getTime() - 60_000))) >= ctx.config.AI_RATE_PER_MINUTE)
-      throw new DomainError('AI_RATE_LIMITED', 429, 'Too many questions in a short time. Please wait a minute.', { meta: { scope: 'user', retryAfterSeconds: 60 } });
-    if ((await turnsSince(new Date(now.toISOString().slice(0, 10)))) >= settings.perUserDailyTurns) throw quota("You have reached today's Copilot limit", 'user');
+      throw new DomainError('AI_RATE_LIMITED', 429, 'Too many questions in a short time. Please wait a minute.', {
+        meta: { scope: 'user', retryAfterSeconds: 60 },
+      });
+    if ((await turnsSince(new Date(now.toISOString().slice(0, 10)))) >= settings.perUserDailyTurns)
+      throw quota("You have reached today's Copilot limit", 'user');
   }
   await assertBudget(ctx, settings);
 }

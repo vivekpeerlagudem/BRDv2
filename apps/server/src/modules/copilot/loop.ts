@@ -9,18 +9,18 @@
  * executes anything: it proposes tool calls and `policy.executeTool` decides.
  */
 import { randomUUID } from 'node:crypto';
-import { agentRun, type AgentRunKind, type AgentRunStatus, type CopilotContextRef } from '../../db/schema-copilot.ts';
+import { type AgentRunKind, type AgentRunStatus, agentRun, type CopilotContextRef } from '../../db/schema-copilot.ts';
 import { type AppContext, schema, sha256Hex, type UserActor } from '../../platform/core.ts';
 import { DomainError } from '../../platform/errors/domain-error.ts';
 import { type AiContentBlock, type AiConverseResult, type AiMessage, AiProviderError, type CopilotFeature } from '../../platform/ports.ts';
+import * as crm from '../crm.ts';
+import * as proposals from '../proposals.ts';
 import { assertBudget, assertCopilotAllowed, costMicroUsd } from './budget.ts';
 import { type ActionEvent, CAPS, executeTool, type ToolCall } from './policy.ts';
 import { PROMPT_VERSION, sessionBlock, systemPrompt } from './prompt.ts';
 import { loadCopilotSettings, modelFor } from './settings.ts';
 import { cleanAnswer, newNonce, ungroundedNumbers } from './text.ts';
-import { AliasBook, getTool, notVisible, type RecordRef, type RefType, type ToolDef, type ToolEnv, toolSpec, toolsForRole, type TurnState } from './tools.ts';
-import * as crm from '../crm.ts';
-import * as proposals from '../proposals.ts';
+import { AliasBook, getTool, notVisible, type RecordRef, type RefType, type ToolDef, type ToolEnv, type TurnState, toolSpec, toolsForRole } from './tools.ts';
 
 export type CopilotEvent =
   | { event: 'status'; data: { text: string } }
@@ -95,10 +95,22 @@ const STATUS_TEXT: Record<string, string> = {
   list_users: 'Looking up colleagues…',
   get_playbook: 'Planning the steps…',
 };
-const FEATURE: Record<AgentRunKind, CopilotFeature> = { chat: 'copilot_chat', triage: 'copilot_triage', my_day: 'copilot_background', digest: 'copilot_background', handoff: 'copilot_background', home: 'copilot_background', eval: 'copilot_chat' };
+const FEATURE: Record<AgentRunKind, CopilotFeature> = {
+  chat: 'copilot_chat',
+  triage: 'copilot_triage',
+  my_day: 'copilot_background',
+  digest: 'copilot_background',
+  handoff: 'copilot_background',
+  home: 'copilot_background',
+  eval: 'copilot_chat',
+};
 
 /** Resolves the record the user has open — through the scoped services, so an invisible record is simply "none". */
-async function openRecord(ctx: AppContext, actor: UserActor, open: CopilotContextRef | null | undefined): Promise<{ type: RefType; id: string; label: string } | null> {
+async function openRecord(
+  ctx: AppContext,
+  actor: UserActor,
+  open: CopilotContextRef | null | undefined,
+): Promise<{ type: RefType; id: string; label: string } | null> {
   if (!open) return null;
   try {
     if (open.type === 'deal') return { type: 'deal', id: open.id, label: (await crm.getDeal(ctx, actor, open.id)).name };
@@ -196,7 +208,21 @@ export async function runAgent(ctx: AppContext, input: RunInput): Promise<RunRes
       })
       .onConflictDoNothing();
     // Ids, counts and codes only — never the question, the answer or a tool payload.
-    ctx.logger.info({ runId, requestId: input.requestId, kind: input.kind, status, steps, toolCalls: turn.toolCalls, autoWrites: turn.autoWrites, proposals: turn.proposals, latencyMs, errorCode }, 'copilot run finished');
+    ctx.logger.info(
+      {
+        runId,
+        requestId: input.requestId,
+        kind: input.kind,
+        status,
+        steps,
+        toolCalls: turn.toolCalls,
+        autoWrites: turn.autoWrites,
+        proposals: turn.proposals,
+        latencyMs,
+        errorCode,
+      },
+      'copilot run finished',
+    );
     const summary: RunSummary = { runId, status, answer, flags, sources, actions, tainted: turn.tainted, simulated: ctx.ai.simulated, model };
     emit({ event: 'done', data: summary });
     return {
@@ -237,7 +263,15 @@ export async function runAgent(ctx: AppContext, input: RunInput): Promise<RunRes
   const specs = offered.map(toolSpec);
   const open = await openRecord(ctx, actor, input.open);
   const openAlias = open ? { ...open, alias: turn.aliases.alias(open.type, open.id, open.label) } : null;
-  const session = sessionBlock({ actor, organizationName: settings.organizationName, timeZone: settings.timeZone, currency: settings.currency, now: ctx.now(), open: openAlias, summary: input.summary ?? null });
+  const session = sessionBlock({
+    actor,
+    organizationName: settings.organizationName,
+    timeZone: settings.timeZone,
+    currency: settings.currency,
+    now: ctx.now(),
+    open: openAlias,
+    summary: input.summary ?? null,
+  });
   const userMessage: AiMessage = { role: 'user', content: [{ type: 'text', text: input.question }] };
   newMessages.push(userMessage);
   const messages: AiMessage[] = [
@@ -366,10 +400,18 @@ export async function runAgent(ctx: AppContext, input: RunInput): Promise<RunRes
       };
       // Independent reads run in parallel; anything that can write runs one at a time, in the order proposed.
       const allRead = calls.every((c) => getTool(c.name)?.tier === 'read');
-      const results = allRead ? await Promise.all(calls.map(run)) : await calls.reduce(async (acc, c) => [...(await acc), await run(c)], Promise.resolve([] as Awaited<ReturnType<typeof run>>[]));
+      const results = allRead
+        ? await Promise.all(calls.map(run))
+        : await calls.reduce(async (acc, c) => [...(await acc), await run(c)], Promise.resolve([] as Awaited<ReturnType<typeof run>>[]));
       const resultMessage: AiMessage = {
         role: 'user',
-        content: calls.map((c, i) => ({ type: 'tool_result', toolCallId: c.id, name: c.name, content: results[i]?.content ?? '{}', ...(results[i]?.isError ? { isError: true } : {}) })),
+        content: calls.map((c, i) => ({
+          type: 'tool_result',
+          toolCallId: c.id,
+          name: c.name,
+          content: results[i]?.content ?? '{}',
+          ...(results[i]?.isError ? { isError: true } : {}),
+        })),
       };
       for (const r of results) toolResults.push(r.content);
       messages.push(resultMessage);

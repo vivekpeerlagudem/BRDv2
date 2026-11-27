@@ -12,7 +12,15 @@ import type { z } from 'zod';
 import { DomainError } from '../../platform/errors/domain-error.ts';
 import { getTool, renderToolOutput, type ToolDef, type ToolEnv } from './tools.ts';
 
-export const CAPS = { maxSteps: 8, maxToolCalls: 12, maxSeconds: 60, maxAutoWritesChat: 5, maxAutoWritesBackground: 20, maxInputTokens: 250_000, maxCostMicroUsd: 500_000 };
+export const CAPS = {
+  maxSteps: 8,
+  maxToolCalls: 12,
+  maxSeconds: 60,
+  maxAutoWritesChat: 5,
+  maxAutoWritesBackground: 20,
+  maxInputTokens: 250_000,
+  maxCostMicroUsd: 500_000,
+};
 
 export interface ToolCall {
   id: string;
@@ -68,7 +76,8 @@ export async function executeTool(env: ToolEnv, call: ToolCall): Promise<ToolExe
   } catch (error) {
     if (error instanceof DomainError) {
       // Not found and not allowed look identical to the model: it must not learn that a hidden record exists.
-      if (error.status === 404 || error.status === 403) return { content: err('not_found', { note: 'The user cannot see this, or it does not exist.' }), isError: true, outcome: 'not_found', tier: tool.tier };
+      if (error.status === 404 || error.status === 403)
+        return { content: err('not_found', { note: 'The user cannot see this, or it does not exist.' }), isError: true, outcome: 'not_found', tier: tool.tier };
       if (error.code === 'COPILOT_LIMIT') return { content: err('limit_reached', { note: error.message }), isError: true, outcome: 'limit', tier: tool.tier };
       return { content: err('refused', { code: error.code, note: error.message }), isError: true, outcome: 'refused', tier: tool.tier };
     }

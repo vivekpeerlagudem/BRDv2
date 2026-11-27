@@ -25,10 +25,10 @@ import { DomainError } from '../platform/errors/domain-error.ts';
 import type { Env, RouteKit } from './kit.ts';
 import { problemResponse, toProblem } from './problem-response.ts';
 import { register as registerAdminRoutes } from './routes/admin.ts';
+import { register as registerCopilotRoutes } from './routes/copilot.ts';
 import { register as registerImportRoutes } from './routes/imports.ts';
 import { register as registerProposalExtRoutes } from './routes/proposals-ext.ts';
 import { register as registerReportRoutes } from './routes/reports.ts';
-import { register as registerCopilotRoutes } from './routes/copilot.ts';
 import { register as registerSalesBriefRoutes } from './routes/sales-brief.ts';
 import { register as registerWeeklyReportRoutes } from './routes/weekly-reports.ts';
 

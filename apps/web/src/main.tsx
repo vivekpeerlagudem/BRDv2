@@ -36,6 +36,7 @@ import { useMe } from './lib/me.ts';
 import { Button, Field, Input, ToastProvider, useAction } from './lib/ui.tsx';
 import { AdminUsersPage, CatalogPage, TemplateEditorPage, TemplatesPage } from './pages/admin.tsx';
 import { AiActivityPage, AiSettingsPage } from './pages/ai.tsx';
+import { CopilotPanel } from './pages/copilot.tsx';
 import { CompaniesPage, CompanyPage, ContactPage, ContactsPage, TasksPage } from './pages/crm.tsx';
 import { DashboardPage } from './pages/dashboard.tsx';
 import { DealPage, DealsPage } from './pages/deals.tsx';
@@ -311,6 +312,7 @@ function Shell() {
   const [switched, setSwitched] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false); // mobile drawer
   const [cmdOpen, setCmdOpen] = useState(false); // ⌘K
+  const [copilotOpen, setCopilotOpen] = useState(false);
   const uid = me.data?.user.id;
   // Bind this tab to the user it signed in as. The whole browser shares one session cookie, so signing in as
   // another user in a different tab/window swaps the session everywhere; this surfaces that switch explicitly
@@ -430,6 +432,19 @@ function Shell() {
             <kbd className="rounded border border-white/15 px-1 text-xs font-medium leading-4 text-nav-text">{isMac ? '⌘K' : 'Ctrl K'}</kbd>
           </button>
           <NotificationBell />
+          <button
+            type="button"
+            onClick={() => {
+              setCopilotOpen(!copilotOpen);
+              setMenuOpen(false);
+            }}
+            aria-expanded={copilotOpen}
+            className={railItem}
+            data-testid="copilot-toggle"
+          >
+            <Bot className="size-4" aria-hidden />
+            <span className="flex-1 text-left">Copilot</span>
+          </button>
         </div>
 
         {/* Primary navigation */}
@@ -515,6 +530,7 @@ function Shell() {
         </main>
       </div>
 
+      <CopilotPanel open={copilotOpen} onClose={() => setCopilotOpen(false)} />
       <CommandMenu open={cmdOpen} onClose={() => setCmdOpen(false)} groups={groups} />
     </div>
   );

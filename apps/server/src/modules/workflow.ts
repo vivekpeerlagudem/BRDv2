@@ -7,6 +7,7 @@ import { and, asc, eq, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { type AppContext, conflict, loadDealFor, lockRow, notFound, SYSTEM, schema, type Uow, type UserActor, unitOfWork } from '../platform/core.ts';
 import { applyClose, todayIso } from './crm.ts';
 import { isStalled, reversalConflicts, shouldMoveToProposalStage } from './domain.ts';
+import { runCopilotScans } from './copilot/scheduled.ts';
 import * as esign from './esign.ts';
 import { applyProposalEvent, expireProposals } from './proposals.ts';
 import * as salesBrief from './sales-brief.ts';
@@ -469,7 +470,9 @@ export async function runScheduledScans(ctx: AppContext) {
   const weekly = await weeklyReports.scheduleWeeklyReports(ctx);
   // Weekly Sales Brief: queue the company-wide brief for leadership once its weekly run time has passed.
   const briefs = await salesBrief.scheduleSalesBrief(ctx);
-  return { flagged, expired, reconciled, reminders: due.length, weeklyReports: weekly, salesBriefs: briefs };
+  // Kensium Copilot: conversation retention (and, later, assignment timers and nightly agents).
+  const copilot = await runCopilotScans(ctx);
+  return { flagged, expired, reconciled, reminders: due.length, weeklyReports: weekly, salesBriefs: briefs, copilot };
 }
 
 // ───────────── job runner ─────────────

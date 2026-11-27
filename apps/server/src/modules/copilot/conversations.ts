@@ -4,9 +4,10 @@
  *  - History sent to the model: the last 20 turns as text; older turns are folded into a rolling summary.
  *  - Nothing here is ever written to the logs.
  */
+
+import type { copilotConversationInput, copilotTurnInput } from '@crm/shared';
 import { and, asc, desc, eq, lt, sql } from 'drizzle-orm';
 import type { z } from 'zod';
-import type { copilotConversationInput, copilotTurnInput } from '@crm/shared';
 import { copilotConversation, copilotMessage } from '../../db/schema-copilot.ts';
 import { type AppContext, notFound, type UserActor } from '../../platform/core.ts';
 import type { AiContentBlock, AiMessage } from '../../platform/ports.ts';
@@ -50,7 +51,14 @@ export async function createConversation(ctx: AppContext, actor: UserActor, inpu
     .returning();
   return publicConversation(row as typeof copilotConversation.$inferSelect);
 }
-const publicConversation = (c: typeof copilotConversation.$inferSelect) => ({ id: c.id, title: c.title, context: c.contextRef, createdAt: c.createdAt, lastAt: c.lastAt, expiresAt: c.expiresAt });
+const publicConversation = (c: typeof copilotConversation.$inferSelect) => ({
+  id: c.id,
+  title: c.title,
+  context: c.contextRef,
+  createdAt: c.createdAt,
+  lastAt: c.lastAt,
+  expiresAt: c.expiresAt,
+});
 
 export async function listConversations(ctx: AppContext, actor: UserActor) {
   const rows = await ctx.db
@@ -84,7 +92,11 @@ type Row = typeof copilotMessage.$inferSelect;
 function finalMessages(rows: Row[]): Row[] {
   const lastAssistantOfRun = new Map<string, number>();
   for (const r of rows) if (r.role === 'assistant' && r.runId) lastAssistantOfRun.set(r.runId, r.seq);
-  return rows.filter((r) => (r.role === 'user' && r.content.some((b) => b.type === 'text')) || (r.role === 'assistant' && r.runId !== null && lastAssistantOfRun.get(r.runId) === r.seq));
+  return rows.filter(
+    (r) =>
+      (r.role === 'user' && r.content.some((b) => b.type === 'text')) ||
+      (r.role === 'assistant' && r.runId !== null && lastAssistantOfRun.get(r.runId) === r.seq),
+  );
 }
 
 /** Folds turns older than the verbatim window into the rolling summary (with the cheap model, or code for the simulator). */
@@ -98,7 +110,10 @@ async function summarizeOlder(ctx: AppContext, actor: UserActor, conversation: t
   const transcript = older.map((m) => `${m.role === 'user' ? 'User' : 'Copilot'}: ${textOf(m.content).slice(0, 600)}`).join('\n');
   let summary: string;
   if (ctx.ai.simulated) {
-    summary = [conversation.summary, ...older.filter((m) => m.role === 'user').map((m) => textOf(m.content).slice(0, 80))].filter(Boolean).join(' · ').slice(-1200);
+    summary = [conversation.summary, ...older.filter((m) => m.role === 'user').map((m) => textOf(m.content).slice(0, 80))]
+      .filter(Boolean)
+      .join(' · ')
+      .slice(-1200);
   } else {
     const settings = await loadCopilotSettings(ctx);
     try {
@@ -109,9 +124,12 @@ async function summarizeOlder(ctx: AppContext, actor: UserActor, conversation: t
         effort: 'low',
         maxTokens: 400,
         timeoutMs: 20_000,
-        system: 'Summarise this CRM assistant conversation in at most 120 words: what the user asked about and what was decided. Plain text. Do not include figures.',
+        system:
+          'Summarise this CRM assistant conversation in at most 120 words: what the user asked about and what was decided. Plain text. Do not include figures.',
         tools: [],
-        messages: [{ role: 'user', content: [{ type: 'text', text: `${conversation.summary ? `Earlier summary: ${conversation.summary}\n\n` : ''}${transcript}` }] }],
+        messages: [
+          { role: 'user', content: [{ type: 'text', text: `${conversation.summary ? `Earlier summary: ${conversation.summary}\n\n` : ''}${transcript}` }] },
+        ],
         userRef: actor.userId.slice(0, 8),
       });
       summary = textOf(r.content).slice(0, 1200) || (conversation.summary ?? '');
@@ -127,14 +145,22 @@ async function summarizeOlder(ctx: AppContext, actor: UserActor, conversation: t
 }
 
 /** One chat turn: loads the history, runs the loop and stores what was said. Events are passed on as they happen. */
-export async function runTurn(ctx: AppContext, actor: UserActor, id: string, input: z.infer<typeof copilotTurnInput>, opts: { emit?: (e: CopilotEvent) => void; requestId?: string; signal?: AbortSignal } = {}) {
+export async function runTurn(
+  ctx: AppContext,
+  actor: UserActor,
+  id: string,
+  input: z.infer<typeof copilotTurnInput>,
+  opts: { emit?: (e: CopilotEvent) => void; requestId?: string; signal?: AbortSignal } = {},
+) {
   const conversation = await own(ctx, actor, id);
   const rows = await ctx.db.select().from(copilotMessage).where(eq(copilotMessage.conversationId, id)).orderBy(asc(copilotMessage.seq));
   const finals = finalMessages(rows);
   const summary = await summarizeOlder(ctx, actor, conversation, finals);
   const userRows = finals.filter((m) => m.role === 'user');
   const fromSeq = userRows.length > VERBATIM_TURNS ? (userRows[userRows.length - VERBATIM_TURNS] as Row).seq : 0;
-  const history: AiMessage[] = finals.filter((m) => m.seq >= fromSeq).map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: [{ type: 'text', text: textOf(m.content) }] }));
+  const history: AiMessage[] = finals
+    .filter((m) => m.seq >= fromSeq)
+    .map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: [{ type: 'text', text: textOf(m.content) }] }));
   const open = input.context === undefined ? conversation.contextRef : input.context;
 
   const result = await runAgent(ctx, {
@@ -158,7 +184,9 @@ export async function runTurn(ctx: AppContext, actor: UserActor, id: string, inp
   await ctx.db.transaction(async (tx) => {
     for (const m of result.messages) {
       const role = m.role === 'assistant' ? 'assistant' : m.content.some((b) => b.type === 'tool_result') ? 'tool' : 'user';
-      await tx.insert(copilotMessage).values({ conversationId: id, seq: ++seq, role, content: m.content, tainted: result.tainted, runId: result.runId, createdAt: now });
+      await tx
+        .insert(copilotMessage)
+        .values({ conversationId: id, seq: ++seq, role, content: m.content, tainted: result.tainted, runId: result.runId, createdAt: now });
     }
     await tx
       .update(copilotConversation)
