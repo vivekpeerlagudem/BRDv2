@@ -12,7 +12,7 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 | M3 | Actions and human control: policy engine, tiers, ledger, scoring, cards | done | (see git log) |
 | M4 | Role home cards | done | (see git log) |
 | M5 | Accept-and-escalate | done | (see git log) |
-| M6 | Background agents | | |
+| M6 | Background agents | done | (see git log) |
 | M7 | Admin, budgets, operations | | |
 | M8 | Evaluation and model ladder (fake, then live Gemini) | | |
 | Final | Final gate, reseed crm_dev, report | | |
@@ -22,6 +22,7 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 - Before the build: 320 tests (all green on 2026-11-25).
 - After M1: +16 adapter tests, +4 foundations (integration), +1 dependency rule, config test extended.
 - After M2: +13 chat integration, +13 text unit, +3 web SSE unit.
+- After M6: +6 agents integration. pnpm test: 413 green.
 - After M5: +7 SLA integration (fake clock), +7 business-hours unit. pnpm verify: 407 tests green.
 - After M4: +4 home integration.
 - After M3: +11 actions integration (incl. policy matrix 3 roles x every tool), +8 scoring unit. pnpm verify: 389+ tests.
@@ -92,6 +93,15 @@ Resume rule: read this file, continue from the next unfinished milestone, update
     or on the converted lead's records), not by a hook in logActivity: crm stays free of copilot code.
 30. **Response times** are a new `responseTimes` block in GET /reports/overview (total, byRep, byTeam; scoped by the
     assignee like every section). No separate /reports/response-times endpoint.
+31. **Only triage calls the model** (fast model through the loop). My Day, handoff and digest pick their candidates
+    and wording in code and write through the same policy engine and ledger (executeTool with a background
+    TurnState, idempotency prefix = job key, cap 20): cheaper, deterministic, and no model-written free text. Their
+    agent_run rows have model "rules".
+32. **Job keys**: triage:<type>:<id> (once per record, not per reassignment), my_day:<user>:<org date>,
+    digest:<user>:<brief periodStart>, handoff:deal:<id>. enqueueOnce checks job_outbox by payload key; the run
+    checks agent_run.idempotency_key; each write checks agent_action.idempotency_key.
+33. **Digest** = an in-app notification built from the role card (no AI line, no writes). It is queued on Mondays
+    (org time) when the latest Sales Brief was approved since about Monday 00:00.
 
 ## Open issues
 
@@ -99,10 +109,9 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 
 ## Next step (resume here)
 
-M6 background agents: modules/copilot/agents.ts — job_outbox queues copilot.triage (on lead.assigned),
-copilot.my_day (02:00 per active user), copilot.digest (Mondays after the Sales Brief is approved),
-copilot.handoff (deal won); idempotency key kind:record:period; deactivated principal = skipped + logged.
-Scheduling from runCopilotScans; handlers registered in workflow.handle.
+M7 admin, budgets, operations: GET/PATCH /admin/copilot/settings (copilotSettingsInput), web settings section on
+/admin/ai, budget checks (budget.ts already has assertBudget: verify per-user daily + org monthly cap, 80 % alert,
+hard stop), admin usage page GET /admin/copilot/usage (no chat content), kill switch.
 
 Notes for whoever resumes:
 - The tool pipeline turns \uXXXX escapes into literal characters when writing files. Never write such escapes; build

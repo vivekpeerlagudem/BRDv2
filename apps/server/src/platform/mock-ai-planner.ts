@@ -254,7 +254,11 @@ export const planStep: MockPlanner = (req, mode) => {
   if (wants(/\b(save|add|write)\b.*\bnote\b|note this/) && has('add_ai_note') && !called('add_ai_note') && (deal ?? firstRef(seen, 'C')))
     return call('add_ai_note', { related: deal ?? firstRef(seen, 'C'), text: 'Summary: reviewed with the Copilot; next step agreed with the owner.' });
   if (wants(/\bscore\b|triage/) && has('set_lead_score') && !called('set_lead_score') && (lead ?? deal))
-    return call('set_lead_score', { record: lead ?? deal, tags: [] });
+    return call('set_lead_score', {
+      record: lead ?? deal,
+      tags: [],
+      ...(/triage/.test(q) ? { reason: 'Triaged from the lead details and the scoring rules.' } : {}),
+    });
   const stage = /\bto (qualification|discovery|proposal sent|negotiation)\b/.exec(q)?.[1];
   if (wants(/\bmove\b/) && stage && has('move_deal_stage') && !called('move_deal_stage') && deal)
     return call('move_deal_stage', { deal, stage: `${stage.charAt(0).toUpperCase()}${stage.slice(1)}` });

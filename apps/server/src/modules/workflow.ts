@@ -5,6 +5,7 @@
  */
 import { and, asc, eq, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { type AppContext, conflict, loadDealFor, lockRow, notFound, SYSTEM, schema, type Uow, type UserActor, unitOfWork } from '../platform/core.ts';
+import { type QUEUES as COPILOT_QUEUES, onCopilotEvent, runBackgroundJob } from './copilot/agents.ts';
 import { onLeadAssigned } from './copilot/assignments.ts';
 import { runCopilotScans } from './copilot/scheduled.ts';
 import { applyClose, todayIso } from './crm.ts';
@@ -496,7 +497,14 @@ async function handle(ctx: AppContext, queue: string, payload: Record<string, un
       });
       // Kensium Copilot accept-and-escalate: every lead assignment gets a work_assignment with a deadline.
       if (payload.name === 'lead.assigned') await onLeadAssigned(ctx, payload);
+      // Background agents: triage on lead.assigned, handoff on deal.closed_won.
+      await onCopilotEvent(ctx, payload);
       return;
+    case 'copilot.triage':
+    case 'copilot.my_day':
+    case 'copilot.digest':
+    case 'copilot.handoff':
+      return runBackgroundJob(ctx, queue as (typeof COPILOT_QUEUES)[number], payload);
     case 'automation.aut004':
       return aut004(ctx, payload as { versionId: string; proposalId: string; dealId: string });
     case 'esign.dispatch':
