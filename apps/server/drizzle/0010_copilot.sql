@@ -10,6 +10,7 @@ CREATE TABLE copilot_conversation (
   role_at_start text NOT NULL,
   summary text,
   summarized_through integer NOT NULL DEFAULT 0,
+  alias_map jsonb NOT NULL DEFAULT '{}',
   created_at timestamptz NOT NULL DEFAULT now(),
   last_at timestamptz NOT NULL DEFAULT now(),
   expires_at timestamptz NOT NULL

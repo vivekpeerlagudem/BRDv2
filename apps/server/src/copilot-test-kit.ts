@@ -85,11 +85,12 @@ export function createKit(organizationName: string, opts: { timeZone?: string } 
     const text = await res.text();
     return { status: res.status, events: parseSse(text), text, contentType: res.headers.get('content-type') ?? '' };
   }
-  async function signIn(key: string) {
+  /** Signs in and stores the session cookie under `key`. The email defaults to <key>@test.example. */
+  async function signIn(key: string, email = `${key}@test.example`) {
     const res = await app.request('/auth/sign-in/email', {
       method: 'POST',
       headers: { origin: ORIGIN, 'content-type': 'application/json' },
-      body: JSON.stringify({ email: `${key}@test.example`, password: PASSWORD }),
+      body: JSON.stringify({ email, password: PASSWORD }),
     });
     if (res.status !== 200) throw new Error(`sign-in failed for ${key}: ${res.status}`);
     cookies[key] = (res.headers.getSetCookie?.() ?? []).map((c) => c.split(';')[0]).join('; ');

@@ -7,8 +7,8 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 
 | # | Milestone | Status | Commit |
 |---|---|---|---|
-| M1 | Foundations: scope fix, AI port, adapters, migration 0010, demo seed, dependency rule | done | see `git log` (M1) |
-| M2 | Read-only Copilot: loop, read tools, playbooks, grounding, SSE API, side panel | next | |
+| M1 | Foundations: scope fix, AI port, adapters, migration 0010, demo seed, dependency rule | done | 65808d5 |
+| M2 | Read-only Copilot: loop, read tools, playbooks, grounding, SSE API, side panel | IN PROGRESS (server written, uncommitted; web not started) | |
 | M3 | Actions and human control: policy engine, tiers, ledger, scoring, cards | | |
 | M4 | Role home cards | | |
 | M5 | Accept-and-escalate | | |
@@ -54,7 +54,37 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 
 - None yet.
 
-## Next step
+## Next step (resume here)
 
-M2.1: the loop (`modules/copilot/loop.ts`) with caps and one `agent_run` row per turn, test-first through the SSE
-endpoint with scripted mock steps.
+M2 is half done and NOT committed. Files on disk (uncommitted), all under apps/server/src:
+modules/copilot/{settings,text,tools,playbooks,prompt,budget,policy,loop,conversations}.ts, http/routes/copilot.ts
+(registered in app.ts), platform/mock-ai-planner.ts (full planner + gullible mode),
+copilot-chat.integration.test.ts (13 tests: 11 pass, 2 fail), and an alias_map column added to 0010.
+
+1. Fix the 2 failing tests in copilot-chat.integration.test.ts:
+   - "outside text reaches the model…": the regex for the escaped source="lead notes" is wrong (test bug, check the
+     real string in the tool_result content), then confirm taint + flags.
+   - "rejects unknown tools…": converseCalls.at(-1).messages.at(-1) is not the tool-result message; search all messages.
+2. Add unit tests for text.ts (cleanUntrusted, cleanAnswer, ungroundedNumbers) and run lint (biome) + typecheck.
+3. Wire purgeExpiredConversations into runScheduledScans (workflow.ts), nightly.
+4. Web: Copilot side panel (toggle next to NotificationBell in apps/web/src/main.tsx), SSE client, source chips;
+   set the web app CSP to img-src 'self'.
+5. Commit M2, then M3 (write tools register through policy.setWriteHandler; planner already knows the tool names
+   create_task{related,title,due}, add_ai_note{related,text}, set_lead_score{record,tags}, move_deal_stage{deal,stage},
+   patch_deal{deal,closeDate}, qualify_lead/convert_lead{lead}, disqualify_lead{lead,reason}, close_deal_lost{deal,reason},
+   log_activity{related,kind,summary}, reassign{record,owner}, accept_assignment{assignment}, draft_follow_up{deal}).
+
+Notes for whoever resumes:
+- The tool pipeline turns \uXXXX escapes into literal characters when writing files. Never write such escapes; build
+  characters from code points (see text.ts, demo-seed.ts).
+- Never put backticks inside a shell command string: the shell runs them (see the open issue below).
+- To re-create the test schema after changing 0010: drop and recreate schema public on crm_test as the migrator, then
+  run the server db:migrate script with --test.
+- Run one test file at a time with vitest (pnpm exec vitest run apps/server/src/FILE).
+
+## Open issue to know about
+
+- 2026-11-27: migration 0010 was applied to crm_dev BY ACCIDENT (a shell quoting slip ran db:migrate without --test)
+  and without a pg_dump first. It is additive only (new tables, new nullable lead columns, one settings column); no
+  existing data was changed and nothing was reseeded. If 0010 changes again before release, crm_dev needs the new
+  columns added by hand or a restore + re-migrate. Take a pg_dump of crm_dev before any further step on it.

@@ -47,6 +47,8 @@ export const copilotConversation = pgTable(
     /** Rolling summary of turns older than the verbatim window. */
     summary: text('summary'),
     summarizedThrough: integer('summarized_through').notNull().default(0),
+    /** Short record aliases the model has seen in this conversation (D1 → deal id …), so later turns can refer to them. */
+    aliasMap: jsonb('alias_map').$type<Record<string, { type: string; id: string; label: string }>>().notNull().default({}),
     createdAt: ts('created_at').notNull().defaultNow(),
     lastAt: ts('last_at').notNull().defaultNow(),
     expiresAt: ts('expires_at').notNull(),

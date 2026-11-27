@@ -28,6 +28,7 @@ import { register as registerAdminRoutes } from './routes/admin.ts';
 import { register as registerImportRoutes } from './routes/imports.ts';
 import { register as registerProposalExtRoutes } from './routes/proposals-ext.ts';
 import { register as registerReportRoutes } from './routes/reports.ts';
+import { register as registerCopilotRoutes } from './routes/copilot.ts';
 import { register as registerSalesBriefRoutes } from './routes/sales-brief.ts';
 import { register as registerWeeklyReportRoutes } from './routes/weekly-reports.ts';
 
@@ -325,6 +326,7 @@ export function createApp(ctx: AppContext, auth: identity.Auth): Hono<Env> {
     registerProposalExtRoutes,
     registerWeeklyReportRoutes,
     registerSalesBriefRoutes,
+    registerCopilotRoutes,
   ])
     register(api, kit);
   app.route('/api/v1', api);

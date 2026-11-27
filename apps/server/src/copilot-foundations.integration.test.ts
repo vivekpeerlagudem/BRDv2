@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createKit, hasTestDb, PASSWORD } from './copilot-test-kit.ts';
 import { agentRun } from './db/schema-copilot.ts';
 import { CANARIES, INJECTIONS, seedCopilotDemo } from './modules/copilot/demo-seed.ts';
+import { hasInvisible } from './modules/copilot/text.ts';
 import { buildUserActor, schema } from './platform/core.ts';
 
 describe.skipIf(!hasTestDb())('Copilot foundations (PostgreSQL integration)', () => {
@@ -94,7 +95,7 @@ describe.skipIf(!hasTestDb())('Copilot foundations (PostgreSQL integration)', ()
     expect(loki?.status).toBe('deactivated');
     expect((await buildUserActor(kit.ctx.db, cap?.userId as string))?.teamScopeIds).not.toContain(loki?.userId);
     // The hidden-Unicode injection really is hidden: it contains characters a person cannot see.
-    expect(/[\u{E0000}-\u{E007F}]/u.test(INJECTIONS.hiddenUnicode)).toBe(true);
+    expect(hasInvisible(INJECTIONS.hiddenUnicode)).toBe(true);
     expect(Object.values(CANARIES)).toHaveLength(3);
   });
 });
