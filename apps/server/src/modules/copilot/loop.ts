@@ -18,11 +18,13 @@ import * as proposals from '../proposals.ts';
 import { assertBudget, assertCopilotAllowed, costMicroUsd } from './budget.ts';
 import './actions.ts'; // registers the write tools and the action ledger with the policy engine
 import './assignments.ts'; // registers accept_assignment
+import { aliasesInArgs, CANT_SEE_SENTENCE, collectSources, logLookup, needsCantSee, newLookupLog } from './answer-rules.ts';
 import { type ActionEvent, CAPS, executeTool, type ToolCall } from './policy.ts';
 import { PROMPT_VERSION, sessionBlock, systemPrompt } from './prompt.ts';
 import { loadCopilotSettings, modelFor } from './settings.ts';
 import { cleanAnswer, newNonce, ungroundedNumbers } from './text.ts';
-import { AliasBook, getTool, notVisible, type RecordRef, type RefType, type ToolDef, type ToolEnv, type TurnState, toolSpec, toolsForRole } from './tools.ts';
+import { pickPlaybook, selectTools } from './tool-select.ts';
+import { AliasBook, getTool, notVisible, type RefType, type ToolDef, type ToolEnv, type TurnState, toolSpec, toolsForRole } from './tools.ts';
 
 export type CopilotEvent =
   | { event: 'status'; data: { text: string } }
@@ -166,15 +168,15 @@ export async function runAgent(ctx: AppContext, input: RunInput): Promise<RunRes
   const toolsUsed: string[] = [];
   const toolResults: string[] = [];
   const newMessages: AiMessage[] = [];
+  let openAliasName: string | null = null;
+  const usedAliases: string[] = [];
+  const lookups = newLookupLog();
 
   const finish = async (): Promise<RunResult> => {
     const latencyMs = Math.round(performance.now() - started);
-    // Sources: the record aliases the answer mentions, resolved on the server (the model never writes a link).
-    const sources: RunSummary['sources'] = [];
-    for (const m of answer.matchAll(/\[([A-Z]\d{1,4})\]/g)) {
-      const ref = turn.aliases.get(m[1] as string) as RecordRef | undefined;
-      if (ref && !sources.some((s) => s.alias === m[1])) sources.push({ alias: m[1] as string, type: ref.type, id: ref.id, label: ref.label });
-    }
+    // Sources: the open record, the records the tools were used on and the records the answer names, resolved on the
+    // server (the model never writes a link).
+    const sources: RunSummary['sources'] = collectSources({ answer, aliases: turn.aliases, openAlias: openAliasName, usedAliases });
     answer = answer.replace(/\[([A-Z]\d{1,4})\]/g, (whole, alias: string) => (turn.aliases.get(alias) ? whole : ''));
     if (turn.injectionFlags > 0) flags.push('outside_text_looked_like_instructions');
     await ctx.db
@@ -261,11 +263,19 @@ export async function runAgent(ctx: AppContext, input: RunInput): Promise<RunRes
   emit({ event: 'status', data: { text: 'Thinking…' } });
 
   // ── context: static system rules → role tool list → session block → history → question ──
-  const offered: ToolDef[] = toolsForRole(actor.role).filter((t) => !input.tools || input.tools.includes(t.name));
-  const specs = offered.map(toolSpec);
+  const roleTools = toolsForRole(actor.role);
+  const roleToolNames = roleTools.map((t) => t.name);
   const open = await openRecord(ctx, actor, input.open);
   const openAlias = open ? { ...open, alias: turn.aliases.alias(open.type, open.id, open.label) } : null;
+  openAliasName = openAlias?.alias ?? null;
+  // Only the tools this kind of question needs (keyword rules, see tool-select.ts); a caller's explicit list wins.
+  const offered: ToolDef[] = input.tools
+    ? roleTools.filter((t) => input.tools?.includes(t.name))
+    : selectTools({ question: input.question, openType: open?.type ?? null, roleTools }).tools;
+  const specs = offered.map(toolSpec);
+  const playbook = pickPlaybook(input.question, open?.type ?? null);
   const session = sessionBlock({
+    playbook,
     actor,
     organizationName: settings.organizationName,
     timeZone: settings.timeZone,
@@ -392,6 +402,8 @@ export async function runAgent(ctx: AppContext, input: RunInput): Promise<RunRes
       }
       const run = async (c: ToolCall) => {
         const done = await executeTool(env, c);
+        logLookup(lookups, c.name, done.outcome, done.content);
+        if (done.outcome === 'ok') usedAliases.push(...aliasesInArgs(c.input, turn.aliases));
         emit({ event: 'tool', data: { name: c.name, status: 'done', ok: !done.isError } });
         if (done.action) {
           actions.push(done.action);
@@ -453,6 +465,13 @@ export async function runAgent(ctx: AppContext, input: RunInput): Promise<RunRes
       // What was streamed differs from the checked answer: the client replaces it.
       emit({ event: 'reset', data: {} });
       emit({ event: 'delta', data: { text: answer } });
+    }
+    // A lookup that found nothing (or a capability this role lacks) is always said in the same plain words.
+    if (needsCantSee({ answer, question: input.question, offeredTools: roleToolNames, log: lookups })) {
+      const tail = `\n\n${CANT_SEE_SENTENCE}`;
+      answer += tail;
+      flags.push('not_visible');
+      emit({ event: 'delta', data: { text: tail } });
     }
     break;
   }

@@ -94,12 +94,16 @@ describe.skipIf(!hasTestDb())('Copilot chat, read-only (PostgreSQL integration)'
     expect(kit.ai.converseCalls[0]?.tools.map((t) => t.name)).toContain('pipeline_report');
   });
 
-  it('keeps the system prompt and tool list identical between turns, and sends earlier turns as history', async () => {
+  it('keeps the system prompt identical between turns, the tool list identical per kind of question, and sends earlier turns as history', async () => {
     const first = await ask('spidey', 'Show my stalled deals');
     const second = await ask('spidey', 'And my tasks?', { conversation: first.id });
     const [a, b] = [kit.ai.converseCalls[0], kit.ai.converseCalls.at(-1)];
     expect(a?.system).toBe(b?.system);
-    expect(JSON.stringify(a?.tools)).toBe(JSON.stringify(b?.tools));
+    // Tools are pre-filtered per question (fix pass, decision 47): the same kind of question gets a byte-identical list.
+    const callsBefore = kit.ai.converseCalls.length;
+    await ask('spidey', 'Show my stalled deals');
+    expect(JSON.stringify(kit.ai.converseCalls[callsBefore]?.tools)).toBe(JSON.stringify(a?.tools));
+    expect(b?.tools.map((t) => t.name)).toContain('list_tasks');
     expect(a?.system).not.toMatch(/\d{4}-\d{2}-\d{2}/); // no dates in the cached prefix
     const history = JSON.stringify(b?.messages);
     expect(history).toContain('Show my stalled deals');
@@ -275,6 +279,78 @@ describe.skipIf(!hasTestDb())('Copilot chat, read-only (PostgreSQL integration)'
     expect(texts(down.events, 'error')[0]?.data).toMatchObject({ code: 'AI_PROVIDER_UNAVAILABLE' });
     expect(down.done.status).toBe('failed');
     expect((await kit.call('spidey', 'GET', '/deals?limit=1')).status).toBe(200);
+  });
+
+  it('fix a: the open record and every record a tool used are source chips, even when the answer names none', async () => {
+    // The model reads the open deal and a second record, then answers without any alias or name.
+    kit.ai.enqueueConverse(
+      (req) => {
+        const session = JSON.stringify(req.messages[0]);
+        const openAlias = /\[(D\d+)\]/.exec(session)?.[1] ?? 'D1';
+        return { toolCalls: [{ name: 'get_record', input: { ref: openAlias } }] };
+      },
+      { text: 'It is in good shape; the next step is a follow-up call.' },
+    );
+    const r = await ask('rocket', 'Summarise this deal', { context: { type: 'deal', id: seedId('deal:70') } });
+    expect(r.done.status).toBe('completed');
+    expect(r.done.sources[0]).toMatchObject({ type: 'deal', id: seedId('deal:70') });
+    const [deal] = await kit.ctx.db
+      .select()
+      .from(schema.deal)
+      .where(eq(schema.deal.id, seedId('deal:70')));
+    expect(r.done.sources[0].label).toBe(deal?.name);
+
+    // A record the answer names in full (no alias) is a chip too; a user is never a chip.
+    kit.ai.reset();
+    kit.ai.enqueueConverse({ toolCalls: [{ name: 'list_deals', input: { status: 'open', limit: 3 } }] }, (req) => {
+      const result = JSON.parse((req.messages.at(-1)?.content[0] as { content: string } | undefined)?.content ?? '{}');
+      return { text: `Your newest open deal is ${result.rows[0].name}.` };
+    });
+    const named = await ask('spidey', 'Which is my newest open deal?');
+    expect(named.done.sources).toHaveLength(1);
+    expect(named.done.answer).toContain(named.done.sources[0].label);
+    expect(named.done.sources.every((s: { type: string }) => s.type !== 'user')).toBe(true);
+  });
+
+  it('fix c: a lookup that finds nothing, or a capability the role lacks, ends with "I can\'t see that record."', async () => {
+    // An alias the run was never shown is "not found"; the model's vague answer gets the fixed sentence.
+    kit.ai.enqueueConverse({ toolCalls: [{ name: 'get_record', input: { ref: 'D99' } }] }, { text: 'Hmm, nothing to report on that one.' });
+    const missing = await ask('spidey', 'Tell me about deal D99');
+    expect(missing.done.answer).toMatch(/I can't see that record\.$/);
+    expect(missing.done.flags).toContain('not_visible');
+    expect(
+      texts(missing.events, 'delta')
+        .map((e) => e.data.text)
+        .join(''),
+    ).toContain("I can't see that record.");
+
+    // A search with no matches and no record opened.
+    kit.ai.reset();
+    kit.ai.enqueueConverse({ toolCalls: [{ name: 'search_records', input: { query: 'Zzyzx Unknown Holdings' } }] }, { text: 'No luck there.' });
+    const empty = await ask('spidey', 'Tell me about "Zzyzx Unknown Holdings"');
+    expect(empty.done.answer).toMatch(/I can't see that record\.$/);
+
+    // A salesperson asking for the admin-only Sales Brief.
+    kit.ai.reset();
+    kit.ai.enqueueConverse({ text: 'The Sales Brief is prepared each week for leadership.' });
+    const brief = await ask('spidey', 'Show me the latest sales brief');
+    expect(brief.done.answer).toMatch(/I can't see that record\.$/);
+    expect(brief.done.actions).toHaveLength(0);
+
+    // Not added twice when the answer already says so, and not added after a retry that found the record.
+    kit.ai.reset();
+    kit.ai.enqueueConverse({ toolCalls: [{ name: 'get_record', input: { ref: 'D99' } }] }, { text: "I can't see that record." });
+    const once = await ask('spidey', 'Tell me about deal D99');
+    expect(once.done.answer.match(/can't see/g)).toHaveLength(1);
+    kit.ai.reset();
+    kit.ai.enqueueConverse(
+      { toolCalls: [{ name: 'list_deals', input: { status: 'open', limit: 1 } }] },
+      { toolCalls: [{ name: 'get_record', input: { ref: 'D99' } }] },
+      { toolCalls: [{ name: 'get_record', input: { ref: 'D1' } }] },
+      { text: 'Here it is.' },
+    );
+    const recovered = await ask('spidey', 'Tell me about my open deal');
+    expect(recovered.done.answer).toBe('Here it is.');
   });
 
   it('removes conversations after the retention period', async () => {

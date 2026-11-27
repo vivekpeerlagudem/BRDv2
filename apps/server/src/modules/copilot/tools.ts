@@ -384,7 +384,7 @@ const listDeals = tool({
     const stage = input.stage ? all.find((s) => s.name.toLowerCase() === input.stage?.toLowerCase()) : undefined;
     if (input.stage && !stage) return { data: { error: 'unknown_stage', stages: all.map((s) => s.name) } };
     const ownerId = await ownerOf(env, input.owner);
-    const limit = input.limit ?? 15;
+    const limit = input.limit ?? 10;
     const page = await crm.listDeals(env.ctx, env.actor, {
       limit: input.flag ? 100 : limit,
       offset: 0,
@@ -434,7 +434,7 @@ const listLeads = tool({
     const untrusted: { source: string; text: string }[] = [];
     const ownerId = await ownerOf(env, input.owner);
     const page = await crm.listLeads(env.ctx, env.actor, {
-      limit: input.limit ?? 15,
+      limit: input.limit ?? 10,
       offset: 0,
       ...(input.query ? { q: input.query } : {}),
       ...(input.status ? { status: input.status } : {}),
@@ -554,7 +554,7 @@ const getTimeline = tool({
       env.ctx,
       env.actor,
       { relatedType: target.type as 'deal' | 'company' | 'contact', relatedId: target.id },
-      { limit: input.limit ?? 15 },
+      { limit: input.limit ?? 10 },
     );
     return {
       data: {
@@ -576,7 +576,7 @@ const REPORT_PARTS = ['totals', 'by_stage', 'by_owner', 'won_lost', 'lost_reason
 const pipelineReport = tool({
   name: 'pipeline_report',
   description:
-    'Sales figures computed by the CRM for a date range (default: last 90 days): open pipeline value and weighted forecast, pipeline by stage and by owner, won and lost, win rate, lost reasons, rep performance, proposal metrics, activity and deals needing attention. Always use this for totals — never add numbers yourself.',
+    'Sales figures computed by the CRM for a date range (default: last 90 days): open pipeline value and weighted forecast, pipeline by stage and by owner, won and lost, win rate, lost reasons, rep performance, proposal metrics, activity and deals needing attention. Use it for every team, company or total question (pipeline value, forecast, won, lost, by person or stage) and quote every figure the user asked for, exactly as returned. Never add numbers yourself.',
   tier: 'read',
   roles: ALL,
   input: z.object({
@@ -660,7 +660,7 @@ const listProposals = tool({
   async run(env, input) {
     const untrusted: { source: string; text: string }[] = [];
     const page = await proposals.listAllProposals(env.ctx, env.actor, {
-      limit: input.limit ?? 15,
+      limit: input.limit ?? 10,
       offset: 0,
       ...(input.query ? { q: input.query } : {}),
       ...(input.status ? { status: input.status as never } : {}),
@@ -846,7 +846,7 @@ export const toolSpec = (t: ToolDef) => {
   return { name: t.name, description: t.description, inputSchema };
 };
 
-const MAX_RESULT_CHARS = 8000; // about 2,000 tokens
+const MAX_RESULT_CHARS = 5000; // about 1,250 tokens (was 8000: tighter to cut input tokens per step)
 /** Serialises a tool output for the model: compact JSON, untrusted text wrapped, size capped by trimming row lists. */
 export function renderToolOutput(env: ToolEnv, out: ToolOutput): { content: string; tainted: boolean } {
   const untrusted = (out.untrusted ?? []).filter((u) => u.text);

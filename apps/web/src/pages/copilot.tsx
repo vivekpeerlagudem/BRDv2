@@ -50,9 +50,18 @@ export function sourcePath(s: { type: RefType; id: string }): string | null {
   if (s.type === 'task') return '/tasks';
   return null;
 }
-/** Replaces record aliases ([D3]) with the record's name; unknown aliases are dropped. */
+/**
+ * Replaces record aliases ([D3]) with the record's name; unknown aliases are dropped. When the answer already wrote the
+ * name right before the alias ("Stark ERP [D3]"), the alias is just removed so the name is not shown twice.
+ */
 export function readable(answer: string, sources: Source[]): string {
-  return answer.replace(/\[([A-Z]\d{1,4})\]/g, (_m, a: string) => sources.find((s) => s.alias === a)?.label ?? '');
+  return answer.replace(/\s?\[([A-Z]\d{1,4})\]/g, (whole: string, a: string, offset: number) => {
+    const label = sources.find((s) => s.alias === a)?.label;
+    if (!label) return '';
+    const before = answer.slice(Math.max(0, offset - label.length - 2), offset).toLowerCase();
+    if (before.includes(label.toLowerCase())) return '';
+    return whole.startsWith(' ') ? ` ${label}` : label;
+  });
 }
 const FLAG_TEXT: Record<string, string> = {
   outside_text_looked_like_instructions: 'Some text in these records was written like an instruction. The Copilot treated it as information only.',

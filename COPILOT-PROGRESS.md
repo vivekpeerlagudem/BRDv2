@@ -138,6 +138,40 @@ Resume rule: read this file, continue from the next unfinished milestone, update
     the base seed's users); the simulator now cites the record it read by alias, as the prompt asks (4ceb70a).
     e2e/copilot.spec.ts: 3/3 passed.
 
+### Fix pass (2026-11-27, COPILOT FIX PASS prompt)
+
+44. **Settings**: .env.local AI_MODEL_MAIN=gemini-3.5-flash-lite, AI_MODEL_FAST=gemini-3.5-flash-lite (the only
+    free-tier Gemini model that answers, decision 36). AI_PROVIDER stays fake while coding and testing.
+45. **Fix a (names and chips)**: prompt rule 3 "write each record's full name the first time, then its alias".
+    Source chips are now built on the server (answer-rules.ts collectSources): the open record first, then every
+    record a successful tool call was made on, then aliases cited in the answer, then records whose full name the
+    answer writes (users and teams are never chips; at most 12). Only records the run was shown can become chips.
+    The web panel no longer shows a name twice when the answer writes "Name [D3]" (readable()).
+46. **Fix b (call the tool)**: prompt rule 4 "when the user asks you to create, score, note, log, accept, qualify,
+    convert, move or change something, CALL THE TOOL in this turn". New playbook take-action v1 with five worked
+    examples (score, follow-ups for stalled deals, save a note, accept a lead, move a stage); lead-triage and
+    deal-risk-next-step raised to v2 with "CALL ..." wording. The matching playbook is now put into the session block
+    by code (tool-select.ts pickPlaybook), so the model never needs a get_playbook round trip.
+47. **Fix c (can't see)**: the server appends the fixed sentence "I can't see that record." (flag not_visible) when
+    (1) a tool answered not_found or unknown_tool and the same tool did not later succeed in the turn, (2) every
+    search_records call returned 0 matches and no record was opened, or (3) the question asks for a capability the
+    role does not have (today: the Sales Brief for non-admins). Not added when the answer already says it.
+48. **Fix d (totals)**: prompt rule 5 and the pipeline_report description route every team, company or total
+    question to pipeline_report (kpis for win rate and won revenue) and require quoting every figure asked for; the
+    tool pre-filter always offers both tools for figure questions.
+49. **Speed: deterministic keyword pre-filter, not a router model.** A router call on AI_MODEL_FAST would add a
+    whole model round trip (0.6-1.5 s on the free tier) and its own 429 risk before the first useful step, and is not
+    reproducible in tests. Keyword groups (tool-select.ts: deals, deal changes, leads, tasks, notes, reports,
+    proposals, brief, team; plus groups for the open record's type; core = search_records, get_record, get_timeline)
+    are free and testable; when nothing matches, the role's full list is offered, so a miss costs tokens, not an
+    answer. get_playbook is no longer offered (playbooks are inlined). The tool list stays sorted, so the same kind
+    of question gets a byte-identical list; the chat test that asserted one list for every turn now asserts
+    "identical system prompt every turn, identical tool list for the same kind of question" (the old guarantee is
+    no longer true by design). System prompt shortened to 8 numbered rules (copilot/v2). Tool results capped at
+    5,000 characters (was 8,000) and default list sizes 10 (was 15).
+    Simulator, 50 eval tasks, average input tokens per question: 10,071 before -> 6,124 after (-39 %), still 50/50.
+50. Items 2 and 3 share loop.ts and prompt.ts, so they are one commit.
+
 ## Open issues
 
 - TaskStop on a backgrounded `pnpm ...` does not kill its tsx child on Windows: check for leftover node processes
