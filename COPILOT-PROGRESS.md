@@ -15,7 +15,7 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 | M6 | Background agents | done | (see git log) |
 | M7 | Admin, budgets, operations | done | (see git log) |
 | M8 | Evaluation and model ladder (fake, then live Gemini) | IN PROGRESS (harness + fake 100 % committed 22aa518; live runs) | 22aa518 |
-| Final | Final gate, reseed crm_dev, report | | |
+| Final | Final gate, reseed crm_dev, report | IN PROGRESS: crm_dev reseeded twice (no duplicates), Playwright 3/3; verify after live eval | 4ceb70a |
 
 ## Test counts
 
@@ -119,6 +119,23 @@ Resume rule: read this file, continue from the next unfinished milestone, update
     failures, p90 first words 5.07 s (target < 3 s: NOT met), cost unknown (model not in the price table: add its
     prices via AI_PRICES to get cost per task and the monthly projection). Failures: L01, L06, L07 (answer names the record by alias/source chip instead of writing its name),
     A03, A08, I06 (the model did not call the write tool), P05 (did not say plainly it cannot see the sales brief).
+
+39. **Grader (f9d5290)**: a record name counts when the answer writes it OR cites its alias shown as a source chip;
+    names compared loosely (dashes, quotes). **Review fixes (7d167ee)**: canary filters match the token anywhere,
+    p90 first words counts runs with no first word at their full duration, cost averages over known costs,
+    refusal must come first, a live retry happens only when the failed attempt wrote nothing.
+40. **gemini-3.8-flash re-checked 2026-11-27 15:50**: provider answers 503 "overloaded" or times out at 60 s (5 of 5
+    calls); still unusable, as in decision 36.
+41. **Live prices**: gemini-3.5-flash-lite is priced USD 0.30 in / 2.50 out / 0.03 cache read per million tokens
+    (published Google paid-tier list price, via third-party aggregators; check ai.google.dev before relying on it).
+    Passed to the eval run only through AI_PRICES on the command line; not stored in .env.local.
+42. **crm_dev demo seed collision**: the hand-made story creates "Pym Technologies" with the same domain as a demo
+    company; the demo seed now reuses the existing company (3a4e23f). crm_dev reseeded twice: identical counts
+    (161 leads, 68 companies, 104 deals, 94 contacts, 291 stage changes), 0 duplicate domains or e-mails, and a
+    third direct demo-seed call added 0 rows. Backup before reseeding: .data/backups/crm_dev-20261127-102058.sql.
+43. **Playwright on crm_dev**: Spider-Man signs in as riley@ and Captain America as morgan@ (the Avengers seed renames
+    the base seed's users); the simulator now cites the record it read by alias, as the prompt asks (4ceb70a).
+    e2e/copilot.spec.ts: 3/3 passed.
 
 ## Open issues
 
