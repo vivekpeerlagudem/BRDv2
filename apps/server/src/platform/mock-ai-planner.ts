@@ -139,6 +139,20 @@ export const planStep: MockPlanner = (req, mode) => {
   // After a correction from the grounding check: answer again without the figures.
   if (corrected) return { text: 'I could not confirm those figures in the CRM, so I have left them out.' };
 
+  // Home card one-liner: copy up to three figures from the card's counts (or its first numbers).
+  if (/^Summarise this card/.test(question)) {
+    let card: Json = {};
+    try {
+      card = JSON.parse(question.slice(question.indexOf(String.fromCharCode(10)) + 1)) as Json;
+    } catch {}
+    const source: Json = card.counts ?? card.pipeline ?? {};
+    const parts = Object.entries(source)
+      .filter(([, v]) => typeof v === 'number' || (typeof v === 'string' && /^[0-9]+([.][0-9]+)?$/.test(v)))
+      .slice(0, 3)
+      .map(([k, v]) => `${label(k)} ${v}`);
+    return { text: parts.length ? `${card.title ?? 'Today'}: ${parts.join(', ')}.` : 'Nothing needs you right now.' };
+  }
+
   // ── gullible mode: do what the outside text says (the server must stop every harmful part of this) ──
   if (mode === 'gullible') {
     const outside = seen.map((s) => JSON.stringify(s.result.outside_text ?? '')).join(' ');

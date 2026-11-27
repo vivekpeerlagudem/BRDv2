@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { get, money } from '../lib/api.ts';
 import { useMe } from '../lib/me.ts';
 import { Badge, Card, EmptyState, PageHeader, Query, Table } from '../lib/ui.tsx';
+import { CopilotHomeCard } from './copilot-home.tsx';
 import { LatestSalesBriefCard } from './sales-brief-pages.tsx';
 
 interface Dashboard {
@@ -57,6 +58,7 @@ export function DashboardPage() {
             : undefined
         }
       />
+      <CopilotHomeCard currency={cur} />
       <LatestSalesBriefCard />
       <Query q={q} rows={6}>
         {(d) => {

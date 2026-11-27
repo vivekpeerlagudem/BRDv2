@@ -10,7 +10,7 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 | M1 | Foundations: scope fix, AI port, adapters, migration 0010, demo seed, dependency rule | done | 65808d5 |
 | M2 | Read-only Copilot: loop, read tools, playbooks, grounding, SSE API, side panel | done | (see git log) |
 | M3 | Actions and human control: policy engine, tiers, ledger, scoring, cards | done | (see git log) |
-| M4 | Role home cards | | |
+| M4 | Role home cards | done | (see git log) |
 | M5 | Accept-and-escalate | | |
 | M6 | Background agents | | |
 | M7 | Admin, budgets, operations | | |
@@ -22,6 +22,7 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 - Before the build: 320 tests (all green on 2026-11-25).
 - After M1: +16 adapter tests, +4 foundations (integration), +1 dependency rule, config test extended.
 - After M2: +13 chat integration, +13 text unit, +3 web SSE unit.
+- After M4: +4 home integration.
 - After M3: +11 actions integration (incl. policy matrix 3 roles x every tool), +8 scoring unit. pnpm verify: 389+ tests.
 
 ## Decisions (made without asking)
@@ -75,6 +76,11 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 23. **close_deal_lost refuses** when the deal has an open signature request (the Copilot never touches e-sign) and
     when the reason matches no lost reason and there is no "Other" reason.
 24. **accept_assignment** is added in M5 with the assignments module (addWriteTool).
+25. **Home card forecast "a week ago"** is replayed from deal_stage_history with today's amounts (amount history is
+    not kept). Week start is Monday 00:00 UTC. The AI line is a `home` run with the fast model and no tools; it is
+    shown only when it is grounded, otherwise the card has no summary.
+26. **Backslashes in tool input get mangled** (heredocs and node -e alike): use the Write/Edit tools for code with
+    regexes or escapes, never shell-built strings.
 
 ## Open issues
 
@@ -82,8 +88,9 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 
 ## Next step (resume here)
 
-M4 role home cards: GET /api/v1/copilot/home (modules/copilot/home.ts), card above the dashboard KPIs
-(apps/web/src/pages/dashboard.tsx). Then M5 (assignments.ts, business-hours.ts, accept_assignment tool).
+M5 accept-and-escalate: modules/copilot/business-hours.ts (addBusinessHours + tests), assignments.ts (work_assignment
+on lead.assigned / assignLead / reassignment, accept/decline/reassign, timers in runCopilotScans, first contact on
+logActivity), accept_assignment tool via addWriteTool, response-times section in reportOverview, web banner.
 
 Notes for whoever resumes:
 - The tool pipeline turns \uXXXX escapes into literal characters when writing files. Never write such escapes; build

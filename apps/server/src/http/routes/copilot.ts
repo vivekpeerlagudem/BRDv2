@@ -2,6 +2,7 @@ import { copilotConversationInput, copilotTurnInput } from '@crm/shared';
 import { streamSSE } from 'hono/streaming';
 import * as actions from '../../modules/copilot/actions.ts';
 import * as conversations from '../../modules/copilot/conversations.ts';
+import { homeCard } from '../../modules/copilot/home.ts';
 import type { CopilotEvent } from '../../modules/copilot/loop.ts';
 import type { Api, RouteKit } from '../kit.ts';
 
@@ -19,6 +20,9 @@ export function register(api: Api, kit: RouteKit): void {
   );
   api.get('/copilot/conversations/:id', async (c) => c.json(await conversations.getConversation(ctx, kit.actor(c), kit.id(c))));
   api.delete('/copilot/conversations/:id', async (c) => c.json(await conversations.deleteConversation(ctx, kit.actor(c), kit.id(c))));
+
+  // Role home card (deterministic); ?summary=1 adds a grounded one-line AI summary.
+  api.get('/copilot/home', async (c) => c.json(await homeCard(ctx, kit.actor(c), { summary: c.req.query('summary') === '1', requestId: c.get('requestId') })));
 
   // Action ledger: the user's own approval cards and automatic changes (with Undo).
   api.get('/copilot/actions', async (c) => c.json(await actions.listActions(ctx, kit.actor(c), c.req.query('view') === 'done' ? 'done' : 'pending')));
