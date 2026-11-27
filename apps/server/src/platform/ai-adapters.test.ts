@@ -87,7 +87,8 @@ describe('OpenAI-compatible driver', () => {
   });
 
   it('accepts a fractional time limit (the loop computes it from performance.now())', async () => {
-    const fetchFake: FetchLike = async () => json({ model: 'm', choices: [{ finish_reason: 'stop', message: { content: 'OK' } }], usage: { prompt_tokens: 1, completion_tokens: 1 } });
+    const fetchFake: FetchLike = async () =>
+      json({ model: 'm', choices: [{ finish_reason: 'stop', message: { content: 'OK' } }], usage: { prompt_tokens: 1, completion_tokens: 1 } });
     const provider = new OpenAiCompatibleProvider({ baseUrl: 'https://llm.example/v1/', apiKey: KEY, fetch: fetchFake });
     await expect(provider.converse(request({ timeoutMs: 59_972.0259 }))).resolves.toMatchObject({ stopReason: 'end' });
   });
