@@ -50,7 +50,7 @@ const nth = async (w: World, who: Who, status: 'open' | 'won' | 'lost', n = 0) =
   const rows = await w.ctx.db
     .select({ id: schema.deal.id, name: schema.deal.name, companyId: schema.deal.companyId })
     .from(schema.deal)
-    .where(and(eq(schema.deal.ownerId, w.users[who]), eq(schema.deal.status, status), sql`${schema.deal.name} not like 'CNRY%'`))
+    .where(and(eq(schema.deal.ownerId, w.users[who]), eq(schema.deal.status, status), sql`${schema.deal.name} not like '%CNRY-%'`))
     .orderBy(asc(schema.deal.name));
   const d = rows[n] ?? rows[0];
   if (!d) throw new Error(`eval: no ${status} deal for ${who}`);
@@ -60,7 +60,7 @@ const companyOf = async (w: World, who: Who) => {
   const [c] = await w.ctx.db
     .select({ id: schema.company.id, name: schema.company.name })
     .from(schema.company)
-    .where(and(eq(schema.company.ownerId, w.users[who]), sql`${schema.company.name} not like 'CNRY%'`))
+    .where(and(eq(schema.company.ownerId, w.users[who]), sql`${schema.company.name} not like '%CNRY-%'`))
     .orderBy(asc(schema.company.name))
     .limit(1);
   if (!c) throw new Error(`eval: no company for ${who}`);
@@ -71,7 +71,7 @@ const plainLead = async (w: World, who: Who) => {
     .select({ id: schema.lead.id, name: schema.lead.name })
     .from(schema.lead)
     .where(
-      and(eq(schema.lead.ownerId, w.users[who]), eq(schema.lead.status, 'new'), sql`${schema.lead.notes} is null`, sql`${schema.lead.name} not like 'CNRY%'`),
+      and(eq(schema.lead.ownerId, w.users[who]), eq(schema.lead.status, 'new'), sql`${schema.lead.notes} is null`, sql`${schema.lead.name} not like '%CNRY-%'`),
     )
     .orderBy(asc(schema.lead.name));
   const l = rows.find((r) => r.id !== seedId('lead:9'));

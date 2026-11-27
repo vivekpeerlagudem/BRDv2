@@ -50,7 +50,7 @@ async function ask(page: Page, question: string) {
 async function myOpenDeal(page: Page) {
   const me = (await apiCall(page, 'GET', '/api/v1/me')).json;
   const deals = (await apiCall(page, 'GET', '/api/v1/deals?status=open&limit=100')).json.items as { id: string; name: string; ownerId: string }[];
-  const d = deals.find((x) => x.ownerId === me.user.id && !x.name.startsWith('CNRY'));
+  const d = deals.find((x) => x.ownerId === me.user.id && !x.name.includes('CNRY-'));
   if (!d) throw new Error('no open deal for this user');
   return d;
 }
@@ -101,10 +101,10 @@ test('salesperson: streamed answer with sources, Undo of an automatic change, an
 
 test('sales manager: approves a stage move proposed by the Copilot', async ({ browser }) => {
   await as(browser, CAP, async (page) => {
-    const deal = await myOpenDeal(page).catch(async () => {
-      const deals = (await apiCall(page, 'GET', '/api/v1/deals?status=open&limit=100')).json.items as { id: string; name: string }[];
-      return deals.find((d) => !d.name.startsWith('CNRY')) as { id: string; name: string };
-    });
+    // An open deal of the team that is NOT already in Negotiation, so a stage move can be proposed.
+    const deals = (await apiCall(page, 'GET', '/api/v1/deals?status=open&limit=100')).json.items as { id: string; name: string; stageName: string }[];
+    const deal = deals.find((d) => !d.name.includes('CNRY-') && d.stageName !== 'Negotiation');
+    if (!deal) throw new Error('no open team deal outside Negotiation');
     await page.goto(`/deals/${deal.id}`);
     await ask(page, 'Move this deal to Negotiation');
     const card = panel(page).getByTestId('copilot-action').first();
