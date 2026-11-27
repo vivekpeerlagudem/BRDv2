@@ -45,10 +45,10 @@ const KEYWORDS: [Group, RegExp][] = [
   ['notes', /\bnotes?\b|\blog\b|\bcall\b|meeting|spoke|save\b|record (a|the)/i],
   [
     'reports',
-    /pipeline|forecast|revenue|win rate|figures|kpi|total|how much|report|quarter|this month|last month|by (rep|owner|person|stage)|performance|lost reasons?/i,
+    /pipeline|forecast|revenue|win rate|figures|kpi|total|how much|report|quarter|(this|last) (week|month)|how (did|are|is) (we|it|my team|the team)|by (rep|owner|person|stage)|performance|lost reasons?/i,
   ],
   ['proposals', /proposals?|quote|sent but|viewed|send\b|e-?mail/i],
-  ['brief', /brief|weekly report|why (did|are|is|were)|leadership/i],
+  ['brief', /brief|weekly report|why (did|are|is|were)|how did we do|(this|last) week|leadership/i],
   ['team', /\bteam\b|who\b|colleague|rep(s|resentative)?\b|response time|escalat|pick[- ]?up|\bsla\b|per person|each (person|rep)|help\b/i],
 ];
 const OPEN_GROUPS: Partial<Record<RefType, Group[]>> = {

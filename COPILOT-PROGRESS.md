@@ -21,6 +21,7 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 
 - Before the build: 320 tests (all green on 2026-11-25).
 - Final (2026-11-27): pnpm test 420/420 in 38 files; typecheck, lint, build green; Playwright e2e/copilot.spec.ts 3/3.
+- Fix pass (2026-11-27): pnpm verify 433/433 in 40 files (+5 chat, +6 tool-select unit, +3 web readable, +2 agents, minus 0); Playwright 3/3.
 - After M1: +16 adapter tests, +4 foundations (integration), +1 dependency rule, config test extended.
 - After M2: +13 chat integration, +13 text unit, +3 web SSE unit.
 - After M8 so far: +2 eval integration (50 tasks on fake, 100 %), +1 adapter regression test (fractional timeout).
@@ -183,6 +184,18 @@ Resume rule: read this file, continue from the next unfinished milestone, update
     and the record is rescored by the deterministic rules (tags kept). An extraction failure never blocks triage.
     The simulator answers the extraction call by keywords; in "gullible" mode it also returns invented values and
     extra keys, which the tests prove are dropped. +2 agents integration tests (normal and injected enquiry).
+52. **Checks (item 6)**: pnpm verify green: typecheck, lint, build, 433/433 tests in 40 files (was 420/38).
+    Playwright e2e/copilot.spec.ts 3/3 on crm_dev with the simulator.
+53. **Live verification (item 5) blocked: quota not reset yet.** At 11:47 UTC one Gemini test call answered (OK),
+    so the app was switched to AI_PROVIDER=openai and checks a-h started. Case a made 3 model steps (list_leads x3,
+    8,678 input / 110 output tokens, USD 0.0029 for the partial run), then every call returned HTTP 429; cases b-h
+    failed at step 1 with 429, and a second single test call at 11:48 UTC was 429 too. The free-tier daily quota
+    resets at midnight Pacific (08:00 UTC); it ran out at ~11:05 UTC, after today's reset, so the next reset is
+    2026-11-28 08:00 UTC. No eval was started and nothing was retried in a loop. The app was put back on
+    AI_PROVIDER=fake so it keeps working (AI_PRICES for gemini-3.5-flash-lite is now in .env.local). No demo data was
+    changed by the attempt (e failed before proposing a card; d created no task).
+54. "How did we do this week?" matched no keyword group (full-list fallback); week wording added to the report and
+    brief groups, with a unit test.
 
 ## Open issues
 
@@ -232,6 +245,11 @@ Notes for whoever resumes:
   columns added by hand or a restore + re-migrate. Take a pg_dump of crm_dev before any further step on it.
 
 ## Next step after the Gemini quota resets (live proof a-h)
+
+Fix pass state (2026-11-27 ~11:55 UTC): items 1-4 and 6 done and committed; item 5 blocked by the quota (decision 53).
+After 2026-11-28 08:00 UTC: one test call; if OK set AI_PROVIDER=openai, restart the API, run checks a-h, then
+pnpm copilot:eval --provider openai --models gemini-3.5-flash-lite --runs 1 (then 2 and 3 if quota remains), and report
+rate-limit errors separately from wrong answers. Leave the app on Gemini afterwards.
 
 - Gemini free-tier daily quota ran out on 2026-11-27 ~11:05 UTC (every call HTTP 429). Live proof a-h not run.
 - To run on Gemini: in .env.local set AI_PROVIDER=openai and AI_MODEL_MAIN=gemini-3.5-flash-lite (gemini-3.8-flash

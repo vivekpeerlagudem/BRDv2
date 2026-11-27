@@ -15,6 +15,7 @@ describe('tool pre-filter (deterministic keyword rules)', () => {
     expect(names('What is my open pipeline value and weighted forecast?')).toContain('pipeline_report');
     expect(names('What are my key figures: won revenue and win rate?')).toEqual(expect.arrayContaining(['kpis', 'pipeline_report']));
     expect(names('How is my team doing?', null, 'sales_manager')).toContain('pipeline_report');
+    expect(names('How did we do this week?', null, 'admin')).toEqual(expect.arrayContaining(['kpis', 'pipeline_report', 'sales_brief_latest']));
   });
   it('offers the write tool an action question needs', () => {
     expect(names('Score this lead', 'lead')).toContain('set_lead_score');
