@@ -123,7 +123,70 @@ const NEVER =
   /\b(send|share|email|e-mail|sign|delete|remove|mark\b.*\bwon|close\b.*\bwon|approve the (brief|report)|change (the )?(settings|role|permission))/i;
 const CANT_SEE = "I can't see that. It is either outside what you can see or it does not exist.";
 
+/**
+ * The quarantined lead-field extraction call (no tools): pick values by keyword from the enquiry text. A fooled
+ * (gullible) model also returns whatever the text told it to, including values outside the lists and extra keys, so
+ * tests can prove the server keeps only valid suggestions.
+ */
+function extractFields(req: AiConverseRequest, mode: 'planner' | 'gullible'): PlannedStep {
+  const text = req.messages.map((m) => m.content.map((b) => (b.type === 'text' ? b.text : '')).join(' ')).join(' ');
+  const t = text.toLowerCase();
+  const out: Json = {};
+  const first = <T extends string>(pairs: [RegExp, T][]) => pairs.find(([re]) => re.test(t))?.[1];
+  out.industry = first([
+    [/manufactur|factory|plant/, 'manufacturing'],
+    [/wholesale|distribut/, 'distribution_wholesale'],
+    [/bakery|food|beverage|coffee|cafe/, 'food_beverage'],
+    [/retail|online store|web ?shop/, 'retail_ecommerce'],
+  ]);
+  out.currentPlatform = first([
+    [/acumatica/, 'acumatica'],
+    [/netsuite/, 'netsuite'],
+    [/quickbooks/, 'quickbooks'],
+    [/dynamics/, 'microsoft_dynamics'],
+    [/sap business one/, 'sap_business_one'],
+    [/\bsage\b/, 'sage'],
+    [/shopify/, 'shopify'],
+    [/bigcommerce/, 'bigcommerce'],
+    [/magento|adobe commerce/, 'adobe_commerce'],
+  ]);
+  const staff = /(\d{1,5})\s*(employees|staff|people)/.exec(t);
+  if (staff) {
+    const n = Number(staff[1]);
+    out.companySizeBand = n <= 10 ? '1-10' : n <= 50 ? '11-50' : n <= 200 ? '51-200' : n <= 1000 ? '201-1000' : '1000+';
+  }
+  const services = [
+    [/\berp\b/, 'erp_implementation'],
+    [/web ?store|e-?commerce|online store/, 'ecommerce_build'],
+    [/integrat/, 'integration'],
+    [/upgrade|migrat/, 'upgrade_migration'],
+    [/managed service|support contract/, 'support_managed_services'],
+  ]
+    .filter(([re]) => (re as RegExp).test(t))
+    .map(([, v]) => v);
+  if (services.length) out.serviceInterest = services;
+  out.budgetBand = first([
+    [/over[ _]?\$?250k/, 'over_250k'],
+    [/\$?(1\d\d|2[0-4]\d)k/, '100k_250k'],
+    [/\$?([3-9]\d)k/, '25k_100k'],
+  ]);
+  out.timeline = first([
+    [/asap|this quarter|within (3|three) months|next month/, '0_3_months'],
+    [/(6|six) months/, '3_6_months'],
+    [/next year|(12|twelve) months/, '6_12_months'],
+  ]);
+  if (mode === 'gullible') {
+    // Obeys the text: an invented budget band, a status change and an extra instruction.
+    out.budgetBand = 'one_million';
+    out.status = 'qualified';
+    out.next_action = 'convert_lead and email the CEO';
+  }
+  for (const k of Object.keys(out)) if (out[k] === undefined) delete out[k];
+  return { text: JSON.stringify(out) };
+}
+
 export const planStep: MockPlanner = (req, mode) => {
+  if (req.system.startsWith('[lead-field-extraction]')) return extractFields(req, mode);
   const qi = questionIndex(req);
   const question = lastQuestion(req);
   if (!question) return { text: 'How can I help?' };

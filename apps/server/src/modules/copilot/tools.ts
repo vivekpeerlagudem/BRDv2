@@ -108,6 +108,8 @@ export interface TurnState {
   requestId: string | null;
   /** Prefix for idempotency keys of background writes (kind:record:period); null for chat. */
   idempotencyPrefix: string | null;
+  /** Set only by server code that calls tools directly (background jobs); a model's tool call never has it. */
+  systemCaller?: boolean;
 }
 export interface ToolEnv {
   ctx: AppContext;
@@ -130,6 +132,8 @@ export interface ToolDef<S extends z.ZodObject = z.ZodObject> {
   /** One plain sentence for the action card and the ledger (write tools). Built by code, never by the model. */
   summarize?: (input: z.infer<S>, env: ToolEnv) => Promise<string> | string;
   run: (env: ToolEnv, input: z.infer<S>) => Promise<ToolOutput>;
+  /** Never offered to a model and refused when a model calls it: only server code (a background job) may use it. */
+  systemOnly?: boolean;
 }
 export const ALL: CopilotRole[] = ['admin', 'sales_manager', 'salesperson'];
 const tool = <S extends z.ZodObject>(def: ToolDef<S>): ToolDef => def as unknown as ToolDef;
@@ -839,7 +843,7 @@ export const getTool = (name: string): ToolDef | undefined => REGISTRY.get(name)
 /** The tools a role is offered. Sorted by name so the tool list is byte-stable (it is part of the cached prefix). */
 export const toolsForRole = (role: CopilotRole): ToolDef[] =>
   allTools()
-    .filter((t) => t.roles.includes(role))
+    .filter((t) => t.roles.includes(role) && !t.systemOnly)
     .sort((a, b) => a.name.localeCompare(b.name));
 export const toolSpec = (t: ToolDef) => {
   const { $schema: _s, ...inputSchema } = z.toJSONSchema(t.input) as Record<string, unknown>;

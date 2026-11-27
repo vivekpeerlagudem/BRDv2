@@ -170,7 +170,19 @@ Resume rule: read this file, continue from the next unfinished milestone, update
     no longer true by design). System prompt shortened to 8 numbered rules (copilot/v2). Tool results capped at
     5,000 characters (was 8,000) and default list sizes 10 (was 15).
     Simulator, 50 eval tasks, average input tokens per question: 10,071 before -> 6,124 after (-39 %), still 50/50.
-50. Items 2 and 3 share loop.ts and prompt.ts, so they are one commit.
+50. Items 2 and 3 share loop.ts and prompt.ts, so they are one commit (3474edb).
+51. **Lead triage with missing fields (lead-fields.ts)**: after the triage run scores the record, a quarantined step
+    calls AI_MODEL_FAST with NO tools and only the lead's own text (web-form company, job title and message, or the
+    lead's company, job title and notes), nonce-wrapped as outside text, and asks for JSON. Every value is checked
+    against the fixed lists (field by field; invalid values and unknown keys dropped; only fields that are still
+    empty). The result is an approval card `confirm_lead_fields` ("Confirm suggested fields for X ... Then rescore
+    it"). Chosen over "Confirm" chips: the card already has Approve/Reject, the 24 h expiry, the ledger and
+    re-validation at approval. The tool is `systemOnly`: never offered to a model, and executeTool refuses it unless
+    server code sets turn.systemCaller (so a fooled model cannot create or approve one). On approval, as the
+    approving user, the fields are written (lead: crm.updateLead; web-form deal: merged into the submission payload)
+    and the record is rescored by the deterministic rules (tags kept). An extraction failure never blocks triage.
+    The simulator answers the extraction call by keywords; in "gullible" mode it also returns invented values and
+    extra keys, which the tests prove are dropped. +2 agents integration tests (normal and injected enquiry).
 
 ## Open issues
 

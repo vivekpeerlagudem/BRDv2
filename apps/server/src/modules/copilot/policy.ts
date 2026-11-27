@@ -57,7 +57,8 @@ const err = (code: string, extra: Record<string, unknown> = {}) => JSON.stringif
 export async function executeTool(env: ToolEnv, call: ToolCall): Promise<ToolExecution> {
   const tool = getTool(call.name);
   // Unknown tool, or one this role is not offered: the same answer, so tool names cannot be probed.
-  if (!tool?.roles.includes(env.actor.role)) return { content: err('unknown_tool'), isError: true, outcome: 'unknown_tool', tier: null };
+  if (!tool?.roles.includes(env.actor.role) || (tool.systemOnly && !env.turn.systemCaller))
+    return { content: err('unknown_tool'), isError: true, outcome: 'unknown_tool', tier: null };
   if (env.turn.toolCalls >= CAPS.maxToolCalls)
     return { content: err('tool_limit_reached', { note: 'Answer now with what you already have.' }), isError: true, outcome: 'limit', tier: tool.tier };
   env.turn.toolCalls++;

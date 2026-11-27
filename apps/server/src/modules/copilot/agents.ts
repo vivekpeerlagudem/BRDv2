@@ -17,6 +17,7 @@ import { DomainError } from '../../platform/errors/domain-error.ts';
 import type { CopilotFeature } from '../../platform/ports.ts';
 import { assertCopilotAllowed } from './budget.ts';
 import { homeCard } from './home.ts';
+import { suggestLeadFields } from './lead-fields.ts';
 import { runAgent } from './loop.ts';
 import { executeTool } from './policy.ts';
 import { loadCopilotSettings } from './settings.ts';
@@ -207,6 +208,13 @@ export async function runBackgroundJob(ctx: AppContext, queue: Queue, payload: R
       question: 'Triage this newly assigned lead: read it, then score it with set_lead_score, choosing tags from the list and writing a one-line reason.',
       idempotencyKey: key,
     });
+    // Missing qualification fields: a quarantined, tool-less step suggests them from the lead's own text, as an
+    // approval card the salesperson confirms (then the record is rescored by the rules). Never blocks the triage.
+    try {
+      await suggestLeadFields(await backgroundEnv(ctx, actor, kind, `${key}:fields`), { type: recordType, id: payload.recordId as string });
+    } catch (error) {
+      ctx.logger.warn({ key, code: error instanceof DomainError ? error.code : 'failed' }, 'lead field suggestion skipped');
+    }
     return;
   }
 
