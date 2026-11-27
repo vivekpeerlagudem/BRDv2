@@ -17,6 +17,7 @@ import * as crm from '../crm.ts';
 import * as proposals from '../proposals.ts';
 import { assertBudget, assertCopilotAllowed, costMicroUsd } from './budget.ts';
 import './actions.ts'; // registers the write tools and the action ledger with the policy engine
+import './assignments.ts'; // registers accept_assignment
 import { type ActionEvent, CAPS, executeTool, type ToolCall } from './policy.ts';
 import { PROMPT_VERSION, sessionBlock, systemPrompt } from './prompt.ts';
 import { loadCopilotSettings, modelFor } from './settings.ts';

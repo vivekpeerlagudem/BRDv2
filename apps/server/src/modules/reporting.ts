@@ -7,6 +7,7 @@ import { scopeFor } from '@crm/shared';
 import { and, eq, gte, inArray, isNull, type SQL, sql } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
+import { workAssignment } from '../db/schema-copilot.ts';
 import { type AppContext, canAccessOwner, forbidden, notFound, ownerScope, requirePerm, schema, type UserActor, unitOfWork } from '../platform/core.ts';
 
 const { deal, pipelineStage, appUserProfile, proposal, proposalVersion, dealFlag, shareLink, lostReason, task, activityLog } = schema;
@@ -311,6 +312,60 @@ export async function reportFilters(ctx: AppContext, actor: UserActor) {
   };
 }
 
+/**
+ * Lead response times (Kensium Copilot accept-and-escalate): assignments made in the period, scoped like every other
+ * section by the assignee. Median and p90 of business minutes to accept, % accepted within the time limit, and the
+ * median minutes to first contact — overall, by rep and by team (current active team).
+ */
+async function responseTimesSection(ctx: AppContext, s: ReportScope) {
+  const wa = workAssignment;
+  const figures = {
+    assigned: sql<number>`count(*)::int`,
+    accepted: sql<number>`count(${wa.acceptedAt})::int`,
+    acceptedWithinSla: sql<number>`count(*) filter (where ${wa.acceptedWithinSla})::int`,
+    escalated: sql<number>`count(*) filter (where ${wa.escalationLevel} > 0)::int`,
+    medianBusinessMinutesToAccept: sql<string | null>`round(percentile_cont(0.5) within group (order by ${wa.businessMinutesToAccept}))::text`,
+    p90BusinessMinutesToAccept: sql<string | null>`round(percentile_cont(0.9) within group (order by ${wa.businessMinutesToAccept}))::text`,
+    medianMinutesToAccept: sql<string | null>`round(percentile_cont(0.5) within group (order by ${wa.minutesToAccept}))::text`,
+    medianMinutesToFirstContact: sql<
+      string | null
+    >`round(percentile_cont(0.5) within group (order by extract(epoch from (${wa.firstContactAt} - ${wa.assignedAt})) / 60))::text`,
+  };
+  const where = and(s.owners(wa.assigneeId), s.inRange(wa.assignedAt), sql`${wa.status} <> 'superseded'`);
+  const shape = (r: { [K in keyof typeof figures]: unknown }) => ({
+    assigned: Number(r.assigned),
+    accepted: Number(r.accepted),
+    acceptedWithinSla: Number(r.acceptedWithinSla),
+    escalated: Number(r.escalated),
+    acceptedWithinSlaPercent: Number(r.accepted) ? Math.round((Number(r.acceptedWithinSla) / Number(r.accepted)) * 100) : null,
+    medianBusinessMinutesToAccept: r.medianBusinessMinutesToAccept === null ? null : Number(r.medianBusinessMinutesToAccept),
+    p90BusinessMinutesToAccept: r.p90BusinessMinutesToAccept === null ? null : Number(r.p90BusinessMinutesToAccept),
+    medianMinutesToAccept: r.medianMinutesToAccept === null ? null : Number(r.medianMinutesToAccept),
+    medianMinutesToFirstContact: r.medianMinutesToFirstContact === null ? null : Number(r.medianMinutesToFirstContact),
+  });
+  const [total] = await ctx.db.select(figures).from(wa).where(where);
+  const byRep = await ctx.db
+    .select({ ownerId: wa.assigneeId, name: appUserProfile.fullName, ...figures })
+    .from(wa)
+    .innerJoin(appUserProfile, eq(appUserProfile.userId, wa.assigneeId))
+    .where(where)
+    .groupBy(wa.assigneeId, appUserProfile.fullName)
+    .orderBy(appUserProfile.fullName);
+  const byTeam = await ctx.db
+    .select({ teamId: team.id, team: team.name, ...figures })
+    .from(wa)
+    .innerJoin(teamMembership, and(eq(teamMembership.userId, wa.assigneeId), eq(teamMembership.isActive, true)))
+    .innerJoin(team, eq(team.id, teamMembership.teamId))
+    .where(where)
+    .groupBy(team.id, team.name)
+    .orderBy(team.name);
+  return {
+    total: total ? shape(total) : null,
+    byRep: byRep.map((r) => ({ ownerId: r.ownerId, name: r.name, ...shape(r) })),
+    byTeam: byTeam.map((r) => ({ teamId: r.teamId, team: r.team, ...shape(r) })),
+  };
+}
+
 export async function reportOverview(ctx: AppContext, actor: UserActor, q: ReportQuery) {
   const s = await resolveScope(ctx, actor, q);
   const live = and(isNull(deal.archivedAt), s.owners(deal.ownerId));
@@ -538,12 +593,15 @@ export async function reportOverview(ctx: AppContext, actor: UserActor, q: Repor
     lastProposalStatus: (r.last_proposal_status as string | null) ?? null,
   }));
 
+  const responseTimes = await responseTimesSection(ctx, s);
+
   return {
     scope: scopeLabel(actor),
     filters: { from: s.from, to: s.to, teamId: s.teamId, ownerId: s.ownerId },
     currency: s.currency,
     timeZone: s.timeZone,
     generatedAt: nowIso,
+    responseTimes,
     pipelineByStage,
     pipelineByOwner,
     pipelineTotals: {

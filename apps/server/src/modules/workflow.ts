@@ -5,6 +5,7 @@
  */
 import { and, asc, eq, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { type AppContext, conflict, loadDealFor, lockRow, notFound, SYSTEM, schema, type Uow, type UserActor, unitOfWork } from '../platform/core.ts';
+import { onLeadAssigned } from './copilot/assignments.ts';
 import { runCopilotScans } from './copilot/scheduled.ts';
 import { applyClose, todayIso } from './crm.ts';
 import { isStalled, reversalConflicts, shouldMoveToProposalStage } from './domain.ts';
@@ -67,6 +68,16 @@ async function dealOwner(u: Uow, dealId: string) {
 const fourHourBucket = (ctx: AppContext) => Math.floor(ctx.now().getTime() / (4 * 3_600_000));
 
 async function notificationsFor(ctx: AppContext, u: Uow, e: Event) {
+  if (e.name === 'lead.assigned' && e.leadId)
+    return notify(ctx, u, {
+      userId: e.userId as string,
+      eventType: 'new_lead_assigned',
+      title: 'New lead assigned to you',
+      body: 'A lead was assigned to you. Accept it in the lead inbox.',
+      linkPath: '/leads',
+      dedupeKey: `lead:${e.leadId}:${e.rowVersion}`,
+      email: false,
+    });
   if (e.name === 'lead.assigned')
     return notify(ctx, u, {
       userId: e.userId as string,
@@ -479,10 +490,13 @@ export async function runScheduledScans(ctx: AppContext) {
 async function handle(ctx: AppContext, queue: string, payload: Record<string, unknown>) {
   switch (queue) {
     case 'event':
-      return unitOfWork(ctx, SYSTEM, async (u) => {
+      await unitOfWork(ctx, SYSTEM, async (u) => {
         await notificationsFor(ctx, u, payload as Event);
         await automationFor(ctx, u, payload as Event);
       });
+      // Kensium Copilot accept-and-escalate: every lead assignment gets a work_assignment with a deadline.
+      if (payload.name === 'lead.assigned') await onLeadAssigned(ctx, payload);
+      return;
     case 'automation.aut004':
       return aut004(ctx, payload as { versionId: string; proposalId: string; dealId: string });
     case 'esign.dispatch':

@@ -11,7 +11,7 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 | M2 | Read-only Copilot: loop, read tools, playbooks, grounding, SSE API, side panel | done | (see git log) |
 | M3 | Actions and human control: policy engine, tiers, ledger, scoring, cards | done | (see git log) |
 | M4 | Role home cards | done | (see git log) |
-| M5 | Accept-and-escalate | | |
+| M5 | Accept-and-escalate | done | (see git log) |
 | M6 | Background agents | | |
 | M7 | Admin, budgets, operations | | |
 | M8 | Evaluation and model ladder (fake, then live Gemini) | | |
@@ -22,6 +22,7 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 - Before the build: 320 tests (all green on 2026-11-25).
 - After M1: +16 adapter tests, +4 foundations (integration), +1 dependency rule, config test extended.
 - After M2: +13 chat integration, +13 text unit, +3 web SSE unit.
+- After M5: +7 SLA integration (fake clock), +7 business-hours unit. pnpm verify: 407 tests green.
 - After M4: +4 home integration.
 - After M3: +11 actions integration (incl. policy matrix 3 roles x every tool), +8 scoring unit. pnpm verify: 389+ tests.
 
@@ -81,6 +82,16 @@ Resume rule: read this file, continue from the next unfinished milestone, update
     shown only when it is grounded, otherwise the card has no summary.
 26. **Backslashes in tool input get mangled** (heredocs and node -e alike): use the Write/Edit tools for code with
     regexes or escapes, never shell-built strings.
+27. **Assignments are created by the lead.assigned job** (web form: deal record; manual assignLead: lead record, new
+    event in crm.assignLead when the owner changes). The manager's Copilot reassign and POST /assignments/:id/reassign
+    create the new row at once; the job then skips it (idempotent for the same assignee). Changing a web-form deal's
+    owner in the plain CRM screen does not start a new assignment (only reassign through /assignments does).
+28. **Escalation level 1** goes to the rep's active team manager; with no active manager it goes straight to an
+    admin (status escalated_admin). The admin chosen is the first active admin by name.
+29. **Time to first contact is found by the scheduled scan** (first call/meeting on the deal, its company or people,
+    or on the converted lead's records), not by a hook in logActivity: crm stays free of copilot code.
+30. **Response times** are a new `responseTimes` block in GET /reports/overview (total, byRep, byTeam; scoped by the
+    assignee like every section). No separate /reports/response-times endpoint.
 
 ## Open issues
 
@@ -88,9 +99,10 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 
 ## Next step (resume here)
 
-M5 accept-and-escalate: modules/copilot/business-hours.ts (addBusinessHours + tests), assignments.ts (work_assignment
-on lead.assigned / assignLead / reassignment, accept/decline/reassign, timers in runCopilotScans, first contact on
-logActivity), accept_assignment tool via addWriteTool, response-times section in reportOverview, web banner.
+M6 background agents: modules/copilot/agents.ts — job_outbox queues copilot.triage (on lead.assigned),
+copilot.my_day (02:00 per active user), copilot.digest (Mondays after the Sales Brief is approved),
+copilot.handoff (deal won); idempotency key kind:record:period; deactivated principal = skipped + logged.
+Scheduling from runCopilotScans; handlers registered in workflow.handle.
 
 Notes for whoever resumes:
 - The tool pipeline turns \uXXXX escapes into literal characters when writing files. Never write such escapes; build

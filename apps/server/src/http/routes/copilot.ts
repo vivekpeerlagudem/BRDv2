@@ -1,6 +1,7 @@
-import { copilotConversationInput, copilotTurnInput } from '@crm/shared';
+import { assignmentDeclineInput, assignmentReassignInput, copilotConversationInput, copilotTurnInput } from '@crm/shared';
 import { streamSSE } from 'hono/streaming';
 import * as actions from '../../modules/copilot/actions.ts';
+import * as assignments from '../../modules/copilot/assignments.ts';
 import * as conversations from '../../modules/copilot/conversations.ts';
 import { homeCard } from '../../modules/copilot/home.ts';
 import type { CopilotEvent } from '../../modules/copilot/loop.ts';
@@ -23,6 +24,16 @@ export function register(api: Api, kit: RouteKit): void {
 
   // Role home card (deterministic); ?summary=1 adds a grounded one-line AI summary.
   api.get('/copilot/home', async (c) => c.json(await homeCard(ctx, kit.actor(c), { summary: c.req.query('summary') === '1', requestId: c.get('requestId') })));
+
+  // Accept-and-escalate.
+  api.get('/assignments', async (c) => c.json(await assignments.listAssignments(ctx, kit.actor(c), { mine: c.req.query('mine') === '1' })));
+  api.post('/assignments/:id/accept', async (c) => c.json(await assignments.acceptAssignment(ctx, kit.actor(c), kit.id(c))));
+  api.post('/assignments/:id/decline', async (c) =>
+    c.json(await assignments.declineAssignment(ctx, kit.actor(c), kit.id(c), (await kit.body(c, assignmentDeclineInput)).reason)),
+  );
+  api.post('/assignments/:id/reassign', async (c) =>
+    c.json(await assignments.reassignAssignment(ctx, kit.actor(c), kit.id(c), (await kit.body(c, assignmentReassignInput)).assigneeId)),
+  );
 
   // Action ledger: the user's own approval cards and automatic changes (with Undo).
   api.get('/copilot/actions', async (c) => c.json(await actions.listActions(ctx, kit.actor(c), c.req.query('view') === 'done' ? 'done' : 'pending')));

@@ -25,6 +25,7 @@ import {
   Textarea,
   useAction,
 } from '../lib/ui.tsx';
+import { AssignmentBanner } from './copilot-assignments.tsx';
 import { ActionError, type Column, SortableTable } from './crm.tsx';
 
 type LeadStatus = 'new' | 'working' | 'qualified' | 'unqualified' | 'converted';
@@ -199,6 +200,7 @@ export function LeadsPage() {
         subtitle="Capture prospects, work and qualify them, then convert them into a company, person and opportunity"
         actions={canManage ? <Button onClick={() => setDialog({ kind: 'new' })}>New lead</Button> : undefined}
       />
+      {me.data && <AssignmentBanner userId={me.data.user.id} />}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div role="tablist" aria-label="Lead status" className="flex flex-wrap gap-0.5 rounded-lg border border-line bg-surface p-0.5">
           {(['', ...STATUS_ORDER] as const).map((s) => (

@@ -1438,6 +1438,9 @@ export async function assignLead(ctx: AppContext, actor: UserActor, id: string, 
       .set({ ownerId, updatedBy: actor.userId, updatedAt: ctx.now(), rowVersion: before.rowVersion + 1 })
       .where(eq(lead.id, id));
     await u.audit('lead.assigned', { type: 'lead', id }, { ownerId: { from: before.ownerId, to: ownerId } });
+    // Accept-and-escalate: the new owner gets an assignment with a deadline (handled by the job runner).
+    if (before.ownerId !== ownerId)
+      await u.enqueue('event', { name: 'lead.assigned', leadId: id, userId: ownerId, assignedBy: actor.userId, rowVersion: before.rowVersion + 1 });
   });
 }
 
