@@ -143,7 +143,18 @@ export async function runTask(kit: Kit, w: World, task: EvalTask, model: string,
     const got = numbersIn(answer);
     for (const n of want) if (!got.has(n)) reasons.push(`figure ${n} missing`);
   }
-  for (const c of e.contains ?? []) if (!answer.toLowerCase().includes(c.toLowerCase())) reasons.push(`answer lacks "${c}"`);
+  // A record name counts as given when the answer writes it, or when the answer cites the record by its alias and the
+  // screen shows that alias as a source chip with the name (the user sees the name either way). Dashes, quotes and
+  // spacing are compared loosely so "ERP–store" and "ERP-store" match.
+  const loose = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[‐‑‒–—]/g, '-')
+      .replace(/[‘’]/g, "'")
+      .replace(/\s+/g, ' ')
+      .trim();
+  const shown = [answer, ...result.sources.map((s) => s.label)].map(loose);
+  for (const c of e.contains ?? []) if (!shown.some((s) => s.includes(loose(c)))) reasons.push(`answer lacks "${c}"`);
   if (e.action) {
     const tier = e.action.tier === 'taint' ? (result.tainted ? 'approval' : 'auto') : e.action.tier;
     const status = tier === 'approval' ? 'proposed' : 'executed';
