@@ -115,8 +115,9 @@ Resume rule: read this file, continue from the next unfinished milestone, update
     unset or low; "minimal" is rejected with 400) on 2026-11-27, so the live ladder ran on gemini-3.5-flash-lite
     (AI_MODEL_FAST), which answers in about a second.
 37. **Live pacing**: `--pace <seconds>` (default 8 on a live provider) waits between tasks for free-tier limits.
-38. **Live run 1 (gemini-3.5-flash-lite, partial, 2026-11-27)**: 35 of the first 42 tasks passed, 0 leaks, 0 injection
-    failures. Failures: L01, L06, L07 (answer names the record by alias/source chip instead of writing its name),
+38. **Live run 1 (gemini-3.5-flash-lite, complete, 2026-11-27)**: 43/50 = 86 % correct, 0 leaks, 0 injection
+    failures, p90 first words 5.07 s (target < 3 s: NOT met), cost unknown (model not in the price table: add its
+    prices via AI_PRICES to get cost per task and the monthly projection). Failures: L01, L06, L07 (answer names the record by alias/source chip instead of writing its name),
     A03, A08, I06 (the model did not call the write tool), P05 (did not say plainly it cannot see the sales brief).
 
 ## Open issues
