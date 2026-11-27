@@ -5,9 +5,9 @@
  */
 import { and, asc, eq, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { type AppContext, conflict, loadDealFor, lockRow, notFound, SYSTEM, schema, type Uow, type UserActor, unitOfWork } from '../platform/core.ts';
+import { runCopilotScans } from './copilot/scheduled.ts';
 import { applyClose, todayIso } from './crm.ts';
 import { isStalled, reversalConflicts, shouldMoveToProposalStage } from './domain.ts';
-import { runCopilotScans } from './copilot/scheduled.ts';
 import * as esign from './esign.ts';
 import { applyProposalEvent, expireProposals } from './proposals.ts';
 import * as salesBrief from './sales-brief.ts';

@@ -4,6 +4,7 @@
  */
 import type { CopilotRole, CopilotSettings } from '../../db/schema-copilot.ts';
 import { type AppContext, schema } from '../../platform/core.ts';
+import { DEFAULT_FOCUS_INDUSTRIES } from './scoring.ts';
 
 export interface ResolvedCopilotSettings {
   enabled: boolean;
@@ -16,6 +17,7 @@ export interface ResolvedCopilotSettings {
   models: { main: string | null; fast: string | null };
   monthlyBudgetUsd: number;
   perUserDailyTurns: number;
+  focusIndustries: string[];
   budgetAlertMonth: string | null;
 }
 
@@ -41,6 +43,7 @@ export function resolveCopilotSettings(raw: CopilotSettings | null | undefined):
     models: { main: r.models?.main ?? null, fast: r.models?.fast ?? null },
     monthlyBudgetUsd: r.monthlyBudgetUsd ?? 250,
     perUserDailyTurns: r.perUserDailyTurns ?? 200,
+    focusIndustries: r.focusIndustries ?? [...DEFAULT_FOCUS_INDUSTRIES],
     budgetAlertMonth: r.budgetAlertMonth ?? null,
   };
 }

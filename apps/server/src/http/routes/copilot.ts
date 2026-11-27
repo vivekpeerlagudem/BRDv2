@@ -1,5 +1,6 @@
 import { copilotConversationInput, copilotTurnInput } from '@crm/shared';
 import { streamSSE } from 'hono/streaming';
+import * as actions from '../../modules/copilot/actions.ts';
 import * as conversations from '../../modules/copilot/conversations.ts';
 import type { CopilotEvent } from '../../modules/copilot/loop.ts';
 import type { Api, RouteKit } from '../kit.ts';
@@ -18,6 +19,12 @@ export function register(api: Api, kit: RouteKit): void {
   );
   api.get('/copilot/conversations/:id', async (c) => c.json(await conversations.getConversation(ctx, kit.actor(c), kit.id(c))));
   api.delete('/copilot/conversations/:id', async (c) => c.json(await conversations.deleteConversation(ctx, kit.actor(c), kit.id(c))));
+
+  // Action ledger: the user's own approval cards and automatic changes (with Undo).
+  api.get('/copilot/actions', async (c) => c.json(await actions.listActions(ctx, kit.actor(c), c.req.query('view') === 'done' ? 'done' : 'pending')));
+  api.post('/copilot/actions/:id/approve', async (c) => c.json(await actions.approveAction(ctx, kit.actor(c), kit.id(c))));
+  api.post('/copilot/actions/:id/reject', async (c) => c.json(await actions.rejectAction(ctx, kit.actor(c), kit.id(c))));
+  api.post('/copilot/actions/:id/undo', async (c) => c.json(await actions.undoAction(ctx, kit.actor(c), kit.id(c))));
 
   api.post('/copilot/conversations/:id/turns', async (c) => {
     const actor = kit.actor(c);

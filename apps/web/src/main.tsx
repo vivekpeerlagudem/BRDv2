@@ -5,6 +5,7 @@ import {
   Bot,
   Building2,
   ChartColumn,
+  Clock,
   CornerDownLeft,
   FileText,
   Handshake,
@@ -23,6 +24,7 @@ import {
   ShieldAlert,
   Sparkles,
   TrendingUp,
+  Undo2,
   Upload,
   UserCog,
   UserPlus,
@@ -37,6 +39,7 @@ import { Button, Field, Input, ToastProvider, useAction } from './lib/ui.tsx';
 import { AdminUsersPage, CatalogPage, TemplateEditorPage, TemplatesPage } from './pages/admin.tsx';
 import { AiActivityPage, AiSettingsPage } from './pages/ai.tsx';
 import { CopilotPanel } from './pages/copilot.tsx';
+import { CopilotApprovalsPage, CopilotDonePage } from './pages/copilot-actions.tsx';
 import { CompaniesPage, CompanyPage, ContactPage, ContactsPage, TasksPage } from './pages/crm.tsx';
 import { DashboardPage } from './pages/dashboard.tsx';
 import { DealPage, DealsPage } from './pages/deals.tsx';
@@ -379,6 +382,13 @@ function Shell() {
       ],
     },
     {
+      title: 'Copilot',
+      items: [
+        { to: '/copilot/approvals', label: 'Waiting for your OK', icon: Clock, show: true },
+        { to: '/copilot/done', label: 'Done by Copilot', icon: Undo2, show: true },
+      ],
+    },
+    {
       title: 'Sales content',
       items: [
         { to: '/templates', label: 'Templates', icon: LayoutTemplate, show: Boolean(p['content.manage']) },
@@ -568,6 +578,8 @@ const routeTree = rootRoute.addChildren([
     r('/admin/users', AdminUsersPage),
     r('/ai', AiActivityPage),
     r('/admin/ai', AiSettingsPage),
+    r('/copilot/approvals', CopilotApprovalsPage),
+    r('/copilot/done', CopilotDonePage),
   ]),
 ]);
 const router = createRouter({ routeTree });

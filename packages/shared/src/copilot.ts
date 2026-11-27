@@ -106,4 +106,5 @@ export const copilotSettingsInput = z.object({
   models: z.object({ main: z.string().trim().max(120).nullable().optional(), fast: z.string().trim().max(120).nullable().optional() }).optional(),
   monthlyBudgetUsd: z.number().min(0).max(100000).optional(),
   perUserDailyTurns: z.number().int().min(1).max(5000).optional(),
+  focusIndustries: z.array(z.enum(LEAD_INDUSTRIES)).max(5).optional(),
 });

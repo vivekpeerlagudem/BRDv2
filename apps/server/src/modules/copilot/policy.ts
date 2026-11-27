@@ -9,6 +9,7 @@
  * The model's wording never decides any of this.
  */
 import type { z } from 'zod';
+import type { ActionStatus } from '../../db/schema-copilot.ts';
 import { DomainError } from '../../platform/errors/domain-error.ts';
 import { getTool, renderToolOutput, type ToolDef, type ToolEnv } from './tools.ts';
 
@@ -31,7 +32,7 @@ export interface ActionEvent {
   id: string;
   tool: string;
   tier: 'auto' | 'approval' | 'draft';
-  status: 'executed' | 'proposed';
+  status: ActionStatus;
   summary: string;
   target: { type: string; id: string } | null;
   undoable: boolean;

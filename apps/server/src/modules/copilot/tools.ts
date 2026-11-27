@@ -131,11 +131,11 @@ export interface ToolDef<S extends z.ZodObject = z.ZodObject> {
   summarize?: (input: z.infer<S>, env: ToolEnv) => Promise<string> | string;
   run: (env: ToolEnv, input: z.infer<S>) => Promise<ToolOutput>;
 }
-const ALL: CopilotRole[] = ['admin', 'sales_manager', 'salesperson'];
+export const ALL: CopilotRole[] = ['admin', 'sales_manager', 'salesperson'];
 const tool = <S extends z.ZodObject>(def: ToolDef<S>): ToolDef => def as unknown as ToolDef;
 
 // ───────────────────────── helpers ─────────────────────────
-const refInput = (what: string) => z.string().trim().min(2).max(8).describe(`Alias of ${what}, exactly as shown in an earlier tool result, e.g. D3`);
+export const refInput = (what: string) => z.string().trim().min(2).max(8).describe(`Alias of ${what}, exactly as shown in an earlier tool result, e.g. D3`);
 const day = (d: Date | string | null | undefined): string | null => (d ? new Date(d).toISOString().slice(0, 10) : null);
 const money = (v: string | number | null | undefined): string | null => (v === null || v === undefined ? null : String(v));
 const personName = (p: { firstName?: string | null; lastName?: string | null }) => [p.firstName, p.lastName].filter(Boolean).join(' ') || '(no name)';

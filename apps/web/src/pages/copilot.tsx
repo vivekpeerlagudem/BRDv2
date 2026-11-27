@@ -226,7 +226,10 @@ export function CopilotPanel({ open, onClose }: { open: boolean; onClose: () => 
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) void send(e as unknown as FormEvent);
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                void send(e as unknown as FormEvent);
+              }
             }}
             rows={2}
             maxLength={4000}

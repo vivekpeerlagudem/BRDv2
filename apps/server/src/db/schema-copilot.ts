@@ -30,6 +30,8 @@ export interface CopilotSettings {
   models?: { main?: string | null; fast?: string | null };
   monthlyBudgetUsd?: number;
   perUserDailyTurns?: number;
+  /** Industries that earn the "focus industry" fit points in lead scoring. */
+  focusIndustries?: string[];
   /** Month (YYYY-MM) for which the 80 % budget alert was already sent. */
   budgetAlertMonth?: string | null;
 }

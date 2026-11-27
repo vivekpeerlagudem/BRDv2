@@ -9,7 +9,7 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 |---|---|---|---|
 | M1 | Foundations: scope fix, AI port, adapters, migration 0010, demo seed, dependency rule | done | 65808d5 |
 | M2 | Read-only Copilot: loop, read tools, playbooks, grounding, SSE API, side panel | done | (see git log) |
-| M3 | Actions and human control: policy engine, tiers, ledger, scoring, cards | | |
+| M3 | Actions and human control: policy engine, tiers, ledger, scoring, cards | done | (see git log) |
 | M4 | Role home cards | | |
 | M5 | Accept-and-escalate | | |
 | M6 | Background agents | | |
@@ -22,6 +22,7 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 - Before the build: 320 tests (all green on 2026-11-25).
 - After M1: +16 adapter tests, +4 foundations (integration), +1 dependency rule, config test extended.
 - After M2: +13 chat integration, +13 text unit, +3 web SSE unit.
+- After M3: +11 actions integration (incl. policy matrix 3 roles x every tool), +8 scoring unit. pnpm verify: 389+ tests.
 
 ## Decisions (made without asking)
 
@@ -60,6 +61,20 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 16. **Web CSP** is a `<meta http-equiv>` with `img-src 'self'` only in `apps/web/index.html`; a stricter script-src would
     break the Vite dev server, and img-src is what blocks pixel exfiltration.
 17. **UI checks** are done by the Playwright flows at the final gate (crm_dev seed passwords are random per seed).
+18. **Internal notes count as outside text** (as in the existing AI layer): a chat turn that has read a record's notes
+    is tainted, so a free-text auto write (task title, AI note, score reason) in that turn becomes an approval card.
+19. **Tasks and notes go on deals, companies or people only** (the schema has no lead tasks/notes); a lead's reason
+    lives in record_score.reason.
+20. **Scoring engagement** (activity in 14 days, proposal viewed) is a +10 bonus group; the total is capped at 100.
+    `focusIndustries` (default distribution/wholesale, manufacturing) is a new Copilot setting. Only won deals the
+    user may see count for "already a customer".
+21. **Approve is limited to the card's own user** (others get 404). Approved cards get status `approved`; only
+    auto actions have Undo. A double click cannot run a card twice (claim via decided_at).
+22. **Copilot notifications are in-app only** (`notifyInApp` in actions.ts, no e-mail) because workflow.notify is
+    private and the copilot module must not import e-mail code.
+23. **close_deal_lost refuses** when the deal has an open signature request (the Copilot never touches e-sign) and
+    when the reason matches no lost reason and there is no "Other" reason.
+24. **accept_assignment** is added in M5 with the assignments module (addWriteTool).
 
 ## Open issues
 
@@ -67,12 +82,8 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 
 ## Next step (resume here)
 
-M3: write tools register through policy.setWriteHandler (modules/copilot/actions.ts); the planner already knows the
-tool names create_task{related,title,due}, add_ai_note{related,text}, set_lead_score{record,tags},
-move_deal_stage{deal,stage}, patch_deal{deal,closeDate}, qualify_lead/convert_lead{lead}, disqualify_lead{lead,reason},
-close_deal_lost{deal,reason}, log_activity{related,kind,summary}, reassign{record,owner}, accept_assignment{assignment},
-draft_follow_up{deal}. Web ActionCard + pages exist in apps/web/src/pages/copilot-actions.tsx (routes not yet added);
-they call POST /copilot/actions/:id/{approve,reject,undo} and GET /copilot/actions?view=pending|done.
+M4 role home cards: GET /api/v1/copilot/home (modules/copilot/home.ts), card above the dashboard KPIs
+(apps/web/src/pages/dashboard.tsx). Then M5 (assignments.ts, business-hours.ts, accept_assignment tool).
 
 Notes for whoever resumes:
 - The tool pipeline turns \uXXXX escapes into literal characters when writing files. Never write such escapes; build
