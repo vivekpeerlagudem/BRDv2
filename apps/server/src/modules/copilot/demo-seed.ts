@@ -436,6 +436,30 @@ export async function seedCopilotDemo(ctx: AppContext, opts: { password: string 
       createdBy: c.owner,
     });
   }
+  // A company with the same domain may already exist (the hand-made Avengers story creates "Pym Technologies").
+  // Reuse it — its id and its owner — instead of skipping the insert and leaving contacts and deals pointing nowhere.
+  const existing = await ctx.db
+    .select({ id: company.id, ownerId: company.ownerId, domain: company.normalizedDomain })
+    .from(company)
+    .where(
+      inArray(
+        company.normalizedDomain,
+        companyRows.map((r) => r.normalizedDomain as string),
+      ),
+    );
+  for (const found of existing) {
+    const row = companyRows.find((r) => r.normalizedDomain === found.domain);
+    if (!row || row.id === found.id) continue; // our own row from an earlier run: idempotent as before
+    const seeded = row.id as string;
+    companyRows.splice(companyRows.indexOf(row), 1);
+    for (const p of contactRows) if (p.companyId === seeded) p.companyId = found.id;
+    for (const co of [...companies, canaryCo, lokiCo])
+      if (co.id === seeded) {
+        co.id = found.id;
+        co.owner = found.ownerId;
+      }
+    for (const p of contactRows) if (p.companyId === found.id) p.ownerId = found.ownerId;
+  }
   count(await ctx.db.insert(company).values(companyRows).onConflictDoNothing().returning({ id: company.id }));
   count(await ctx.db.insert(contact).values(contactRows).onConflictDoNothing().returning({ id: contact.id }));
 
