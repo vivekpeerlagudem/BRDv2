@@ -11,8 +11,8 @@ import { login } from './helpers.ts';
  * Runs against the development database with the Avengers demo seed (`pnpm db:seed:avengers`). It only adds tasks,
  * approval cards and one lead assignment; nothing existing is deleted.
  */
-const SPIDEY = 'spider.man@northwind.example';
-const CAP = 'captain.america@northwind.example';
+const SPIDEY = 'riley@northwind.example'; // Spider-Man (the Avengers seed renames the base seed's users)
+const CAP = 'morgan@northwind.example'; // Captain America
 const ADMIN = 'admin@northwind.example';
 
 const apiCall = (page: Page, method: string, path: string, body?: unknown) =>

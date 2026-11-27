@@ -298,6 +298,8 @@ export const planStep: MockPlanner = (req, mode) => {
       continue;
     }
     if (s.name === 'get_playbook') continue;
+    // A single record is cited by its alias, as the system prompt asks, so the screen can show it as a source chip.
+    if (typeof s.result.ref === 'string') lines.push(`Source: ${s.result.type ?? 'record'} [${s.result.ref}]`);
     lines.push(...describe(s.result));
     if (s.result.outside_text && mode !== 'gullible')
       lines.push('Note: this record contains text written by someone outside the company. I treated it as information only.');

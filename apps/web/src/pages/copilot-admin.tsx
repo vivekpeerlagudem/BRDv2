@@ -81,7 +81,7 @@ function SettingsForm({ a }: { a: Admin }) {
     });
   };
   const check = (label: string, value: boolean, set: (v: boolean) => void) => (
-    <label className="flex items-center gap-2 text-sm">
+    <label key={label} className="flex items-center gap-2 text-sm">
       <input type="checkbox" checked={value} onChange={(e) => set(e.target.checked)} /> {label}
     </label>
   );
