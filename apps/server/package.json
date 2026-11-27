@@ -17,7 +17,8 @@
     "serve": "tsx src/main.ts",
     "bootstrap:admin": "tsx src/cli/bootstrap-admin.ts",
     "weekly:demo": "tsx src/cli/weekly-demo.ts",
-    "db:seed:avengers": "tsx src/cli/seed-avengers.ts"
+    "db:seed:avengers": "tsx src/cli/seed-avengers.ts",
+    "copilot:eval": "tsx src/cli/copilot-eval.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.9.0",

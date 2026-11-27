@@ -46,20 +46,25 @@ export function parseSse(text: string): SseEvent[] {
   return out;
 }
 
-export function createKit(organizationName: string, opts: { timeZone?: string } = {}) {
+/**
+ * `realAi`: use the provider configured in .env.local (AI_PROVIDER, read by the config loader only) instead of the
+ * mock — for the M8 live evaluation, never for tests. `env` overrides configuration values.
+ */
+export function createKit(organizationName: string, opts: { timeZone?: string; realAi?: boolean; env?: Record<string, string> } = {}) {
   const clock = { now: new Date('2026-11-18T10:00:00.000Z') }; // a Wednesday, 10:00 UTC
   const ai = new MockAiProvider();
   const config = parseConfig({
     ...process.env,
     NODE_ENV: 'test',
     LOG_LEVEL: 'silent',
-    AI_PROVIDER: 'fake',
+    AI_PROVIDER: opts.realAi ? (process.env.AI_PROVIDER ?? 'fake') : 'fake',
     DATABASE_URL: testDbUrl(),
     APP_ORIGIN: ORIGIN,
     BUYER_ORIGIN: 'http://proposals.localhost:5173',
     STORAGE_DIR: './.data/test-storage',
+    ...opts.env,
   });
-  const { ctx, pool, auth } = buildContext(config, { ai, now: () => new Date(clock.now) });
+  const { ctx, pool, auth } = buildContext(config, { ...(opts.realAi ? {} : { ai }), now: () => new Date(clock.now) });
   const app = createApp(ctx, auth);
   const cookies: Record<string, string> = {};
   const ids: Record<string, string> = {};

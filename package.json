@@ -22,6 +22,7 @@
     "db:reset:dev": "pnpm --filter @crm/server db:reset:dev",
     "weekly:demo": "pnpm --filter @crm/server weekly:demo",
     "db:seed:avengers": "pnpm --filter @crm/server db:seed:avengers",
+    "copilot:eval": "pnpm --filter @crm/server copilot:eval",
     "dev:worker": "pnpm --filter @crm/server worker",
     "test:e2e": "playwright test",
     "pretest": "pnpm --filter @crm/server db:migrate --test"
