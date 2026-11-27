@@ -40,6 +40,7 @@ import { AdminUsersPage, CatalogPage, TemplateEditorPage, TemplatesPage } from '
 import { AiActivityPage, AiSettingsPage } from './pages/ai.tsx';
 import { CopilotPanel } from './pages/copilot.tsx';
 import { CopilotApprovalsPage, CopilotDonePage } from './pages/copilot-actions.tsx';
+import { CopilotAdminPage } from './pages/copilot-admin.tsx';
 import { CompaniesPage, CompanyPage, ContactPage, ContactsPage, TasksPage } from './pages/crm.tsx';
 import { DashboardPage } from './pages/dashboard.tsx';
 import { DealPage, DealsPage } from './pages/deals.tsx';
@@ -401,6 +402,7 @@ function Shell() {
       items: [
         { to: '/admin/users', label: 'Users', icon: UserCog, show: Boolean(p['user.manage']) },
         { to: '/admin/ai', label: 'AI settings', icon: Bot, show: Boolean(p['settings.manage']) },
+        { to: '/admin/copilot', label: 'Copilot', icon: Sparkles, show: Boolean(p['settings.manage']) },
         { to: '/admin/settings', label: 'Settings', icon: Settings, show: Boolean(p['settings.manage']) },
         { to: '/admin/import', label: 'Import data', icon: Upload, show: Boolean(p['settings.manage']) },
         { to: '/admin/audit', label: 'Audit log', icon: ScrollText, show: Boolean(p['audit.view']) },
@@ -580,6 +582,7 @@ const routeTree = rootRoute.addChildren([
     r('/admin/ai', AiSettingsPage),
     r('/copilot/approvals', CopilotApprovalsPage),
     r('/copilot/done', CopilotDonePage),
+    r('/admin/copilot', CopilotAdminPage),
   ]),
 ]);
 const router = createRouter({ routeTree });

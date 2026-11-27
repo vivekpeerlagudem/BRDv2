@@ -1,6 +1,7 @@
-import { assignmentDeclineInput, assignmentReassignInput, copilotConversationInput, copilotTurnInput } from '@crm/shared';
+import { assignmentDeclineInput, assignmentReassignInput, copilotConversationInput, copilotSettingsInput, copilotTurnInput } from '@crm/shared';
 import { streamSSE } from 'hono/streaming';
 import * as actions from '../../modules/copilot/actions.ts';
+import * as copilotAdmin from '../../modules/copilot/admin.ts';
 import * as assignments from '../../modules/copilot/assignments.ts';
 import * as conversations from '../../modules/copilot/conversations.ts';
 import { homeCard } from '../../modules/copilot/home.ts';
@@ -24,6 +25,15 @@ export function register(api: Api, kit: RouteKit): void {
 
   // Role home card (deterministic); ?summary=1 adds a grounded one-line AI summary.
   api.get('/copilot/home', async (c) => c.json(await homeCard(ctx, kit.actor(c), { summary: c.req.query('summary') === '1', requestId: c.get('requestId') })));
+
+  // Administration (settings.manage): settings with the kill switch, and usage metadata (never chat content).
+  api.get('/admin/copilot/settings', async (c) => c.json(await copilotAdmin.getCopilotAdmin(ctx, kit.actor(c))));
+  api.patch('/admin/copilot/settings', async (c) =>
+    c.json(await copilotAdmin.updateCopilotSettings(ctx, kit.actor(c), await kit.body(c, copilotSettingsInput))),
+  );
+  api.get('/admin/copilot/usage', async (c) =>
+    c.json(await copilotAdmin.copilotUsage(ctx, kit.actor(c), Math.min(365, Math.max(1, Number(c.req.query('days') ?? 30) || 30)))),
+  );
 
   // Accept-and-escalate.
   api.get('/assignments', async (c) => c.json(await assignments.listAssignments(ctx, kit.actor(c), { mine: c.req.query('mine') === '1' })));

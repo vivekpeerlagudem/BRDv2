@@ -13,7 +13,7 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 | M4 | Role home cards | done | (see git log) |
 | M5 | Accept-and-escalate | done | (see git log) |
 | M6 | Background agents | done | (see git log) |
-| M7 | Admin, budgets, operations | | |
+| M7 | Admin, budgets, operations | done | (see git log) |
 | M8 | Evaluation and model ladder (fake, then live Gemini) | | |
 | Final | Final gate, reseed crm_dev, report | | |
 
@@ -22,6 +22,7 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 - Before the build: 320 tests (all green on 2026-11-25).
 - After M1: +16 adapter tests, +4 foundations (integration), +1 dependency rule, config test extended.
 - After M2: +13 chat integration, +13 text unit, +3 web SSE unit.
+- After M7: +4 admin integration.
 - After M6: +6 agents integration. pnpm test: 413 green.
 - After M5: +7 SLA integration (fake clock), +7 business-hours unit. pnpm verify: 407 tests green.
 - After M4: +4 home integration.
@@ -102,6 +103,10 @@ Resume rule: read this file, continue from the next unfinished milestone, update
     checks agent_run.idempotency_key; each write checks agent_action.idempotency_key.
 33. **Digest** = an in-app notification built from the role card (no AI line, no writes). It is queued on Mondays
     (org time) when the latest Sales Brief was approved since about Monday 00:00.
+34. **Copilot admin lives at /admin/copilot** (its own page next to AI settings) with GET/PATCH
+    /api/v1/admin/copilot/settings and GET /admin/copilot/usage. The per-user daily cap is a number of questions
+    per day (perUserDailyTurns, default 200); the org monthly cap (default USD 250) counts all AI features. Usage cost
+    comes from ai_usage by feature; latency and first words from chat agent_run rows.
 
 ## Open issues
 
@@ -109,9 +114,9 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 
 ## Next step (resume here)
 
-M7 admin, budgets, operations: GET/PATCH /admin/copilot/settings (copilotSettingsInput), web settings section on
-/admin/ai, budget checks (budget.ts already has assertBudget: verify per-user daily + org monthly cap, 80 % alert,
-hard stop), admin usage page GET /admin/copilot/usage (no chat content), kill switch.
+M8 evaluation: modules/copilot/evals/ (50 tasks, deterministic graders), CLI script copilot:eval
+(--provider fake|openai|anthropic --models a,b --runs n) writing deliverables/copilot-eval/<date>.md; run on fake;
+then the live Gemini run (AI_PROVIDER=openai from .env.local, demo data only, never print the key).
 
 Notes for whoever resumes:
 - The tool pipeline turns \uXXXX escapes into literal characters when writing files. Never write such escapes; build
