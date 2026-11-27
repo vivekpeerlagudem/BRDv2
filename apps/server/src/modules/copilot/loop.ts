@@ -315,7 +315,7 @@ export async function runAgent(ctx: AppContext, input: RunInput): Promise<RunRes
           model,
           effort: 'low',
           maxTokens: 2000,
-          timeoutMs: Math.max(5_000, Math.min(ctx.config.AI_TIMEOUT_MS, deadline - performance.now())),
+          timeoutMs: Math.round(Math.max(5_000, Math.min(ctx.config.AI_TIMEOUT_MS, deadline - performance.now()))),
           system: systemPrompt(actor.role),
           tools: answerOnly ? [] : specs,
           messages,

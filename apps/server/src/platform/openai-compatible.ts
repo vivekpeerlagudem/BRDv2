@@ -173,7 +173,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
 
   private async post(body: Json, timeoutMs: number, outer?: AbortSignal): Promise<Response> {
     if (!this.baseUrl || !this.apiKey) throw new AiProviderError('auth', 'The AI provider is not configured');
-    const timeout = AbortSignal.timeout(timeoutMs);
+    const timeout = AbortSignal.timeout(Math.max(1, Math.round(timeoutMs))); // must be a whole number of ms
     const signal = outer ? AbortSignal.any([timeout, outer]) : timeout;
     let res: Response;
     try {
