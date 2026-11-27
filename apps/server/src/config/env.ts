@@ -21,8 +21,21 @@ const envSchema = z.object({
   STORAGE_DIR: z.string().default('./.data/storage'),
   ESIGN_PROVIDER: z.enum(['fake']).default('fake'),
   ESIGN_WEBHOOK_SECRET: z.string().min(16),
-  AI_PROVIDER: z.enum(['fake', 'anthropic']).default('fake'),
+  /** fake = built-in simulator (default; tests and CI). openai = any OpenAI-compatible endpoint. anthropic = Claude API. */
+  AI_PROVIDER: z.enum(['fake', 'openai', 'anthropic']).default('fake'),
   ANTHROPIC_API_KEY: z.string().optional(),
+  /** OpenAI-compatible endpoint (OpenAI, Gemini's OpenAI endpoint, OpenRouter, Groq, Ollama). Needed for AI_PROVIDER=openai. */
+  AI_BASE_URL: z.url().optional(),
+  /** Secret. Used by AI_PROVIDER=openai, and by anthropic when ANTHROPIC_API_KEY is not set. Never logged. */
+  AI_API_KEY: z.string().optional(),
+  /** Kensium Copilot models: the chat loop, the cheap triage/summary model, and the offline eval judge. */
+  AI_MODEL_MAIN: z.string().optional(),
+  AI_MODEL_FAST: z.string().optional(),
+  AI_MODEL_JUDGE: z.string().optional(),
+  /** Optional reasoning effort sent to OpenAI-compatible providers that accept it (left out when not set). */
+  AI_REASONING_EFFORT: z.enum(['none', 'minimal', 'low', 'medium', 'high']).optional(),
+  /** Optional JSON: USD per million tokens for models missing from the built-in price table, e.g. {"m":{"input":0.3,"output":2.5}}. */
+  AI_PRICES: z.string().optional(),
   // Model per AI feature (AI-IMPLEMENTATION-DESIGN §4). Override to re-route a feature without a code change.
   AI_MODEL_DRAFT: z.string().default('claude-sonnet-5-5'),
   AI_MODEL_SUMMARY: z.string().default('claude-sonnet-5-5'),
@@ -85,7 +98,20 @@ export function parseConfig(source: Record<string, string | undefined>): Config 
  */
 export function productionProviderIssues(config: Config): string[] {
   const issues: string[] = [];
-  if (config.AI_PROVIDER === 'anthropic' && !config.ANTHROPIC_API_KEY) issues.push('ANTHROPIC_API_KEY: required when AI_PROVIDER=anthropic');
+  if (config.AI_PROVIDER === 'anthropic' && !config.ANTHROPIC_API_KEY && !config.AI_API_KEY)
+    issues.push('ANTHROPIC_API_KEY: required when AI_PROVIDER=anthropic');
+  if (config.AI_PROVIDER === 'openai') {
+    if (!config.AI_BASE_URL) issues.push('AI_BASE_URL: required when AI_PROVIDER=openai');
+    if (!config.AI_API_KEY) issues.push('AI_API_KEY: required when AI_PROVIDER=openai');
+    if (!config.AI_MODEL_MAIN) issues.push('AI_MODEL_MAIN: required when AI_PROVIDER=openai');
+  }
+  if (config.AI_PRICES) {
+    try {
+      JSON.parse(config.AI_PRICES);
+    } catch {
+      issues.push('AI_PRICES: must be valid JSON');
+    }
+  }
   if (config.ESTIMATES_SOURCE === 'google' && !config.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64)
     issues.push('GOOGLE_SERVICE_ACCOUNT_JSON_BASE64: required when ESTIMATES_SOURCE=google');
   if (config.SALES_BRIEF_SHEETS === 'google' && !config.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64)

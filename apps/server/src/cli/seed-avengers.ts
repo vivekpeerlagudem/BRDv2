@@ -17,6 +17,7 @@
  *
  * SAFETY: refuses NODE_ENV=production and any database whose name does not end in `_dev`.
  */
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +29,7 @@ import { salesBriefRun } from '../db/schema-sales-brief.ts';
 import { weeklyReportRun } from '../db/schema-weekly-reports.ts';
 import { addTeamMember, createTeam, renameTeam } from '../modules/admin.ts';
 import { updateSettings as updateAiSettings } from '../modules/ai.ts';
+import { seedCopilotDemo } from '../modules/copilot/demo-seed.ts';
 import {
   closeDealLost,
   closeDealWon,
@@ -121,6 +123,12 @@ const WIPE = [
   'view_session',
   'viewer_identity',
   'weekly_report_run',
+  'agent_action',
+  'agent_run',
+  'copilot_conversation',
+  'copilot_message',
+  'record_score',
+  'work_assignment',
   'product',
   'proposal_template',
   'template_version',
@@ -622,6 +630,10 @@ try {
   if (!brief || (brief.status !== 'ready' && brief.status !== 'needs_attention'))
     throw new Error(`The sales brief did not finish (status ${brief?.status ?? 'missing'}${brief?.failureReason ? `, ${brief.failureReason}` : ''}).`);
 
+  // ── i3. Kensium Copilot demo data: bulk leads, companies and deals over six months, canaries, injection texts ────
+  // After the brief on purpose: the brief above keeps describing the small hand-made story.
+  const copilotSeed = await seedCopilotDemo(ctx, { password: process.env.SEED_PASSWORD ?? randomUUID() });
+
   // ── j. Summary ──────────────────────────────────────────────────────────────────────────────────────────────────
   const origin = config.APP_ORIGIN.replace(/\/$/, '');
   const HEALTH_WORDS: Record<string, string> = { green: 'on track', amber: 'needs attention', red: 'at risk' };
@@ -649,6 +661,8 @@ try {
       ),
       ...brief.signals.map((x) => `  [${x.severity}/${x.kind}] ${x.title}`),
       `  Brief        ${origin}/sales-brief/${brief.id}`,
+      '',
+      `Copilot demo data: ${copilotSeed.leads} leads · ${copilotSeed.companies} companies · ${copilotSeed.deals} deals (${copilotSeed.stageChanges} stage changes) · ${copilotSeed.contacts} contacts · ${copilotSeed.tasks} tasks · ${copilotSeed.notes} notes · ${copilotSeed.activities} calls and meetings · ${copilotSeed.formSubmissions} web-form enquiries · ${copilotSeed.canaries} canary records · ${copilotSeed.injections} planted injection texts · ${copilotSeed.users} active users (${copilotSeed.inserted} rows added by this run)`,
     ].join('\n'),
   );
 } finally {

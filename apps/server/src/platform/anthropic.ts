@@ -7,12 +7,28 @@
  *    no test makes a network call.
  */
 import Anthropic from '@anthropic-ai/sdk';
-import { type AiProvider, AiProviderError, type AiProviderStatus, type AiRequest, type AiResult } from './ports.ts';
+import {
+  type AiContentBlock,
+  type AiConverseRequest,
+  type AiConverseResult,
+  type AiMessage,
+  type AiProvider,
+  AiProviderError,
+  type AiProviderStatus,
+  type AiRequest,
+  type AiResult,
+  type AiStopReason,
+} from './ports.ts';
 
 /** The one SDK method the driver uses — lets tests substitute a recorded-response client. */
 export interface AnthropicMessagesClient {
   messages: {
     create(body: Anthropic.MessageCreateParamsNonStreaming, options?: { timeout?: number; maxRetries?: number }): Promise<Anthropic.Message>;
+    /** SDK stream helper: emits 'text' deltas; `finalMessage()` is authoritative for content, usage and stop reason. */
+    stream?(
+      body: Anthropic.MessageCreateParamsNonStreaming,
+      options?: { timeout?: number; maxRetries?: number; signal?: AbortSignal },
+    ): { on(event: 'text', handler: (delta: string) => void): unknown; finalMessage(): Promise<Anthropic.Message> };
   };
 }
 
@@ -46,6 +62,27 @@ export function mapAnthropicError(error: unknown): AiProviderError {
   }
   return new AiProviderError('network', 'Unexpected error while calling the AI provider');
 }
+
+/** Internal messages → Messages API content blocks. */
+function toAnthropicMessages(messages: AiMessage[]): Anthropic.MessageParam[] {
+  return messages.map((m) => ({
+    role: m.role,
+    content: m.content.map((b) =>
+      b.type === 'text'
+        ? { type: 'text' as const, text: b.text }
+        : b.type === 'tool_call'
+          ? { type: 'tool_use' as const, id: b.id, name: b.name, input: b.input }
+          : { type: 'tool_result' as const, tool_use_id: b.toolCallId, content: b.content, ...(b.isError ? { is_error: true } : {}) },
+    ),
+  })) as Anthropic.MessageParam[];
+}
+const ANTHROPIC_STOP: Record<string, AiStopReason> = {
+  end_turn: 'end',
+  stop_sequence: 'end',
+  tool_use: 'tool_calls',
+  max_tokens: 'max_tokens',
+  refusal: 'refusal',
+};
 
 export class AnthropicAiProvider implements AiProvider {
   readonly name = 'anthropic';
@@ -103,6 +140,63 @@ export class AnthropicAiProvider implements AiProvider {
       cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
       cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
       ...ids,
+    };
+  }
+
+  /**
+   * One model step with tools. Tool choice stays "auto" (a forced choice is rejected by current models); tool input is
+   * validated by the caller. The system prompt and the tool list are the cached prefix (breakpoint on the last tool).
+   */
+  async converse(req: AiConverseRequest): Promise<AiConverseResult> {
+    if (!this.client) throw new AiProviderError('auth', 'The AI provider is not configured');
+    const tools = req.tools.map((t, i) => ({
+      name: t.name,
+      description: t.description,
+      input_schema: t.inputSchema,
+      ...(i === req.tools.length - 1 ? { cache_control: { type: 'ephemeral' as const } } : {}),
+    }));
+    const body = {
+      model: req.model,
+      max_tokens: req.maxTokens,
+      system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }],
+      ...(tools.length ? { tools } : {}),
+      messages: toAnthropicMessages(req.messages),
+      output_config: { effort: req.effort },
+      metadata: { user_id: req.userRef },
+    } as unknown as Anthropic.MessageCreateParamsNonStreaming;
+    let message: Anthropic.Message;
+    try {
+      if (req.onTextDelta && this.client.messages.stream) {
+        const stream = this.client.messages.stream(body, { timeout: req.timeoutMs, maxRetries: 0, ...(req.signal ? { signal: req.signal } : {}) });
+        stream.on('text', (delta) => req.onTextDelta?.(delta));
+        message = await stream.finalMessage();
+      } else {
+        message = await this.client.messages.create(body, { timeout: req.timeoutMs, maxRetries: 0 });
+        if (req.onTextDelta) for (const block of message.content) if (block.type === 'text') req.onTextDelta(block.text);
+      }
+    } catch (error) {
+      throw mapAnthropicError(error);
+    }
+    const providerRequestId = (message as { _request_id?: string | null })._request_id ?? undefined;
+    const stopReason = ANTHROPIC_STOP[String(message.stop_reason)] ?? 'end';
+    const content: AiContentBlock[] = [];
+    // On a refusal the content is not read (it can be partial); thinking blocks are never kept.
+    if (stopReason !== 'refusal') {
+      for (const block of message.content) {
+        if (block.type === 'text' && block.text) content.push({ type: 'text', text: block.text });
+        else if (block.type === 'tool_use')
+          content.push({ type: 'tool_call', id: block.id, name: block.name, input: (block.input ?? {}) as Record<string, unknown> });
+      }
+    }
+    return {
+      content,
+      stopReason,
+      model: message.model,
+      inputTokens: message.usage.input_tokens,
+      outputTokens: message.usage.output_tokens,
+      cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
+      cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
+      ...(providerRequestId ? { providerRequestId } : {}),
     };
   }
 }

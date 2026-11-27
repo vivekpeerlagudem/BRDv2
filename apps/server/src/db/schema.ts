@@ -93,6 +93,8 @@ export const organizationSettings = pgTable('organization_settings', {
     .$type<{ enabled: boolean; runWeekday: number; runTime: string; ownerUserId: string | null }>()
     .notNull()
     .default({ enabled: true, runWeekday: 1, runTime: '08:00', ownerUserId: null }),
+  /** Kensium Copilot admin settings (0010). Stored sparse; modules/copilot/settings.ts fills the defaults. */
+  copilotSettings: jsonb('copilot_settings').$type<import('./schema-copilot.ts').CopilotSettings>().notNull().default({}),
   ...audit,
 });
 
@@ -343,6 +345,13 @@ export const lead = pgTable(
     convertedDealId: uuid('converted_deal_id').references(() => deal.id),
     convertedAt: ts('converted_at'),
     customFields: jsonb('custom_fields').$type<Record<string, unknown>>().notNull().default({}),
+    // Optional Kensium qualification fields (0010); values come from the fixed lists in @crm/shared.
+    industry: text('industry'),
+    currentPlatform: text('current_platform'),
+    companySizeBand: text('company_size_band'),
+    serviceInterest: text('service_interest').array(),
+    budgetBand: text('budget_band'),
+    timeline: text('timeline'),
     archivedAt: ts('archived_at'),
     ...audit,
   },

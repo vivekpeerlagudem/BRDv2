@@ -4,7 +4,7 @@
  */
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { ERROR_CODES, type PermKey, type Role, scopeFor } from '@crm/shared';
-import { type ExtractTablesWithRelations, eq, inArray, type SQL, sql } from 'drizzle-orm';
+import { and, type ExtractTablesWithRelations, eq, inArray, type SQL, sql } from 'drizzle-orm';
 import { drizzle, type NodePgDatabase, type NodePgQueryResultHKT } from 'drizzle-orm/node-postgres';
 import type { PgColumn, PgTransaction } from 'drizzle-orm/pg-core';
 import type pg from 'pg';
@@ -56,7 +56,12 @@ export async function buildUserActor(db: DbOrTx, userId: string): Promise<UserAc
     const managed = await db.select({ teamId: schema.teamManager.teamId }).from(schema.teamManager).where(eq(schema.teamManager.userId, userId));
     const teamIds = managed.map((m) => m.teamId);
     if (teamIds.length) {
-      for (const m of await db.select().from(schema.teamMembership).where(inArray(schema.teamMembership.teamId, teamIds))) scope.add(m.userId);
+      // Only ACTIVE memberships: a deactivated rep keeps the row (R7) but leaves the manager's team scope.
+      const members = await db
+        .select()
+        .from(schema.teamMembership)
+        .where(and(inArray(schema.teamMembership.teamId, teamIds), eq(schema.teamMembership.isActive, true)));
+      for (const m of members) scope.add(m.userId);
       for (const m of await db.select().from(schema.teamManager).where(inArray(schema.teamManager.teamId, teamIds))) scope.add(m.userId);
     }
   }

@@ -6,7 +6,25 @@
  *  - Tests can script the next responses (`enqueue`) to simulate provider failures, malformed output or rate limits.
  * Its answers are template text, not model output, and every screen labels them "simulator".
  */
-import { type AiProvider, AiProviderError, type AiProviderStatus, type AiRequest, type AiResult } from './ports.ts';
+import { type MockPlanner, planStep } from './mock-ai-planner.ts';
+import {
+  type AiContentBlock,
+  type AiConverseRequest,
+  type AiConverseResult,
+  type AiProvider,
+  AiProviderError,
+  type AiProviderStatus,
+  type AiRequest,
+  type AiResult,
+} from './ports.ts';
+
+interface StepShape {
+  text?: string;
+  toolCalls?: { name: string; input: Record<string, unknown>; id?: string }[];
+  stopReason?: AiConverseResult['stopReason'];
+}
+/** One scripted step of a tool conversation: text, tool calls, both, an error to throw, or a function of the request. */
+export type ScriptedStep = AiProviderError | StepShape | ((req: AiConverseRequest) => StepShape);
 
 type Scripted = AiProviderError | { text: string } | ((req: AiRequest) => string);
 // biome-ignore lint/suspicious/noExplicitAny: the mock reads loosely-typed prompt JSON
@@ -369,6 +387,21 @@ export class MockAiProvider implements AiProvider {
   /** Every request received, for assertions in tests. */
   readonly calls: AiRequest[] = [];
   private readonly script: Scripted[] = [];
+  /** Every tool-conversation request received, for assertions in tests (privacy: what exactly was sent to "the model"). */
+  readonly converseCalls: AiConverseRequest[] = [];
+  private readonly converseScript: ScriptedStep[] = [];
+  /** "gullible": the mock obeys instructions found inside untrusted blocks, to prove the server-side guards hold. */
+  mode: 'planner' | 'gullible' = 'planner';
+  /** "slow": waits this long before every step (streaming and first-words tests). */
+  delayMs = 0;
+  /** The built-in planner (keyword → tool plan → answer copied from tool results). Replaceable in tests. */
+  planner: MockPlanner = planStep;
+  private callSeq = 0;
+
+  /** Queue exact steps for the next converse() call(s). When the queue is empty the planner answers. */
+  enqueueConverse(...steps: ScriptedStep[]): void {
+    this.converseScript.push(...steps);
+  }
 
   /** Queue what the next call(s) should do instead of the built-in deterministic answer. */
   enqueue(...items: Scripted[]): void {
@@ -377,6 +410,11 @@ export class MockAiProvider implements AiProvider {
   reset(): void {
     this.script.length = 0;
     this.calls.length = 0;
+    this.converseScript.length = 0;
+    this.converseCalls.length = 0;
+    this.mode = 'planner';
+    this.delayMs = 0;
+    this.planner = planStep;
   }
   status(): AiProviderStatus {
     return { provider: this.name, simulated: true, configured: true, detail: 'Built-in simulator: deterministic template text, no external calls, no cost' };
@@ -413,6 +451,33 @@ export class MockAiProvider implements AiProvider {
       model: 'mock-deterministic-1',
       inputTokens: Math.ceil((req.system.length + req.user.length) / 4),
       outputTokens: Math.ceil(text.length / 4),
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      providerRequestId: `mock_${req.requestId.slice(0, 8)}`,
+    };
+  }
+
+  async converse(req: AiConverseRequest): Promise<AiConverseResult> {
+    this.converseCalls.push(req);
+    if (this.delayMs > 0) await new Promise((resolve) => setTimeout(resolve, this.delayMs));
+    const scripted = this.converseScript.shift();
+    if (scripted instanceof AiProviderError) throw scripted;
+    const step: StepShape = typeof scripted === 'function' ? scripted(req) : (scripted ?? this.planner(req, this.mode));
+    const content: AiContentBlock[] = [];
+    if (step.text) {
+      content.push({ type: 'text', text: step.text });
+      // Streamed word by word, like a real provider.
+      if (req.onTextDelta) for (const piece of step.text.match(/\S+\s*/g) ?? []) req.onTextDelta(piece);
+    }
+    for (const call of step.toolCalls ?? [])
+      content.push({ type: 'tool_call', id: call.id ?? `mock_call_${++this.callSeq}`, name: call.name, input: call.input });
+    const sent = req.system.length + JSON.stringify(req.messages).length + JSON.stringify(req.tools).length;
+    return {
+      content,
+      stopReason: step.stopReason ?? (step.toolCalls?.length ? 'tool_calls' : 'end'),
+      model: 'mock-deterministic-1',
+      inputTokens: Math.ceil(sent / 4),
+      outputTokens: Math.ceil(JSON.stringify(content).length / 4),
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
       providerRequestId: `mock_${req.requestId.slice(0, 8)}`,

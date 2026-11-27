@@ -1,4 +1,13 @@
 import { z } from 'zod';
+import {
+  LEAD_BUDGET_BANDS,
+  LEAD_INDUSTRIES,
+  LEAD_PLATFORMS,
+  LEAD_SERVICE_INTERESTS,
+  LEAD_SIZE_BANDS,
+  LEAD_TIMELINES,
+  leadQualificationFields,
+} from './copilot.ts';
 import { pricingSchema } from './pricing.ts';
 import { roleSchema } from './roles.ts';
 
@@ -77,6 +86,7 @@ export const leadInput = z.object({
   notes: optionalText(5000),
   ownerId: uuid.optional(),
   confirm: z.array(z.string()).optional(),
+  ...leadQualificationFields,
 });
 export const leadPatch = z.object({
   name: name.optional(),
@@ -88,6 +98,7 @@ export const leadPatch = z.object({
   notes: optionalText(5000),
   status: z.enum(['new', 'working']).optional(), // only non-terminal transitions here; use qualify/disqualify/convert for the rest
   rowVersion: z.number().int().optional(),
+  ...leadQualificationFields,
 });
 export const leadAssignInput = z.object({ ownerId: uuid });
 export const leadDisqualifyInput = z.object({ reason: z.string().trim().min(1).max(500) });
@@ -187,6 +198,13 @@ export const leadSubmissionInput = z.object({
   message: optionalText(4000),
   /** Honeypot: real users leave it empty (BR-LED-006). */
   website: z.string().max(200).optional(),
+  // Optional Kensium qualification answers (fixed lists). Stored in the submission payload; industry also goes to the company.
+  industry: z.enum(LEAD_INDUSTRIES).optional(),
+  currentPlatform: z.enum(LEAD_PLATFORMS).optional(),
+  companySizeBand: z.enum(LEAD_SIZE_BANDS).optional(),
+  serviceInterest: z.enum(LEAD_SERVICE_INTERESTS).optional(),
+  budgetBand: z.enum(LEAD_BUDGET_BANDS).optional(),
+  timeline: z.enum(LEAD_TIMELINES).optional(),
 });
 
 export const inviteUserInput = z.object({ email, fullName: name, role: roleSchema, password: z.string().min(12).max(128), teamId: uuid.optional() });

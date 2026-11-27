@@ -7,6 +7,7 @@ import { type AppContext, createDb } from './platform/core.ts';
 import { CsvOnlyEstimatesSource, GoogleSheetsEstimatesSource } from './platform/google-sheets.ts';
 import { createLogger } from './platform/logging/logger.ts';
 import { MockAiProvider } from './platform/mock-ai.ts';
+import { OpenAiCompatibleProvider } from './platform/openai-compatible.ts';
 import { FileOnlyPublisher, GoogleSheetsPublisher } from './platform/sales-brief-sheets.ts';
 
 /**
@@ -34,7 +35,18 @@ export function buildContext(
     esign: new FakeESignProvider(storage, config.ESIGN_WEBHOOK_SECRET),
     // Choosing "anthropic" without a key does NOT silently fall back to the simulator: the provider reports
     // "not configured" and AI calls fail with a clear error, so nobody mistakes template text for model output.
-    ai: overrides.ai ?? (config.AI_PROVIDER === 'anthropic' ? new AnthropicAiProvider({ apiKey: config.ANTHROPIC_API_KEY }) : new MockAiProvider()),
+    ai:
+      overrides.ai ??
+      (config.AI_PROVIDER === 'anthropic'
+        ? new AnthropicAiProvider({ apiKey: config.ANTHROPIC_API_KEY ?? config.AI_API_KEY })
+        : config.AI_PROVIDER === 'openai'
+          ? new OpenAiCompatibleProvider({
+              baseUrl: config.AI_BASE_URL,
+              apiKey: config.AI_API_KEY,
+              defaultModel: config.AI_MODEL_MAIN,
+              reasoningEffort: config.AI_REASONING_EFFORT,
+            })
+          : new MockAiProvider()),
     email: new LogEmail(logger),
     // Estimates sheets: CSV upload only by default; the read-only Google Sheets reader is an explicit switch.
     estimates:

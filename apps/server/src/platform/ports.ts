@@ -107,10 +107,63 @@ export interface AiProviderStatus {
   configured: boolean;
   detail: string;
 }
+// ───────────────────────── tool conversation (Kensium Copilot) ─────────────────────────
+// ONE internal format for every provider. Drivers translate it to their wire format and back; nothing outside a driver
+// knows a provider's message shape. The provider never executes anything: it only proposes tool calls, and the
+// Copilot loop decides (permission, tier, caps) whether each one runs.
+export type CopilotFeature = 'copilot_chat' | 'copilot_triage' | 'copilot_background';
+export interface AiToolSpec {
+  name: string;
+  description: string;
+  /** JSON Schema (object) of the tool input. Drivers may simplify it for providers with partial JSON Schema support. */
+  inputSchema: Record<string, unknown>;
+}
+export type AiContentBlock =
+  | { type: 'text'; text: string }
+  /** `meta`: opaque provider data that must be sent back with the call (kept by drivers, ignored elsewhere). */
+  | { type: 'tool_call'; id: string; name: string; input: Record<string, unknown>; meta?: Record<string, unknown> }
+  | { type: 'tool_result'; toolCallId: string; name: string; content: string; isError?: boolean };
+/** user: text and tool_result blocks. assistant: text and tool_call blocks. */
+export interface AiMessage {
+  role: 'user' | 'assistant';
+  content: AiContentBlock[];
+}
+export type AiStopReason = 'end' | 'tool_calls' | 'max_tokens' | 'refusal';
+export interface AiConverseRequest {
+  requestId: string;
+  correlationId?: string;
+  feature: AiFeature | CopilotFeature;
+  model: string;
+  effort: 'low' | 'medium' | 'high';
+  maxTokens: number;
+  timeoutMs: number;
+  /** Static rules; identical for every call of a role, so it is the cacheable prefix together with the tools. */
+  system: string;
+  tools: AiToolSpec[];
+  messages: AiMessage[];
+  userRef: string;
+  /** Called with each piece of answer text as it arrives (streaming). Optional. */
+  onTextDelta?: (text: string) => void;
+  signal?: AbortSignal;
+}
+export interface AiConverseResult {
+  /** text and tool_call blocks only, in the order the model produced them. */
+  content: AiContentBlock[];
+  stopReason: AiStopReason;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  providerRequestId?: string;
+}
+
 export interface AiProvider {
   readonly name: string;
   readonly simulated: boolean;
   complete(req: AiRequest): Promise<AiResult>;
+  /** One model step of a tool conversation. May throw AiProviderError only. */
+  converse(req: AiConverseRequest): Promise<AiConverseResult>;
   /** Configuration status only — never makes a (billable) call. */
   status(): AiProviderStatus;
 }

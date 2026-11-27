@@ -73,6 +73,12 @@ const BUSINESS_TABLES = [
   'view_session',
   'viewer_identity',
   'weekly_report_run',
+  'agent_action',
+  'agent_run',
+  'copilot_conversation',
+  'copilot_message',
+  'record_score',
+  'work_assignment',
 ];
 
 // Content kept by default; cleared only with --demo.
