@@ -21,7 +21,7 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 
 - Before the build: 320 tests (all green on 2026-11-25).
 - Final (2026-11-27): pnpm test 420/420 in 38 files; typecheck, lint, build green; Playwright e2e/copilot.spec.ts 3/3.
-- Fix pass (2026-11-27): pnpm verify 433/433 in 40 files (+5 chat, +6 tool-select unit, +3 web readable, +2 agents, minus 0); Playwright 3/3.
+- Fix pass (2026-11-27): pnpm verify 433/433 in 40 files (+2 chat, +6 tool-select unit, +3 web readable, +2 agents); Playwright 3/3.
 - After M1: +16 adapter tests, +4 foundations (integration), +1 dependency rule, config test extended.
 - After M2: +13 chat integration, +13 text unit, +3 web SSE unit.
 - After M8 so far: +2 eval integration (50 tasks on fake, 100 %), +1 adapter regression test (fractional timeout).
