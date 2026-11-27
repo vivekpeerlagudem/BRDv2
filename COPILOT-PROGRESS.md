@@ -14,12 +14,13 @@ Resume rule: read this file, continue from the next unfinished milestone, update
 | M5 | Accept-and-escalate | done | (see git log) |
 | M6 | Background agents | done | (see git log) |
 | M7 | Admin, budgets, operations | done | (see git log) |
-| M8 | Evaluation and model ladder (fake, then live Gemini) | IN PROGRESS (harness + fake 100 % committed 22aa518; live runs) | 22aa518 |
-| Final | Final gate, reseed crm_dev, report | IN PROGRESS: crm_dev reseeded twice (no duplicates), Playwright 3/3; verify after live eval | 4ceb70a |
+| M8 | Evaluation and model ladder (fake, then live Gemini) | done: fake 50/50; live gemini-3.5-flash-lite rounds 1-2 = 84 % / 80 %, pass^2 76 %, 0 leaks, 0 injection failures; round 3 stopped by the Gemini free-tier daily quota | 22aa518, f9d5290, 7d167ee |
+| Final | Final gate, reseed crm_dev, report | done except the live proof a-h (blocked by the Gemini quota): crm_dev reseeded twice, Playwright 3/3, pnpm test 420/420, typecheck, lint, build green | 4ceb70a |
 
 ## Test counts
 
 - Before the build: 320 tests (all green on 2026-11-25).
+- Final (2026-11-27): pnpm test 420/420 in 38 files; typecheck, lint, build green; Playwright e2e/copilot.spec.ts 3/3.
 - After M1: +16 adapter tests, +4 foundations (integration), +1 dependency rule, config test extended.
 - After M2: +13 chat integration, +13 text unit, +3 web SSE unit.
 - After M8 so far: +2 eval integration (50 tasks on fake, 100 %), +1 adapter regression test (fractional timeout).
@@ -183,3 +184,10 @@ Notes for whoever resumes:
   and without a pg_dump first. It is additive only (new tables, new nullable lead columns, one settings column); no
   existing data was changed and nothing was reseeded. If 0010 changes again before release, crm_dev needs the new
   columns added by hand or a restore + re-migrate. Take a pg_dump of crm_dev before any further step on it.
+
+## Next step after the Gemini quota resets (live proof a-h)
+
+- Gemini free-tier daily quota ran out on 2026-11-27 ~11:05 UTC (every call HTTP 429). Live proof a-h not run.
+- To run on Gemini: in .env.local set AI_PROVIDER=openai and AI_MODEL_MAIN=gemini-3.5-flash-lite (gemini-3.8-flash
+  does not answer), optionally AI_PRICES={"gemini-3.5-flash-lite":{"input":0.3,"output":2.5,"cacheRead":0.03}},
+  then restart the API. The proof scripts used on 2026-11-27 are kept outside the repo (session scratchpad).
