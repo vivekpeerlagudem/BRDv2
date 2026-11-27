@@ -19,6 +19,8 @@ const arg = (name: string, fallback: string) => {
 const provider = arg('provider', 'fake');
 if (!['fake', 'openai', 'anthropic'].includes(provider)) throw new Error('--provider must be fake, openai or anthropic');
 const runs = Math.max(1, Math.min(5, Number(arg('runs', '1')) || 1));
+/** Seconds to wait between tasks on a live provider (rate limits); 0 for fake. */
+const paceSeconds = Number(arg('pace', provider === 'fake' ? '0' : '8')) || 0;
 const only = arg('only', '')
   .split(',')
   .map((s) => s.trim())
@@ -41,6 +43,7 @@ const { summaries, results } = await runEval(kit, {
   live,
   password: PASSWORD,
   only,
+  paceMs: paceSeconds * 1000,
   onTask: (r) => {
     done++;
     console.log(

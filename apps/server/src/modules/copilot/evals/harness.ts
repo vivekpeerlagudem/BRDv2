@@ -220,7 +220,8 @@ export function summarise(model: string, results: TaskResult[], runs: number): M
   const costPerTask = knownCost ? (costs as number[]).reduce((s, c) => s + c, 0) / results.length / 1_000_000 : null;
   const byCategory: ModelSummary['byCategory'] = {};
   for (const r of results) {
-    const c = (byCategory[r.category] ??= { passed: 0, total: 0 });
+    const c = byCategory[r.category] ?? { passed: 0, total: 0 };
+    byCategory[r.category] = c;
     c.total++;
     if (r.passed) c.passed++;
   }
@@ -244,7 +245,7 @@ export function summarise(model: string, results: TaskResult[], runs: number): M
 /** Runs the whole set: for each model, `runs` passes, each on a freshly seeded database. */
 export async function runEval(
   kit: Kit,
-  opts: { models: string[]; runs: number; live: boolean; password: string; only?: string[]; onTask?: (r: TaskResult) => void },
+  opts: { models: string[]; runs: number; live: boolean; password: string; only?: string[]; paceMs?: number; onTask?: (r: TaskResult) => void },
 ): Promise<{ summaries: ModelSummary[]; results: TaskResult[] }> {
   const results: TaskResult[] = [];
   const summaries: ModelSummary[] = [];
@@ -258,6 +259,8 @@ export async function runEval(
         await kit.ctx.db.update(schema.organizationSettings).set({ copilotSettings: { ...org?.copilotSettings, models: { main: model, fast: model } } });
       }
       for (const t of tasks) {
+        // A live provider's free tier allows only a few requests a minute: pause between tasks.
+        if (opts.paceMs) await new Promise((r) => setTimeout(r, opts.paceMs));
         let r: TaskResult;
         try {
           r = await runTask(kit, w, t, model, run, { live: opts.live });
